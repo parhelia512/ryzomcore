@@ -92,7 +92,7 @@ table.insert(SearchCommand.commands_list,{"client", "player", "4_desc", "4", {{"
 table.insert(SearchCommand.commands_list,{"client", "player", "channel_desc", "channel",{{"Text:<Channelname>",""}}, {{"Text:<Password>","channel_password_desc"},{"*","channel_leave_desc"}}})
 table.insert(SearchCommand.commands_list,{"client", "player", "tell_desc", "tell",{{"Text:<PlayerName>",""}}, {{"Text:<Message>",""}}})
 table.insert(SearchCommand.commands_list,{"client", "player", "tell_desc", "t",{{"Text:<PlayerName>",""}}, {{"Text:<Message>",""}}})
-table.insert(SearchCommand.commands_list,{"client", "player", "em_desc", "em",{{"Text:<CustomEmoteText>",""}}, {{"Text:<>",""}}, {{"Text:<MoreCustomEmoteText>",""}}})
+table.insert(SearchCommand.commands_list,{"client", "player", "em_desc", "em",{{"Text:<CustomEmoteText>",""}}, {{":",""}}, {{"Text:<MoreCustomEmoteText>",""}}})
 
 
 
