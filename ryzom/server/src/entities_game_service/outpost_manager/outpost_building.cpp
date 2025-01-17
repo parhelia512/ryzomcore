@@ -195,7 +195,10 @@ void COutpostBuilding::update(uint32 nCurrentTime)
 								CGameItemPtr item;
 								item = GameItemManager.createItem(_StaticData->Driller.MPs[i], (j+1)*(250/DRILLER_NB_LEVEL), true, false);
 								if (item != NULL)
+								{
+									nlinfo("OP %s MP Generated %s Q%i", _Parent->getName().c_str(), _StaticData->Driller.MPs[i].toString().c_str(), (j+1)*(250/DRILLER_NB_LEVEL));
 									pGuild->putItem(item);
+								}
 							}
 						}
 					}
@@ -258,8 +261,44 @@ std::string COutpostBuilding::toString() const
 	if (_Constructing)
 		desc += "constructing ";
 
+	if (_StaticData->Type == CStaticOutpostBuilding::TypeDriller)
+	{
+		desc += "\nProduction:\n";
+		for (uint i = 0; i < _StaticData->Driller.MPQuantities.size(); ++i)
+		{
+			for (uint j = 0; j < DRILLER_NB_LEVEL; ++j)
+			{
+				if (_StaticData->Driller.QualityFactor[j])
+					desc += _StaticData->Driller.MPs[i].toString()+NLMISC::toString(" Q%d", (j+1)*(250/DRILLER_NB_LEVEL))+"\n";
+			}
+		}
+	}
+
 	return desc;
 }
+
+//----------------------------------------------------------------------------
+std::string COutpostBuilding::getProductString() const
+{
+	string desc = "";
+	if (_StaticData == NULL)
+		return desc;
+
+	if (_StaticData->Type == CStaticOutpostBuilding::TypeDriller)
+	{
+		for (uint i = 0; i < _StaticData->Driller.MPQuantities.size(); ++i)
+		{
+			for (uint j = 0; j < DRILLER_NB_LEVEL; ++j)
+			{
+				if (_StaticData->Driller.QualityFactor[j])
+					desc += _StaticData->Driller.MPs[i].toString()+NLMISC::toString(" Q%d", 50*(j+1))+",";
+			}
+		}
+	}
+
+	return desc;
+}
+
 
 //----------------------------------------------------------------------------
 void COutpostBuilding::setConstructionTime(uint32 nNbSeconds, uint32 nCurrentTime)

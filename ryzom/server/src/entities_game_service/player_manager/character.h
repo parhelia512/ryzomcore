@@ -957,7 +957,7 @@ public:
 	 * \param XpGain is the amount of xp added to a skill / speciality
 	 * \param Skill is the name of used skill for action (or associated skill ofr specialized action used)
 	 */
-	void addXpToSkill(double XpGain, const std::string &Skill, bool silent = false);
+	void addXpToSkill(double XpGain, const std::string &Skill, bool silent = false, bool useCats = true);
 
 	/**
 	 * addXpToSkillAndBuffer add xpGain to a skill. Do not send messages to clients, but buffer the messages
@@ -1085,7 +1085,7 @@ public:
 	void removeAnimal(CGameItemPtr item, CPetCommandMsg::TCommand command);
 
 	// remove pet from player corresponding to index and despawn it
-	void removeRentAMount();
+	void removeRentAMount(TDataSetRow rentamount);
 	void removeAnimalIndex(uint32 beastIndex, CPetCommandMsg::TCommand command, bool keepInventory=false);
 
 	// update coordinate for spawned pets
@@ -1384,6 +1384,9 @@ public:
 
 	///\set the loot container
 	void setLootContainer(CInventoryPtr lootSac);
+
+	bool isInitChest(uint8 chest);
+	void isInitChest(uint8 chest, bool value);
 
 	/// update scores infos in database
 	void updateScoresInDatabase();
@@ -2967,7 +2970,7 @@ public:
 	void incSlotVersion(INVENTORIES::TInventory invId, uint32 slot);
 
 	/// send item infos. For slotId (combination of inventory and slot), see explanation in CItemInfos
-	void sendItemInfos(uint16 slotId);
+	void sendItemInfos(uint32 slotId);
 
 	/// return true if the player wears an item with the specified sheetId
 	bool doesWear(const NLMISC::CSheetId &sheetId) const;
@@ -3271,7 +3274,7 @@ private:
 	 *	may even be bigger than the original XpGain!
 	 */
 	double addXpToSkillInternal(double XpGain, const std::string &ContSkill, TAddXpToSkillMode addXpMode,
-								std::map<SKILLS::ESkills, CXpProgressInfos> &gainBySkill, bool silent=false);
+								std::map<SKILLS::ESkills, CXpProgressInfos> &gainBySkill, bool silent=false, bool useCats = true);
 
 	/// Initialize the specified pet inventory, if it is valid
 	bool initPetInventory(uint8 index);
@@ -3454,6 +3457,8 @@ private:
 	// Keep pointer on the container being looted
 	CInventoryPtr _LootContainer;
 	NLMISC::CEntityId _EntityLoot;
+
+	bool _initializedChests[20];
 
 	/// if this player has an invitation for another team, keep the team here
 	NLMISC::CEntityId _TeamInvitor;

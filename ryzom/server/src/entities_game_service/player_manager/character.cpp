@@ -239,7 +239,7 @@ CVariable<uint32> OutpostDaysForGvX(
 	"egs", "OutpostDaysForGvX", "Minimum days in Guild for GvE,PvE and GvG", 21, 0, true);
 
 CVariable<float> RegenerateReposModifierFactor(
-	"egs", "RegenerateReposModifierFactor", "Factor who will increase the RegenerateModifier with the time", 0, 0, true);
+	"egs", "RegenerateReposModifierFactor", "Factor who will increase the RegenerateModifier with the time", 0.03, 0, true);
 
 
 
@@ -442,6 +442,9 @@ CCharacter::CCharacter()
 
 	for (uint i = 0; i < (PVP_CLAN::EndClans - PVP_CLAN::BeginClans + 1); ++i)
 		_FactionPoint[i] = 0;
+
+	for (uint i = 0; i < 20; ++i)
+		_initializedChests[i] = false;
 
 	_PvpPoint = 0;
 	_GuildPoints = 0;
@@ -2317,6 +2320,8 @@ void CCharacter::mount(TDataSetRow PetRowId, bool fromArk, bool skipDistance)
 							// remember the mount state
 							if (petIndex != -1)
 								_PlayerPets[petIndex].IsMounted = true;
+							else
+								_RentAMount = PetRowId;
 							//							_PropertyDatabase.setProp( "USER:MOUNT_WALK_SPEED",
 							//(sint64)(sint)(e->getPhysScores().CurrentWalkSpeed() * 1000.0f) );
 							CBankAccessor_PLR::getUSER().setMOUNT_WALK_SPEED(_PropertyDatabase,
@@ -2383,6 +2388,10 @@ void CCharacter::mount(TDataSetRow PetRowId, bool fromArk, bool skipDistance)
 							}
 
 							return;
+						}
+						else
+						{
+							PHRASE_UTILITIES::sendDynamicSystemMessage(_EntityRowId, "ANIMAL_TOO_FAR");
 						}
 					}
 
@@ -2782,15 +2791,26 @@ void CCharacter::applyRegenAndClipCurrentValue()
 	sint16 speedVariationModifier = std::max((sint)_PhysScores.SpeedVariationModifier, (sint) - 100);
 	CSheetId aqua_speed("aqua_speed.sbrick");
 	bool usingAquaSpeed = false;
-	if (isInWater() && getMode() != MBEHAV::MOUNT_NORMAL && (haveBrick(aqua_speed) || _CurrentSpeedSwimBonus > 0))
+	if (isInWater())
 	{
-		setBonusMalusName("aqua_speed", addEffectInDB(aqua_speed, true));
-		if (_CurrentSpeedSwimBonus > 0)
-			speedVariationModifier = std::min(speedVariationModifier + (sint16)_CurrentSpeedSwimBonus, 100);
-		else
+		if (TheDataset.isAccessible(_EntityMounted()))
 		{
-			usingAquaSpeed = true;
-			speedVariationModifier = std::min(speedVariationModifier + 33, 100);
+			CCreature* creature = CreatureManager.getCreature(_EntityMounted);
+			if (creature->_Race == EGSPD::CPeople::WaterFauna)
+			{
+				speedVariationModifier = 100;
+			}
+		}
+		else if (getMode() != MBEHAV::MOUNT_NORMAL && haveBrick(aqua_speed) || _CurrentSpeedSwimBonus > 0)
+		{
+			setBonusMalusName("aqua_speed", addEffectInDB(aqua_speed, true));
+			if (_CurrentSpeedSwimBonus > 0)
+				speedVariationModifier = std::min(speedVariationModifier + (sint16)_CurrentSpeedSwimBonus, 100);
+			else
+			{
+				usingAquaSpeed = true;
+				speedVariationModifier = std::min(speedVariationModifier + 33, 100);
+			}
 		}
 	}
 	else
@@ -4017,7 +4037,7 @@ void CCharacter::setTargetBotchatProgramm(CEntityBase* target, const CEntityId &
 	// set bot chat programms and npcs special options
 	CCreature* c = NULL;
 
-	if (targetId.getType() == RYZOMID::npc)
+	if (targetId.getType() >= RYZOMID::bot_ai_begin && targetId.getType() <= RYZOMID::bot_ai_end)
 	{
 		c = dynamic_cast<CCreature*>(target);
 
@@ -4742,8 +4762,7 @@ extern CBitMemStream DBOutput; // global to avoid reallocation
 void CCharacter::databaseUpdate()
 {
 	// Write the inventory updates
-	_InventoryUpdater.sendAllUpdates(
-		_Id); // must be before the sending of _PropertyDatabase, because it tests _PropertyDatabase.notSentYet()
+	_InventoryUpdater.sendAllUpdates(_Id); // must be before the sending of _PropertyDatabase, because it tests _PropertyDatabase.notSentYet()
 
 	// Write the character's database delta (for comment numbers, see tutorial in cdb_group.h)
 	if (_PropertyDatabase.getChangedPropertyCount() != 0) // ensures writeDelta() will return true
@@ -6183,6 +6202,7 @@ string CCharacter::getPetsInfos()
 	{
 		string sheet = _PlayerPets[i].PetSheetId.toString();
 		string ticketSheet = _PlayerPets[i].TicketPetSheetId.toString();
+		string spawnedPet = TheDataset.getEntityId(_PlayerPets[i].SpawnedPets).toString();
 
 		uint32 timeBeforeDespawn = 0;
 		if (CTickEventHandler::getGameCycle() <= _PlayerPets[i].DeathTick + 3 * 24 * 36000)
@@ -6224,8 +6244,10 @@ string CCharacter::getPetsInfos()
 		uint32 weight = _Inventory[packInv]->getInventoryWeight();
 		uint32 max_weight = _Inventory[packInv]->getMaxWeight();
 
-		pets += sheet+"|"+ticketSheet+"|"+type+"|"+state+"|"+toString("%d", _PlayerPets[i].Size)+"|"+toString("%d", _PlayerPets[i].StableId)+"|"+toString("%d,%d,%d", _PlayerPets[i].Landscape_X, _PlayerPets[i].Landscape_Y, _PlayerPets[i].Landscape_Z)+"|"+toString("%u", timeBeforeDespawn)+"|"+toString("%f/%f", _PlayerPets[i].Satiety, _PlayerPets[i].MaxSatiety)+"|"+toString("%u|%u/%u|%u/%u", slots, bulk, max_bulk, weight, max_weight)+"|"+inBag+"|"+spawnFlag+"|"+name+"\n";
+		pets += sheet+"|"+ticketSheet+"|"+type+"|"+state+"|"+toString("%d", _PlayerPets[i].Size)+"|"+toString("%d", _PlayerPets[i].StableId)+"|"+toString("%d,%d,%d", _PlayerPets[i].Landscape_X, _PlayerPets[i].Landscape_Y, _PlayerPets[i].Landscape_Z)+"|"+toString("%u", timeBeforeDespawn)+"|"+toString("%f/%f", _PlayerPets[i].Satiety, _PlayerPets[i].MaxSatiety)+"|"+toString("%u|%u/%u|%u/%u", slots, bulk, max_bulk, weight, max_weight)+"|"+inBag+"|"+spawnFlag+"|"+name+"|"+spawnedPet+"\n";
 	}
+
+	pets += TheDataset.getEntityId(_RentAMount).toString();
 
 	return pets;
 }
@@ -6703,19 +6725,19 @@ void CCharacter::onAnimalSpawned(CPetSpawnConfirmationMsg::TSpawnError SpawnStat
 {
 	CPetAnimal &animal = _PlayerPets[PetIdx];
 
-	if (SpawnStatus == CPetSpawnConfirmationMsg::NO_ERROR_SPAWN)
+	if (SpawnStatus == CPetSpawnConfirmationMsg::NO_ERROR_SPAWN
+		|| (SpawnStatus == CPetSpawnConfirmationMsg::PET_ALREADY_SPAWNED && PetIdx == MAX_INVENTORY_ANIMAL))
 	{
-		if (PetIdx == 8)
+		if (PetIdx == MAX_INVENTORY_ANIMAL) // Special case of RentAMount
 		{
 			CCreature* c = CreatureManager.getCreature(TheDataset.getEntityId(PetMirrorRow));
-			if (c)
+			if (c) {
 				c->setIsAPet(true);
-			c->setName("pet_of_"+getName().toString());
-
+				c->setName("pet_of_"+getName().toString());
+			}
 			CMirrorPropValue<TYPE_FUEL> freeSpeedMode(TheDataset, PetMirrorRow, DSPropertyFUEL);
 			freeSpeedMode = true;
 			_RentAMount = PetMirrorRow;
-
 		}
 		else if (PetIdx < MAX_INVENTORY_ANIMAL)
 		{
@@ -7265,12 +7287,15 @@ void CCharacter::removeAnimal(CGameItemPtr item, CPetCommandMsg::TCommand mode)
 	}
 }
 
-void CCharacter::removeRentAMount()
+void CCharacter::removeRentAMount(TDataSetRow rentamount)
 {
 	CPetCommandMsg msg;
 	msg.Command = CPetCommandMsg::DESPAWN;
 	msg.CharacterMirrorRow = _EntityRowId;
-	msg.PetMirrorRow = _RentAMount;
+	if (rentamount == INVALID_DATASET_INDEX)
+		msg.PetMirrorRow = _RentAMount;
+	else
+		msg.PetMirrorRow = rentamount;
 	msg.Coordinate_X = _EntityState.X;
 	msg.Coordinate_Y = _EntityState.Y;
 	msg.Coordinate_H = _EntityState.Z;
@@ -8197,7 +8222,7 @@ void CCharacter::addGuildPoints(uint32 points)
 // addXpToSkillInternal : Add amount of xp gain to a skill
 //---------------------------------------------------
 double CCharacter::addXpToSkillInternal(double XpGain, const std::string &ContSkill, TAddXpToSkillMode addXpMode,
-										std::map<SKILLS::ESkills, CXpProgressInfos> &gainBySkill, bool silent)
+										std::map<SKILLS::ESkills, CXpProgressInfos> &gainBySkill, bool silent, bool useCats)
 {
 	H_AUTO(CCharacter_addXpToSkill);
 
@@ -8321,9 +8346,9 @@ double CCharacter::addXpToSkillInternal(double XpGain, const std::string &ContSk
 	uint32 ringCatalyserLvl = 0;
 	uint32 ringCatalyserCount = 0;
 	// Don't take away cats if free trial limit reached and there is no DP.
-	bool bConsumeCats = !(bFreeTrialLimitReached && _DeathPenalties->isNull());
+	bool bConsumeCats = useCats && !(bFreeTrialLimitReached && _DeathPenalties->isNull()) && addXpMode != AddXpToSkillBranch;
 
-	if (bConsumeCats && (addXpMode != AddXpToSkillBranch))
+	if (bConsumeCats)
 	{
 		if (_XpCatalyserSlot != INVENTORIES::INVALID_INVENTORY_SLOT)
 		{
@@ -8422,6 +8447,8 @@ double CCharacter::addXpToSkillInternal(double XpGain, const std::string &ContSk
 	// For AddXpToSkillBranch mode
 	double XpGainTruncated = XpGain;
 	double XpGainRemainder = 0.0;
+
+	nlinfo("<CCharacter::addXpToSkill> Skill %s Reach needed amount xp ( xp %f / xp Needed %d ) for progress", skillName.c_str(), skill->Xp, stage->XpForPointSkill);
 
 	if (skill->Xp > stage->XpForPointSkill)
 	{
@@ -17024,14 +17051,14 @@ bool CCharacter::pickUpRawMaterial(uint32 indexInTempInv, bool* lastMaterial)
 			if (useGenericMats)
 			{
 				 // Not Named or Boss mats
-				if (genericMp->ItemId != mp->ItemId && rand() % 500 < modifier)
+				if (mp->Quantity > 0 && genericMp->ItemId != mp->ItemId && rand() % 500 < modifier)
 				{
 					SM_STATIC_PARAMS_1(params, STRING_MANAGER::sbrick);
 					params[0].SheetId = usedSheet;
 					sendDynamicSystemMessage(_EntityRowId, "ALLEGORY_EFFECT_TRIGGERED", params);
 					bonus = 2;
 				}
-				item = createItem(quality, bonus*genericMp->Quantity, genericMp->ItemId);
+				item = createItem(quality, bonus*mp->Quantity, genericMp->ItemId);
 			}
 			else
 				item = createItem(quality, mp->Quantity, mp->ItemId);
@@ -22926,10 +22953,10 @@ void CCharacter::setProspectionLocateDepositEffect(CSEffectPtr effect)
 
 //------------------------------------------------------------------------------
 
-void CCharacter::addXpToSkill(double XpGain, const std::string &Skill, bool silent)
+void CCharacter::addXpToSkill(double XpGain, const std::string &Skill, bool silent, bool useCats)
 {
 	std::map<SKILLS::ESkills, CXpProgressInfos> dummy;
-	XpGain = addXpToSkillInternal(XpGain, Skill, AddXpToSkillSingle, dummy, silent);
+	XpGain = addXpToSkillInternal(XpGain, Skill, AddXpToSkillSingle, dummy, silent, useCats);
 	if (XpGain > 0)
 	{
 		do
