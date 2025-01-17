@@ -304,6 +304,16 @@ table.insert(SearchCommand.commands_list,{"eScript", ":DEV:SGM:GM:EM:", "setFact
 
 --END eScript commands
 
+
+
+function SearchCommand:pars_all_emotes()
+	local emot_list = getEmotesList()
+
+	for emote_id,emote_translation in pairs(emot_list) do
+		table.insert(SearchCommand.commands_list,{"client", "player", "client_emote_desc", emote_translation, {{"Text:<CustomEmoteText>",""},{"none",""}}})
+	end
+end
+
 function SearchCommand:find(tbl, value)
 	for k, v in pairs(tbl) do
 		if v == value then
@@ -1634,5 +1644,11 @@ function SearchCommand:finish_commands(command_name,uiId)
 	SearchCommand:close_modal(uiId)
 	SearchCommand:search(uiId)
 end
+
+--##############Pars now all Emotes and add it to command table
+SearchCommand:pars_all_emotes()
+--##############END Pars now all Emotes and add it to command table
+
+
 -- VERSION --
 RYZOM_SEARCH_COMMAND_VERSION = 367
