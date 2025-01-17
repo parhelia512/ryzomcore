@@ -141,6 +141,7 @@ void CGuild::addXP( uint32 xp )
 	{
 		setXP( _XP + xp );
 		CBankAccessor_GUILD::getGUILD().setXP(_DbGroup, _XP);
+		sendMessageToGuildMembers( "GUILD_XP_GAIN" );
 	}
 //	setClientDBProp( "GUILD:XP", _XP );
 }
@@ -550,9 +551,9 @@ void CGuild::dumpGuildInfos( NLMISC::CLog & log )
 	log.displayNL("\tMoney: %" NL_I64 "u", getMoney() );
 //	log.displayNL("\tVillage: %hu", getVillage() );
 	log.displayNL("\tCreation date: %u", getCreationDate() );
-//	log.displayNL("\tXP: %u", getXP() );
+	log.displayNL("\tXP: %u", getXP() );
 //	log.displayNL("\tBulk: %d", _Inventory->getInventoryBulk() );
-	log.displayNL("\tMax bulk: %d", _Inventory->getMaxBulk() );
+//	log.displayNL("\tMax bulk: %d", _Inventory->getMaxBulk() );
 //	log.displayNL("\tCharge points: %u", getChargesPoints() );
 	log.displayNL("\tRace: %s", EGSPD::CPeople::toString(getRace()).c_str() );
 	log.displayNL("\tIcon: 0x%016" NL_I64 "x", getIcon() );
@@ -1059,7 +1060,7 @@ void CGuild::putItem( CCharacter * user, INVENTORIES::TInventory srcInv, uint32 
 	if (!member)
 		return;
 
-	uint8 chest = floor((float)slot / (float)GuildChestSlots);
+	uint8 chest = floor((float)dstSlot / (float)GuildChestSlots);
 
 
 	if (!haveChestViewGrade(chest, member->getGrade()) || !haveChestPutGrade(chest, member->getGrade()))
@@ -1102,7 +1103,7 @@ void CGuild::putItem( CCharacter * user, INVENTORIES::TInventory srcInv, uint32 
 	// try to move the required quantity of the item
 	if ( CInventoryBase::moveItem(user->getInventory(srcInv), slot, _Inventory, dstSlot, quantity ) != CInventoryBase::ior_ok )
 	{
-		CCharacter::sendDynamicSystemMessage( user->getId(),"GUILD_PLAYER_BAG_FULL" );
+		CCharacter::sendDynamicSystemMessage( user->getId(),"GUILD_ITEM_MAX_BULK" );
 		return;
 	}
 }

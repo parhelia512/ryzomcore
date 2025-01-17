@@ -941,7 +941,7 @@ CVector CUserEntity::getVelocity() const
 {
 	static const CVector lateral(0,0,1);
 	static CVector velocity;
-	velocity =  front() * _FrontVelocity + ( lateral ^ front()) * _LateralVelocity;
+	velocity = front() * _FrontVelocity + ( lateral ^ front()) * _LateralVelocity;
 	velocity.normalize();
 	// User is Dead
 	if(isDead())
@@ -1218,25 +1218,46 @@ void CUserEntity::applyMotion(CEntityCL *target)
 		// User was stop and the next pos is to close to begin to move.
 		else
 			speed = CVectorD::Null;
+
+		// SPEED VECTOR NULL -> NO MOVE
+		if(speed == CVectorD::Null)
+			return;
+
+		double modif = (100.0f/(float)NetMngr.getMsPerTick());
+		clamp(modif, 0.0, 1.0);
+		speed *= modif;
 	}
 	else
 	{
 		speed = getVelocity()*_SpeedFactor.getValue();
+		double modif = (100.0f/(float)NetMngr.getMsPerTick());
+		clamp(modif, 0.0, 1.0);
+		speed *= modif;
+
+		if (mount && mount->getPrimitive() && mount->getSheet()->Race == EGSPD::CPeople::WaterFauna)
+		{
+			if(_CheckPrimitive)
+			{
+				UGlobalPosition gPos1, gPos2;
+				_Primitive->getGlobalPosition(gPos1, dynamicWI);
+				_Primitive->move(speed, dynamicWI);
+				_Primitive->getGlobalPosition(gPos2, dynamicWI);
+				float waterHeight;
+				if (!GR->isWaterPosition(gPos2, waterHeight))
+				{
+					_HasMoved = false;
+					_Primitive->setGlobalPosition(gPos1, dynamicWI);
+					return;
+				}
+			}
+		}
+
 		_SpeedFactor.addFactorValue(0.005f);
 	}
-
-	// SPEED VECTOR NULL -> NO MOVE
-	if(speed == CVectorD::Null)
-		return;
 
 	// First Person View
 	if(UserControls.isInternalView())
 	{
-		// If the server is slow, the client move slower too (only needed in FPV).
-		double modif = (100.0f/(float)NetMngr.getMsPerTick());
-		// don't increase speed
-		clamp(modif, 0.0, 1.0);
-		speed *= modif;
 		// Move
 		_HasMoved = true;
 		_Primitive->move(speed, dynamicWI);
@@ -1246,9 +1267,6 @@ void CUserEntity::applyMotion(CEntityCL *target)
 	// Third Person View
 	else
 	{
-		double modif = (100.0f/(float)NetMngr.getMsPerTick());
-		clamp(modif, 0.0, 1.0);
-		speed *= modif;
 		speed += pos();
 		sint64 x = (sint64)((sint32)(speed.x * 1000.0));
 		sint64 y = (sint64)((sint32)(speed.y * 1000.0));
@@ -1771,7 +1789,6 @@ bool CUserEntity::msgForCombatPos(NLMISC::CBitMemStream &out)
 	return false;
 }// msgForCombatPos //
 
-
 //-----------------------------------------------
 // checkPos :
 // Check the User Position according to the server code.
@@ -1780,6 +1797,8 @@ bool CUserEntity::msgForCombatPos(NLMISC::CBitMemStream &out)
 //-----------------------------------------------
 void CUserEntity::checkPos()
 {
+	CCharacterCL *mount = dynamic_cast<CCharacterCL *>(EntitiesMngr.entity(_Mount));
+
 	if(PACS && _Primitive)
 	{
 		// Is in water ?
@@ -1808,7 +1827,6 @@ void CUserEntity::checkPos()
 						{
 							mode(MBEHAV::MOUNT_SWIM);
 							// also change mounted entity mode
-							CCharacterCL *mount = dynamic_cast<CCharacterCL *>(EntitiesMngr.entity(_Mount));
 							if(mount)
 							{
 								// Set the mount.
@@ -1837,7 +1855,6 @@ void CUserEntity::checkPos()
 					{
 						mode(MBEHAV::MOUNT_NORMAL);
 						// also change mounted entity mode
-						CCharacterCL *mount = dynamic_cast<CCharacterCL *>(EntitiesMngr.entity(_Mount));
 						if(mount)
 						{
 							// Set the mount.
@@ -1883,6 +1900,20 @@ void CUserEntity::checkPos()
 			}
 			else
 			{
+				if (mount && mount->getSheet()->Race == EGSPD::CPeople::WaterFauna)
+				{
+					//Test here the move and validate it. If it's not water => no move
+					UGlobalPosition gPos;
+					_CheckPrimitive->getGlobalPosition(gPos, dynamicWI);
+					float waterHeight;
+					if (!GR->isWaterPosition(gPos, waterHeight))
+					{
+						_HasMoved = false;
+						pacsPos(_LastPositionValidated,_LastGPosValidated);
+						return;
+					}
+				}
+
 				_LastPositionValidated = _Primitive->getFinalPosition(dynamicWI);
 				_Primitive->getGlobalPosition(_LastGPosValidated, dynamicWI);
 			}
