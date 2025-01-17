@@ -320,6 +320,7 @@
 	<action handler="set" params="dblink=UI:SAVE:CHAT:COLORS:TELL|value=makeRGB(170,170,170)" />
 	<action handler="set" params="dblink=UI:SAVE:CHAT:COLORS:DYN|value=makeRGB(162,255,173)" />
 	<action handler="set" params="dblink=UI:SAVE:CHAT:ENTER_DONT_QUIT_CB|value=0" />
+	<action handler="set" params="dblink=UI:SAVE:CHAT:CHAT_AUTOCOMPLETE|value=1" />
 	<action handler="set" params="dblink=UI:SAVE:CHAT:SHOW_TIMES_IN_CHAT_CB|value=0" />
 	<action handler="set" params="dblink=UI:SAVE:CHAT:SHOW_DYN_CHANNEL_NAME_IN_CHAT_CB|value=0" />
 
@@ -404,6 +405,15 @@
 	<action handler="set" params="dblink=UI:SAVE:INV_GUILD:FILTER_MP|value=1" />
 	<action handler="set" params="dblink=UI:SAVE:INV_GUILD:FILTER_MISSMP|value=1" />
 	<action handler="set" params="dblink=UI:SAVE:INV_GUILD:FILTER_TP|value=1" />
+	<action handler="set" params="dblink=UI:SAVE:INV_GUILD2:SORT_TYPE|value=1" />
+	<action handler="set" params="dblink=UI:SAVE:INV_GUILD2:ICON_LIST|value=0" />
+	<action handler="set" params="dblink=UI:SAVE:INV_GUILD2:FILTER_ARMOR|value=1" />
+	<action handler="set" params="dblink=UI:SAVE:INV_GUILD2:FILTER_WEAPON|value=1" />
+	<action handler="set" params="dblink=UI:SAVE:INV_GUILD2:FILTER_TOOL|value=1" />
+	<action handler="set" params="dblink=UI:SAVE:INV_GUILD2:FILTER_PET|value=1" />
+	<action handler="set" params="dblink=UI:SAVE:INV_GUILD2:FILTER_MP|value=1" />
+	<action handler="set" params="dblink=UI:SAVE:INV_GUILD2:FILTER_MISSMP|value=1" />
+	<action handler="set" params="dblink=UI:SAVE:INV_GUILD2:FILTER_TP|value=1" />
 	<action handler="set" params="dblink=UI:SAVE:INV_ROOM:SORT_TYPE|value=1" />
 	<action handler="set" params="dblink=UI:SAVE:INV_ROOM:ICON_LIST|value=1" />
 	<action handler="set" params="dblink=UI:SAVE:INV_ROOM:FILTER_ARMOR|value=1" />
