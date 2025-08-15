@@ -94,7 +94,7 @@ jobs:
 
     - name: Configure CMake
       env:
-        MACOSX_DEPLOYMENT_TARGET: 10.12
+        MACOSX_DEPLOYMENT_TARGET: 10.13
       run: >
         cmake --preset ${{ matrix.cmake_preset }}
         ${{ matrix.cmake_options }}
@@ -110,7 +110,7 @@ jobs:
 
     - name: Build
       env:
-        MACOSX_DEPLOYMENT_TARGET: 10.12
+        MACOSX_DEPLOYMENT_TARGET: 10.13
       run: cmake --build --preset client
 
     - name: Package
