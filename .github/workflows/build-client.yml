@@ -78,12 +78,12 @@ jobs:
         wget https://raw.githubusercontent.com/microsoft/msquic/main/src/inc/quic_sal_stub.h
         sudo mv msquic.h msquic_posix.h quic_sal_stub.h /usr/include/
 
-    - uses: actions/cache/restore@v4.0.2
+    - uses: actions/cache/restore@v4
       with:
         path: ${{ steps.strings.outputs.hunter-dir }}
         key: ${{ matrix.os }}-hunter
 
-    - uses: actions/cache/restore@v4.0.2
+    - uses: actions/cache/restore@v4
       if: runner.os == 'Windows'
       with:
         path: C:\Users\runneradmin\AppData\Local\Temp\chocolatey
