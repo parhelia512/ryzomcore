@@ -286,13 +286,6 @@ IF(WITH_QT5)
   FIND_QT5()
 ENDIF()
 
-IF(WITH_QT)
-  SET(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${QTDIR} $ENV{QTDIR})
-
-  # Use Qt 4
-  FIND_PACKAGE(Qt4 COMPONENTS QtCore QtGui QtXml QtOpenGL REQUIRED)
-ENDIF()
-
 #TODO: hunter assimp package
 IF(WITH_ASSIMP)
   FIND_PACKAGE(assimp REQUIRED)
@@ -306,10 +299,13 @@ IF(WITH_NEL_TESTS OR WITH_TESTING)
   FIND_PACKAGE(CppTest)
 
   ENABLE_TESTING()
+  # GoogleTest requires at least C++17 not the whole project depends on google test though
+  # set(CMAKE_CXX_STANDARD 17)
+  # set(CMAKE_CXX_STANDARD_REQUIRED ON)
   include(FetchContent)
   FetchContent_Declare(
           googletest
-          URL https://github.com/google/googletest/archive/a7f443b80b105f940225332ed3c31f2790092f47.zip
+          URL https://github.com/google/googletest/archive/54915d462bb64e9b2bd1a3f0e70c00e6f5d817fb.zip
           EXCLUDE_FROM_ALL
   )
   SET(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
