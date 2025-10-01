@@ -192,7 +192,8 @@ IF(HUNTER_ENABLED)
 
   HUNTER_ADD_PACKAGE(libxml2)
   FIND_PACKAGE(libxml2 CONFIG REQUIRED)
-  SET(LIBXML2_LIBRARIES ${LIBXML2_LIBRARIES} libxml2::libxml2)
+  # add compatibility with cmake find module
+  add_library(LibXml2::LibXml2 ALIAS libxml2::libxml2)
 
   # cross compiling doesn't quite work on the hunter openssl package therefor compile it separately and use it
   IF(NOT CMAKE_CROSSCOMPILING)
@@ -204,7 +205,6 @@ IF(HUNTER_ENABLED)
 
   # for precompiled headers, not needed if using TARGET_PRECOMPILE_HEADERS() from cmake 3.16+
   SET(ZLIB_INCLUDE_DIR ZLIB_ROOT/include)
-  SET(LIBXML2_INCLUDE_DIR ${LIBXML2_ROOT}/include/libxml2)
 ELSE()
 FIND_PACKAGE(ZLIB REQUIRED)
 FIND_PACKAGE(LibXml2 REQUIRED)
@@ -229,19 +229,41 @@ ENDIF()
 NL_CONFIGURE_CHECKS()
 
 IF(WITH_STATIC_LIBXML2)
-  ADD_DEFINITIONS(-DLIBXML_STATIC)
+  if(HUNTER_ENABLED)
+      set_property(TARGET libxml2::libxml2
+              APPEND
+              PROPERTY INTERFACE_COMPILE_DEFINITIONS
+              LIBXML_STATIC
+      )
+  else()
+      set_property(TARGET LibXml2::LibXml2
+              APPEND
+              PROPERTY INTERFACE_COMPILE_DEFINITIONS
+              LIBXML_STATIC
+      )
+  endif ()
 ENDIF()
 
 FIND_PACKAGE(Iconv QUIET)
 IF(ICONV_FOUND)
   INCLUDE_DIRECTORIES(${ICONV_INCLUDE_DIR})
-  SET(LIBXML2_LIBRARIES ${LIBXML2_LIBRARIES} ${ICONV_LIBRARIES})
+  if(TARGET LibXml2::LibXml2 AND NOT HUNTER_ENABLED)
+      set_property(TARGET LibXml2::LibXml2
+            APPEND
+            PROPERTY INTERFACE_LINK_LIBRARIES
+            ${ICONV_LIBRARIES}
+      )
+  endif ()
 ENDIF()
 
 IF(WITH_STATIC)
   # libxml2 could need winsock2 library
-  IF(WINSOCK2_LIB)
-    SET(LIBXML2_LIBRARIES ${LIBXML2_LIBRARIES} ${WINSOCK2_LIB})
+  IF(WINSOCK2_LIB AND TARGET LibXml2::LibXml2 AND NOT HUNTER_ENABLED)
+      set_property(TARGET LibXml2::LibXml2
+            APPEND
+            PROPERTY INTERFACE_LINK_LIBRARIES
+            ${WINSOCK2_LIB}
+      )
   ENDIF()
 ENDIF()
 
