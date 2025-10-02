@@ -188,12 +188,17 @@ IF(HUNTER_ENABLED)
   HUNTER_ADD_PACKAGE(ZLIB)
 
   FIND_PACKAGE(ZLIB CONFIG REQUIRED)
-  SET(ZLIB_LIBRARY ZLIB::zlib)
+  # add compatibility with cmake findZLIB module
+  if(ZLIB_FOUND AND NOT TARGET ZLIB::ZLIB)
+      add_library(ZLIB::ZLIB ALIAS ZLIB::zlib)
+  endif()
 
   HUNTER_ADD_PACKAGE(libxml2)
   FIND_PACKAGE(libxml2 CONFIG REQUIRED)
   # add compatibility with cmake find module
-  add_library(LibXml2::LibXml2 ALIAS libxml2::libxml2)
+  if(libxml2_FOUND AND NOT TARGET LibXml2::LibXml2)
+      add_library(LibXml2::LibXml2 ALIAS libxml2::libxml2)
+  endif()
 
   # cross compiling doesn't quite work on the hunter openssl package therefor compile it separately and use it
   IF(NOT CMAKE_CROSSCOMPILING)
@@ -245,13 +250,12 @@ IF(WITH_STATIC_LIBXML2)
 ENDIF()
 
 FIND_PACKAGE(Iconv QUIET)
-IF(ICONV_FOUND)
-  INCLUDE_DIRECTORIES(${ICONV_INCLUDE_DIR})
+IF(Iconv_FOUND)
   if(TARGET LibXml2::LibXml2 AND NOT HUNTER_ENABLED)
       set_property(TARGET LibXml2::LibXml2
             APPEND
             PROPERTY INTERFACE_LINK_LIBRARIES
-            ${ICONV_LIBRARIES}
+            Iconv::Iconv
       )
   endif ()
 ENDIF()
@@ -350,18 +354,12 @@ IF(WITH_NEL)
 
     HUNTER_ADD_PACKAGE(CURL)
     FIND_PACKAGE(CURL CONFIG REQUIRED)
-    # TODO: for nelgui
-    SET(CURL_LIBRARIES CURL::libcurl libxml2::libxml2)
   ELSE()
     IF(WITH_GUI)
       FIND_PACKAGE(Luabind REQUIRED)
     ENDIF()
 
     FIND_PACKAGE(CURL REQUIRED)
-    # if cmake finds config-file package, ie FIND_PACKAGE(CURL CONFIG), then CURL_LIBRARIES is not defined
-    IF(TARGET CURL::libcurl)
-      SET(CURL_LIBRARIES CURL::libcurl)
-    ENDIF()
 
     IF((WIN32 OR CURL_LIBRARIES MATCHES "\\.a") AND WITH_STATIC_CURL)
       SET(CURL_STATIC ON)
@@ -370,43 +368,82 @@ IF(WITH_NEL)
     ENDIF()
 
     IF(CURL_STATIC)
-      SET(CURL_DEFINITIONS -DCURL_STATICLIB)
-
-      LIST(APPEND CURL_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIR})
-      LIST(APPEND CURL_LIBRARIES ${OPENSSL_LIBRARIES})
+      set_property(TARGET CURL::libcurl
+              APPEND
+              PROPERTY INTERFACE_COMPILE_DEFINITIONS
+              CURL_STATICLIB
+      )
+      set_property(TARGET CURL::libcurl
+              APPEND
+              PROPERTY INTERFACE_INCLUDE_DIRECTORIES
+              ${OPENSSL_INCLUDE_DIR}
+      )
+      set_property(TARGET CURL::libcurl
+              APPEND
+              PROPERTY INTERFACE_LINK_LIBRARIES
+              ${OPENSSL_LIBRARIES}
+      )
 
       IF(WIN32)
-        LIST(APPEND CURL_LIBRARIES Crypt32 Cryptui)
+        set_property(TARGET CURL::libcurl
+                APPEND
+                PROPERTY INTERFACE_LINK_LIBRARIES
+                Crypt32 Cryptui
+        )
       ELSE()
         # CURL depends on libidn
         FIND_LIBRARY(IDN_LIBRARY idn)
         IF(IDN_LIBRARY)
-          LIST(APPEND CURL_LIBRARIES ${IDN_LIBRARY})
+          set_property(TARGET CURL::libcurl
+                  APPEND
+                  PROPERTY INTERFACE_LINK_LIBRARIES
+                  ${IDN_LIBRARY}
+          )
         ENDIF()
 
         # CURL Macports version can depend on libidn, libidn2, libintl, libpsl and libiconv too
         IF(APPLE)
           FIND_LIBRARY(INTL_LIBRARY intl)
           IF(INTL_LIBRARY)
-            LIST(APPEND CURL_LIBRARIES ${INTL_LIBRARY})
+            set_property(TARGET CURL::libcurl
+                    APPEND
+                    PROPERTY INTERFACE_LINK_LIBRARIES
+                    ${INTL_LIBRARY}
+            )
           ENDIF()
 
           FIND_LIBRARY(IDN2_LIBRARY idn2)
           IF(IDN2_LIBRARY)
-            LIST(APPEND CURL_LIBRARIES ${IDN2_LIBRARY})
+            set_property(TARGET CURL::libcurl
+                    APPEND
+                    PROPERTY INTERFACE_LINK_LIBRARIES
+                    ${IDN2_LIBRARY}
+            )
           ENDIF()
 
           FIND_LIBRARY(PSL_LIBRARY psl)
           IF(PSL_LIBRARY)
-            LIST(APPEND CURL_LIBRARIES ${PSL_LIBRARY})
+            set_property(TARGET CURL::libcurl
+                    APPEND
+                    PROPERTY INTERFACE_LINK_LIBRARIES
+                    ${PSL_LIBRARY}
+            )
           ENDIF()
 
           FIND_LIBRARY(UNISTRING_LIBRARY unistring)
           IF(UNISTRING_LIBRARY)
-            LIST(APPEND CURL_LIBRARIES ${UNISTRING_LIBRARY})
+            set_property(TARGET CURL::libcurl
+                    APPEND
+                    PROPERTY INTERFACE_LINK_LIBRARIES
+                    ${UNISTRING_LIBRARY}
+            )
           ENDIF()
 
-          LIST(APPEND CURL_LIBRARIES ${SECURITY_FRAMEWORK})
+          set_property(TARGET CURL::libcurl
+                  APPEND
+                  PROPERTY INTERFACE_LINK_LIBRARIES
+                  ${SECURITY_FRAMEWORK}
+          )
         ENDIF()
       ENDIF()
     ENDIF()
