@@ -2,7 +2,7 @@ name: "Ryzom Core: CI / CD"
 
 on:
   push:
-    branches: [ "core4", "feature/*" ]
+    branches: [ "core4", "feature/*", "bugfix/*" ]
     paths-ignore:
       - '.devcontainer/**'
       - '.github/workflows/**'
@@ -53,25 +53,30 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-22.04, ubuntu-24.04 ]
+        build-type: ["static", "dynamic"]
+        exclude:
+          - os: ubuntu-22.04
+            build-type: dynamic
     steps:
       - uses: actions/checkout@v4
 
       - id: cache
         uses: actions/cache@v4
         with:
-          key: nel-${{ matrix.os }}-${{ hashFiles('nel/**', '.github/nel/**', 'cmake/**', 'CMakeModules/**', 'CMakeLists.txt', 'CMakePresets.json') }}
+          key: nel-${{ matrix.os }}-${{ matrix.build-type }}-${{ hashFiles('nel/**', '.github/nel/**', 'cmake/**', 'CMakeModules/**', 'CMakeLists.txt', 'CMakePresets.json') }}
           path: ${{ needs.strings.outputs.build-dir }}/nel/nel-*
 
       - uses: ./.github/nel
         if: steps.cache.outputs.cache-hit != 'true'
         with:
+          os: ${{ matrix.os }}
+          build-type: ${{ matrix.build-type }}
           build-dir: ${{ needs.strings.outputs.build-dir }}
           build-version: ${{ needs.strings.outputs.build-version }}
-          os: ${{ matrix.os }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: nel-${{ matrix.os }}-${{ needs.strings.outputs.build-version }}
+          name: nel-${{ matrix.os }}-${{ matrix.build-type }}-${{ needs.strings.outputs.build-version }}
           path: ${{ needs.strings.outputs.build-dir }}/nel/nel-*
           if-no-files-found: error
 
@@ -89,7 +94,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: nel-${{ matrix.os }}-*
+          pattern: nel-${{ matrix.os }}-static-*
           merge-multiple: true
           path: ${{ needs.strings.outputs.build-dir }}
 
@@ -121,14 +126,16 @@ jobs:
     needs: [ strings, nel ]
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ ubuntu-24.04 ]
+        build-type: ["static", "dynamic"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: nel-${{ matrix.os }}-*
+          pattern: nel-${{ matrix.os }}-${{ matrix.build-type }}-*
           merge-multiple: true
           path: ${{ needs.strings.outputs.build-dir }}
 
@@ -142,6 +149,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           os: ${{ matrix.os }}
+          build-type: ${{ matrix.build-type }}
           install-dir: ${{ needs.strings.outputs.install-dir }}
           image-group: ${{ needs.strings.outputs.image-group }}
           image-version: ${{ needs.strings.outputs.image-version }}
@@ -150,7 +158,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ryzom-${{ matrix.os }}-${{ needs.strings.outputs.build-version }}
+          name: ryzom-${{ matrix.os }}-${{ matrix.build-type }}-${{ needs.strings.outputs.build-version }}
           path: ${{ needs.strings.outputs.build-dir }}/ryzom/ryzom-*
           if-no-files-found: error
 
@@ -167,7 +175,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: nel-${{ matrix.os }}-*
+          pattern: nel-${{ matrix.os }}-static-*
           merge-multiple: true
           path: ${{ needs.strings.outputs.build-dir }}
 
@@ -205,7 +213,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: nel-${{ matrix.os }}-*
+          pattern: nel-${{ matrix.os }}-static-*
           merge-multiple: true
           path: ${{ needs.strings.outputs.build-dir }}
 
