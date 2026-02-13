@@ -11,6 +11,20 @@
 		}
 	}
 
+	if (!function_exists('eregi')) {
+		/** removed from php 7.0.0 */
+		function eregi($pattern, $line, &$match = array()) {
+			return preg_match('/'.$pattern.'/i', $line, $match);
+		}
+	}
+
+	if (!function_exists('ereg_replace')) {
+		/** removed from php 7.0.0 */
+		function ereg_replace($pattern, $replacement, $string) {
+			return preg_replace('/'.$pattern.'/', $replacement, $string);
+		}
+	}
+
 	/*
 	 * pushes some data in the debug variable
 	 */

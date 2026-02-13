@@ -415,8 +415,7 @@ class Mail_Handler{
     
         preg_match_all("/=\?UTF-8\?B\?([^\?]+)\?=/i",$str, $arr);
         for ($i=0;$i<count($arr[1]);$i++){ 
-            $str=ereg_replace(ereg_replace("\?","\?",
-               $arr[0][$i]),base64_decode($arr[1][$i]),$str);
+            $str=preg_replace('/'.preg_quote($arr[0][$i], '/').'/',base64_decode($arr[1][$i]),$str);
         }
         return $str;
     
