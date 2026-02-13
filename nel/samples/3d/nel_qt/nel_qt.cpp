@@ -26,7 +26,7 @@
 #endif
 
 // Qt includes
-#include <QtGui/QApplication>
+#include <QtWidgets/QApplication>
 #include <QtCore/QMap>
 #include <QtCore/qdebug.h>
 

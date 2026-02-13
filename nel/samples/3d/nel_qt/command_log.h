@@ -21,9 +21,9 @@
 // STL includes
 
 // Qt includes
-#include <QtGui/QWidget>
-#include <QtGui/QTextEdit>
-#include <QtGui/QLineEdit>
+#include <QtWidgets/QWidget>
+#include <QtWidgets/QTextEdit>
+#include <QtWidgets/QLineEdit>
 
 // NeL includes
 #include <nel/misc/log.h>

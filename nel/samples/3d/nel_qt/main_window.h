@@ -21,7 +21,7 @@
 // STL includes
 
 // Qt includes
-#include <QtGui/QMainWindow>
+#include <QtWidgets/QMainWindow>
 
 // NeL includes
 #include <nel/misc/rgba.h>
@@ -36,7 +36,7 @@
 #include "sound_utilities.h"
 
 class QTreeView;
-class QDirModel;
+class QFileSystemModel;
 class QUndoStack;
 class QScrollArea;
 
@@ -138,7 +138,7 @@ private:
 	QDockWidget *m_GraphicsConfigDock;
 
 	QTreeView *m_AssetTreeView;
-	QDirModel *m_AssetTreeModel;
+	QFileSystemModel *m_AssetTreeModel;
 	QDockWidget *m_AssetTreeDock;
 	
 	QMenu *m_FileMenu;

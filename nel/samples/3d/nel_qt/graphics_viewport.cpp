@@ -20,7 +20,7 @@
 // STL includes
 
 // Qt includes
-#include <QtGui/QAction>
+#include <QtWidgets/QAction>
 
 // NeL includes
 #include <nel/misc/debug.h>
@@ -46,7 +46,11 @@ namespace {
 
 QString nli18n(const char *label)
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	return QString::fromUtf16(reinterpret_cast<const char16_t *>(CI18N::get(label).c_str()));
+#else
 	return QString::fromUtf16(CI18N::get(label).c_str());
+#endif
 }
 
 } /* anonymous namespace */

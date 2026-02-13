@@ -20,11 +20,11 @@
 // STL includes
 
 // Qt includes
-#include <QtGui/QtGui>
-#include <QtGui/QTreeView>
-#include <QtGui/QDirModel>
-#include <QtGui/QUndoStack>
-#include <QtGui/QScrollArea>
+#include <QtWidgets/QtWidgets>
+#include <QtWidgets/QTreeView>
+#include <QtWidgets/QFileSystemModel>
+#include <QtWidgets/QUndoStack>
+#include <QtWidgets/QScrollArea>
 
 // NeL includes
 // #include <nel/misc/debug.h>
@@ -45,7 +45,11 @@ namespace {
 
 QString nli18n(const char *label)
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	return QString::fromUtf16(reinterpret_cast<const char16_t *>(CI18N::get(label).c_str()));
+#else
 	return QString::fromUtf16(CI18N::get(label).c_str());
+#endif
 }
 
 } /* anonymous namespace */
@@ -339,7 +343,8 @@ void CMainWindow::createDockWindows()
 		m_AssetTreeDock = new QDockWidget(this);
 		m_AssetTreeDock->setAllowedAreas(Qt::AllDockWidgetAreas);
 		m_AssetTreeView = new QTreeView(m_AssetTreeDock);
-		m_AssetTreeModel = new QDirModel();
+		m_AssetTreeModel = new QFileSystemModel();
+		m_AssetTreeModel->setRootPath(QDir::currentPath());
 		m_AssetTreeView->setModel(m_AssetTreeModel);
 		m_AssetTreeView->setSortingEnabled(true);
 		m_AssetTreeDock->setWidget(m_AssetTreeView);
