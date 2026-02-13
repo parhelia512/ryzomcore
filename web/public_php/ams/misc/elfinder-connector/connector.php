@@ -2,7 +2,7 @@
 
 error_reporting(0); // Set E_ALL for debuging
 
-require_once('../../../config.php');
+require_once(dirname(dirname(dirname(__DIR__))) . '/config.php');
 
 include_once dirname(__FILE__).DIRECTORY_SEPARATOR.'elFinderConnector.class.php';
 include_once dirname(__FILE__).DIRECTORY_SEPARATOR.'elFinder.class.php';

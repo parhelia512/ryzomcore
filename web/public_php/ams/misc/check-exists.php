@@ -5,7 +5,7 @@ Copyright (c) 2012 Reactive Apps, Ronnie Garcia
 Released under the MIT License <http://www.opensource.org/licenses/mit-license.php> 
 */
 
-require_once('../../config.php');
+require_once(dirname(dirname(__DIR__)) . '/config.php');
 
 // Define a destination
 $targetFolder = '/uploads'; // Relative to the root and should match the upload folder in the uploader script
