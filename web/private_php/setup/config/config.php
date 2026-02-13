@@ -145,6 +145,15 @@ $NEL_SETUP_VERSION_CONFIGURED = (int)'%nelSetupVersion%';
 // Get installed version
 require_once('setup/version.php');
 
+if (!isset($NEL_SETUP_VERSION_CONFIGURED)) {
+	$NEL_SETUP_VERSION_CONFIGURED = 1;
+}
+if (PHP_SAPI !== 'cli' && (!isset($_SERVER['SCRIPT_NAME']) || strpos($_SERVER['SCRIPT_NAME'], '/setup/') === false) && $NEL_SETUP_VERSION_CONFIGURED < $NEL_SETUP_VERSION) {
+	header('HTTP/1.1 503 Service Unavailable');
+	header('Retry-After: 3600');
+	die('Database upgrade required. Run setup/upgrade.php.');
+}
+
 // Override user parameters
 require_once('config_user.php');
 
