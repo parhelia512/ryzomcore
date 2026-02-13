@@ -68,7 +68,7 @@ IF(WITH_NEL_TOOLS AND WITH_3D)
     ENDIF()
   ENDIF()
 
-  IF(WITH_QT5)
+  IF(WITH_QT5 OR WITH_QT6)
     ADD_SUBDIRECTORY(tile_edit_qt)
     ADD_SUBDIRECTORY(object_viewer_widget)
     ADD_SUBDIRECTORY(shared_widgets)
