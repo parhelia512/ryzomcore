@@ -234,7 +234,7 @@ Remove the CMakeCache.txt file and try again from another folder, e.g.:
 ENDMACRO(CHECK_OUT_OF_SOURCE)
 
 MACRO(NL_SETUP_DEFAULT_OPTIONS)
-  IF(WITH_QT5 OR WITH_QT6)
+  IF(WITH_QT5)
     OPTION(WITH_STUDIO              "Build Core Studio"                             OFF )
   ENDIF()
 
