@@ -33,12 +33,12 @@ if (!function_exists('_smarty_strftime_compat')) {
                     case 'B': $date_format .= 'F'; break;
                     case 'h': $date_format .= 'M'; break;
                     case 'd': $date_format .= 'd'; break;
-                    case 'e': $date_format .= 'j'; break;
+                    case 'e': $date_format .= sprintf('%2d', date('j', $timestamp)); break;
                     case 'G': $date_format .= 'o'; break;
                     case 'H': $date_format .= 'H'; break;
                     case 'I': $date_format .= 'h'; break;
-                    case 'k': $date_format .= 'G'; break;
-                    case 'l': $date_format .= 'g'; break;
+                    case 'k': $date_format .= sprintf('%2d', date('G', $timestamp)); break;
+                    case 'l': $date_format .= sprintf('%2d', date('g', $timestamp)); break;
                     case 'm': $date_format .= 'm'; break;
                     case 'M': $date_format .= 'i'; break;
                     case 'n': $date_format .= "\n"; break;
