@@ -152,16 +152,31 @@ $isSetupScript = $setupDir !== false && $scriptFilename !== false
 	&& strpos(str_replace('\\', '/', $scriptFilename), str_replace('\\', '/', $setupDir) . '/') === 0;
 $requiresUpgrade = $NEL_SETUP_VERSION_CONFIGURED < $NEL_SETUP_VERSION;
 if ($isWebRequest && !$isSetupScript && $requiresUpgrade) {
-	$scriptName = isset($_SERVER['SCRIPT_NAME']) ? str_replace('\\', '/', $_SERVER['SCRIPT_NAME']) : '';
-	$isLoginProtocol = substr($scriptName, -strlen('/login/r2_login.php')) === '/login/r2_login.php';
+	$loginScript = !empty($PUBLIC_PHP_PATH) ? realpath($PUBLIC_PHP_PATH . '/login/r2_login.php') : false;
+	$isLoginScript = $scriptFilename !== false && $loginScript !== false && $scriptFilename === $loginScript;
 	header('HTTP/1.1 503 Service Unavailable');
 	header('Retry-After: 3600');
-	if ($isLoginProtocol) {
+	if ($isLoginScript) {
 		header('Content-Type: text/plain; charset=utf-8');
 		die('0:Service temporarily unavailable while a database upgrade is in progress. Please try again later.');
 	}
 	header('Content-Type: text/html; charset=utf-8');
-	die('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Maintenance</title></head><body style="font-family:sans-serif;max-width:48rem;margin:3rem auto;padding:0 1rem;"><h1>Maintenance in progress</h1><p>The website is temporarily unavailable while a database upgrade is in progress.</p><p>Please try again later, or complete the upgrade at <code>setup/upgrade.php</code>.</p></body></html>');
+	$maintenancePage = <<<'HTML'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maintenance</title>
+</head>
+<body style="font-family:sans-serif;max-width:48rem;margin:3rem auto;padding:0 1rem;">
+<h1>Maintenance in progress</h1>
+<p>The website is temporarily unavailable while a database upgrade is in progress.</p>
+<p>Please try again later or contact the server administrator for upgrade progress.</p>
+</body>
+</html>
+HTML;
+	die($maintenancePage);
 }
 
 // Override user parameters
