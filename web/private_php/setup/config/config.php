@@ -152,16 +152,24 @@ $isSetupScript = $setupDir !== false && $scriptFilename !== false
 	&& strpos(str_replace('\\', '/', $scriptFilename), str_replace('\\', '/', $setupDir) . '/') === 0;
 $requiresUpgrade = $NEL_SETUP_VERSION_CONFIGURED < $NEL_SETUP_VERSION;
 if ($isWebRequest && !$isSetupScript && $requiresUpgrade) {
-	$loginScript = !empty($PUBLIC_PHP_PATH) ? realpath($PUBLIC_PHP_PATH . '/login/r2_login.php') : false;
-	$isLoginScript = $scriptFilename !== false && $loginScript !== false && $scriptFilename === $loginScript;
+	$scriptName = isset($_SERVER['SCRIPT_NAME']) ? str_replace('\\', '/', $_SERVER['SCRIPT_NAME']) : '';
+	$scriptDirectoryName = rtrim(trim(str_replace('\\', '/', dirname($scriptName)), '/'), '/');
+	$scriptDirectory = ($scriptDirectoryName === '' || $scriptDirectoryName === '.') ? '/' : '/' . $scriptDirectoryName;
+	$loginDirectorySuffix = '/login';
+	$loginResponsePrefix = '0:';
+	$isLoginScript = $scriptName !== ''
+		&& basename($scriptName) === 'r2_login.php'
+		&& strlen($scriptDirectory) >= strlen($loginDirectorySuffix)
+		&& substr($scriptDirectory, -strlen($loginDirectorySuffix)) === $loginDirectorySuffix;
+	$loginMaintenanceMessage = $loginResponsePrefix . 'Service temporarily unavailable while a database upgrade is in progress. Please try again later.';
 	header('HTTP/1.1 503 Service Unavailable');
 	header('Retry-After: 3600');
 	if ($isLoginScript) {
 		header('Content-Type: text/plain; charset=utf-8');
-		die('0:Service temporarily unavailable while a database upgrade is in progress. Please try again later.');
-	}
-	header('Content-Type: text/html; charset=utf-8');
-	$maintenancePage = <<<'HTML'
+		die($loginMaintenanceMessage);
+	} else {
+		header('Content-Type: text/html; charset=utf-8');
+		$maintenancePage = <<<'HTML'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -176,7 +184,8 @@ if ($isWebRequest && !$isSetupScript && $requiresUpgrade) {
 </body>
 </html>
 HTML;
-	die($maintenancePage);
+		die($maintenancePage);
+	}
 }
 
 // Override user parameters
