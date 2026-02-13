@@ -796,7 +796,7 @@
 		if (!isset($uViewGroups) ||  $uViewGroups == '')
 			$query = "SELECT uuser.login AS login, uuser.uid AS uid, uuser.useCookie AS useCookie, uuser.gid AS gid, ugroup.login AS gname, uuser.allowed_ip AS allowed_ip FROM user AS uuser, user AS ugroup WHERE uuser.gid=ugroup.uid ORDER BY uid";
 		else
-			$query = "SELECT uuser.login AS login, uuser.uid AS uid, uuser.useCookie AS useCookie, uuser.gid AS gid, ugroup.login AS gname, uuser.allowed_ip AS allowed_ip FROM user AS uuser, user AS ugroup WHERE uuser.gid=ugroup.uid AND uuser.gid='$uViewGroups' ORDER BY uid";
+			$query = "SELECT uuser.login AS login, uuser.uid AS uid, uuser.useCookie AS useCookie, uuser.gid AS gid, ugroup.login AS gname, uuser.allowed_ip AS allowed_ip FROM user AS uuser, user AS ugroup WHERE uuser.gid=ugroup.uid AND uuser.gid='".intval($uViewGroups)."' ORDER BY uid";
 		$result = sqlquery($query);
 		while ($result && ($arr=mysql_fetch_array($result)))
 		{
@@ -870,13 +870,13 @@
 						continue;
 					list($vname, $vpath, $vstate, $vgname, $vwarn, $verr, $valarm, $vgraph, $vcmd) = explode("|", $varSetup);
 					
-					$result = sqlquery("SELECT count(*) as count FROM variable WHERE name='$vname'");
+					$result = sqlquery("SELECT count(*) as count FROM variable WHERE name='".sqlescape($vname)."'");
 					if ($result && ($arr=sqlfetch($result)) && $arr["count"] == 0)
 					{
 						if (!isset($groupnames[$vgname]))
 						{
-							sqlquery("INSERT INTO variable_group SET name='$vgname'");
-							$result = sqlquery("SELECT vgid FROM variable_group WHERE name='$vgname'");
+							sqlquery("INSERT INTO variable_group SET name='".sqlescape($vgname)."'");
+							$result = sqlquery("SELECT vgid FROM variable_group WHERE name='".sqlescape($vgname)."'");
 							if ($result && ($arr=sqlfetch($result)))
 							{
 								$vgid = $arr["vgid"];
@@ -892,7 +892,7 @@
 							
 						if ($vgid != -1)
 						{
-							sqlquery("INSERT INTO variable SET name='$vname', path='$vpath', state='$vstate', vgid='$vgid', warning_bound='$vwarn', error_bound='$verr', alarm_order='$valarm', graph_update='$vgraph', command='$vcmd'");
+							sqlquery("INSERT INTO variable SET name='".sqlescape($vname)."', path='".sqlescape($vpath)."', state='".sqlescape($vstate)."', vgid='".intval($vgid)."', warning_bound='".sqlescape($vwarn)."', error_bound='".sqlescape($verr)."', alarm_order='".sqlescape($valarm)."', graph_update='".sqlescape($vgraph)."', command='".sqlescape($vcmd)."'");
 						}
 					}
 				}
@@ -913,7 +913,7 @@
 		if ($varGroup=="-1")
 			$result = sqlquery("SELECT * FROM variable ORDER BY vgid, name");
 		else
-			$result = sqlquery("SELECT * FROM variable WHERE vgid='$varGroup' ORDER BY name");
+			$result = sqlquery("SELECT * FROM variable WHERE vgid='".intval($varGroup)."' ORDER BY name");
 		echo "<table border=1>\n";
 		echo "<tr><th>Name</th><th>Vid</th><th>Group</th><th>Path</th><th>State</th><th>Warning</th><th>Error</th><th>Order</th><th>Graph</th><th>Variable</th><th colspan=2>Commands</th></tr>\n";
 
@@ -1051,10 +1051,10 @@
 
 		echo "<table cellpadding=0 cellspacing=0><tr valign=top><td>\n";
 		
-		if (!isset($serverOrder))
+		if (!isset($serverOrder) || !in_array($serverOrder, array('name', 'address')))
 			$serverOrder = "name";
 
-		if (!isset($serviceOrder))
+		if (!isset($serviceOrder) || !in_array($serviceOrder, array('shard, server, name', 'shard', 'server', 'name', 'service_id')))
 			$serviceOrder = "shard, server, name";
 			
 		unset($servers);
@@ -1079,7 +1079,7 @@
 		else if ($fshard == "*")
 			$result = sqlquery("SELECT * FROM service ORDER BY $serviceOrder");
 		else
-			$result = sqlquery("SELECT * FROM service WHERE shard LIKE '%$fshard%' ORDER BY $serviceOrder");
+			$result = sqlquery("SELECT * FROM service WHERE shard LIKE '%".sqlescape($fshard)."%' ORDER BY $serviceOrder");
 
 		echo "<table border=1><tr><form method=post action='".$_SERVER['PHP_SELF']."?editShards=true'><th>Shard ";
 		echo "<select name=fshard onChange='submit()'>";
