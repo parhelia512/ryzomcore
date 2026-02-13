@@ -1063,6 +1063,7 @@ MACRO(FIND_QT6)
     # Check if we are using Qt static or shared libraries
     GET_TARGET_PROPERTY(_FILE Qt6::Core IMPORTED_LOCATION_RELEASE)
 
+    # Qt6 uses standard CMake _VERSION variable (not _VERSION_STRING like Qt5)
     SET(QT_VERSION "${Qt6Core_VERSION}")
     SET(QT_VERSION_MAJOR 6)
     SET(_VERSION "${QT_VERSION}")
