@@ -310,7 +310,10 @@ void QtColorPicker::buttonPressed(bool toggled)
     if (!toggled)
         return;
 
-    const QRect desktop = QGuiApplication::primaryScreen()->geometry();
+    const QScreen *screen = QGuiApplication::primaryScreen();
+    if (!screen)
+        return;
+    const QRect desktop = screen->geometry();
     // Make sure the popup is inside the desktop.
     QPoint pos = mapToGlobal(rect().bottomLeft());
     if (pos.x() < desktop.left())
