@@ -29,6 +29,7 @@
 #include <nel/misc/i18n.h>
 
 // Project includes
+#include "../../../tools/3d/shared_widgets/common.h"
 #include "main_window.h"
 #include "configuration.h"
 #include "internationalization.h"
@@ -38,19 +39,6 @@ using namespace std;
 using namespace NLMISC;
 
 namespace NLQT {
-
-namespace {
-
-QString nli18n(const char *label)
-{
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-	return QString::fromUtf16(reinterpret_cast<const char16_t *>(CI18N::get(label).c_str()));
-#else
-	return QString::fromUtf16(CI18N::get(label).c_str());
-#endif
-}
-
-} /* anonymous namespace */
 
 CGraphicsConfig::CGraphicsConfig(QWidget *parent, CConfiguration *configuration, CInternationalization *internationalization, QUndoStack *undoStack) 
 	: QWidget(parent), m_Configuration(configuration), m_Internationalization(internationalization), m_UndoStack(undoStack), 

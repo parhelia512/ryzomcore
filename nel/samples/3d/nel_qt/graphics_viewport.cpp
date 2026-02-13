@@ -33,6 +33,7 @@
 #include <nel/3d/u_text_context.h>
 
 // Project includes
+#include "../../../tools/3d/shared_widgets/common.h"
 #include "internationalization.h"
 #include "graphics_config.h"
 
@@ -41,19 +42,6 @@ using namespace NLMISC;
 using namespace NL3D;
 
 namespace NLQT {
-
-namespace {
-
-QString nli18n(const char *label)
-{
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-	return QString::fromUtf16(reinterpret_cast<const char16_t *>(CI18N::get(label).c_str()));
-#else
-	return QString::fromUtf16(CI18N::get(label).c_str());
-#endif
-}
-
-} /* anonymous namespace */
 
 CGraphicsViewport::CGraphicsViewport(QWidget *parent) 
 	: QWidget(parent),

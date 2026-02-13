@@ -32,7 +32,8 @@
 #include <nel/3d/u_driver.h>
 
 // Project includes
-#include "command_log.h"
+#include "../../../tools/3d/shared_widgets/common.h"
+#include "../../../tools/3d/shared_widgets/command_log.h"
 #include "graphics_viewport.h"
 #include "graphics_config.h"
 
@@ -40,19 +41,6 @@ using namespace std;
 using namespace NLMISC;
 
 namespace NLQT {
-
-namespace {
-
-QString nli18n(const char *label)
-{
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-	return QString::fromUtf16(reinterpret_cast<const char16_t *>(CI18N::get(label).c_str()));
-#else
-	return QString::fromUtf16(CI18N::get(label).c_str());
-#endif
-}
-
-} /* anonymous namespace */
 
 CMainWindow::CMainWindow(const QMap<QString, QSize> &customSizeHints, QWidget *parent, Qt::WindowFlags flags)
 	: QMainWindow(parent, flags),
@@ -318,7 +306,7 @@ void CMainWindow::createDockWindows()
 	{
 		m_CommandLogDock = new QDockWidget(this);
 		m_CommandLogDock->setAllowedAreas(Qt::TopDockWidgetArea | Qt::BottomDockWidgetArea);
-		m_CommandLog = new CCommandLog(m_CommandLogDock);
+		m_CommandLog = new CCommandLogDisplayer(m_CommandLogDock);
 		m_CommandLogDock->setWidget(m_CommandLog);
 		addDockWidget(Qt::BottomDockWidgetArea, m_CommandLogDock);
 		m_WidgetsMenu->addAction(m_CommandLogDock->toggleViewAction());
