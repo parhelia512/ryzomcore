@@ -161,7 +161,7 @@ if ($isWebRequest && !$isSetupScript && $requiresUpgrade) {
 		&& basename($scriptName) === 'r2_login.php'
 		&& strlen($scriptDirectory) >= strlen($loginDirectorySuffix)
 		&& substr($scriptDirectory, -strlen($loginDirectorySuffix)) === $loginDirectorySuffix;
-	$loginMaintenanceMessage = $loginResponsePrefix . 'Service temporarily unavailable while a database upgrade is in progress. Please try again later.';
+	$loginMaintenanceMessage = $loginResponsePrefix . 'Service temporarily unavailable while a database upgrade is pending. Please try again later.';
 	header('HTTP/1.1 503 Service Unavailable');
 	header('Retry-After: 3600');
 	if ($isLoginScript) {
@@ -178,8 +178,8 @@ if ($isWebRequest && !$isSetupScript && $requiresUpgrade) {
 <title>Maintenance</title>
 </head>
 <body style="font-family:sans-serif;max-width:48rem;margin:3rem auto;padding:0 1rem;">
-<h1>Maintenance in progress</h1>
-<p>The website is temporarily unavailable while a database upgrade is in progress.</p>
+<h1>Maintenance pending</h1>
+<p>The website is temporarily unavailable while a database upgrade is pending.</p>
 <p>Please try again later or contact the server administrator for upgrade progress.</p>
 </body>
 </html>
