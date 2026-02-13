@@ -81,7 +81,7 @@
 
 	       $i = $j = 0;
 
-	       while (@list($key,$value) = @each($input))
+	       foreach ($input as $key => $value)
 	       {
 	           if( !( isset( $chunks[$i] ) ) )
 	           {

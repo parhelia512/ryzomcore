@@ -43,7 +43,7 @@ function display_forum_content($shard, $user)
 function display_thread_content($shard, $forum, $thread)
 {
 	$udir = get_user_dir($forum, $shard);
-	read_index($udir.$thread, &$header, &$array);
+	read_index($udir.$thread, $header, $array);
 	
 	$a = explode("%%", $header);
 
