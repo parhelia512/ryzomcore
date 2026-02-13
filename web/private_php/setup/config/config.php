@@ -145,10 +145,13 @@ $NEL_SETUP_VERSION_CONFIGURED = (int)'%nelSetupVersion%';
 // Get installed version
 require_once('setup/version.php');
 
-if (!isset($NEL_SETUP_VERSION_CONFIGURED)) {
-	$NEL_SETUP_VERSION_CONFIGURED = 1;
-}
-if (PHP_SAPI !== 'cli' && (!isset($_SERVER['SCRIPT_NAME']) || strpos($_SERVER['SCRIPT_NAME'], '/setup/') === false) && $NEL_SETUP_VERSION_CONFIGURED < $NEL_SETUP_VERSION) {
+$isWebRequest = PHP_SAPI !== 'cli';
+$setupDir = realpath(__DIR__ . '/setup');
+$scriptFilename = isset($_SERVER['SCRIPT_FILENAME']) ? realpath($_SERVER['SCRIPT_FILENAME']) : false;
+$isSetupScript = $setupDir !== false && $scriptFilename !== false
+	&& strpos(str_replace('\\', '/', $scriptFilename), str_replace('\\', '/', $setupDir) . '/') === 0;
+$requiresUpgrade = $NEL_SETUP_VERSION_CONFIGURED < $NEL_SETUP_VERSION;
+if ($isWebRequest && !$isSetupScript && $requiresUpgrade) {
 	header('HTTP/1.1 503 Service Unavailable');
 	header('Retry-After: 3600');
 	die('Database upgrade required. Run setup/upgrade.php.');
