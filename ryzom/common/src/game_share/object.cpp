@@ -399,13 +399,13 @@ uint32 CObject::getSize() const { BOMB("Try to call the function getSize() on an
 
 CObject::TSmartPtr CObject::clone() const { BOMB("Try to call the function clone() on an object that is not a table", return NULL); return NULL;}
 
-void CObject::add(const std::string & key,  CObject::TSmartPtr value)
+void CObject::add(const std::string & key,  const CObject::TSmartPtr &value)
 {
 	//H_AUTO(R2_CObject_add)
 	insert(key,  value,  -1);
 }
 
-void CObject::add(CObject::TSmartPtr value){ add("",  value); }
+void CObject::add(const CObject::TSmartPtr &value){ add("",  value); }
 
 bool CObject::set(const std::string& /* key */, const std::string & /* value */)
 {
@@ -437,7 +437,7 @@ void CObject::serialize(std::string& out) const
 	CSerializeContext context;
 	doSerialize(out,  context);
 }
-bool CObject::insert( const std::string& /* key */,   CObject::TSmartPtr /* value */,  sint32 /* position */)
+bool CObject::insert( const std::string& /* key */,   const CObject::TSmartPtr& /* value */,  sint32 /* position */)
 {
 	//H_AUTO(R2_CObject_insert)
 	BOMB("Try to call the function insert() on an object that is not a table", return false);
@@ -1485,7 +1485,7 @@ bool CObjectTable::canTake(sint32 position) const
 
 
 
-bool CObjectTable::insert(const std::string& key,  CObject::TSmartPtr value,  sint32 position)
+bool CObjectTable::insert(const std::string& key,  const CObject::TSmartPtr &value,  sint32 position)
 {
 	//H_AUTO(R2_CObjectTable_insert)
 	CHECK_TABLE_INTEGRITY

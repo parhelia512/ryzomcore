@@ -167,7 +167,7 @@ bool CScenario::setNode( const std::string& instanceId, const std::string& attrN
 }
 
 bool  CScenario::insertNode(const std::string&  instanceId, const std::string & attrName, sint32 position,
-	const std::string& key, CObject::TSmartPtr value)
+	const std::string& key, const CObject::TSmartPtr &value)
 {
 	_Clean = false;
 	CObject* found= _InstanceMap->find(instanceId);

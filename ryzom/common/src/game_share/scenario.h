@@ -140,7 +140,7 @@ public:
 	bool setNode( const std::string& instanceId, const std::string& attrName, CObject* value);
 
 	bool insertNode(const std::string&  instanceId, const std::string & attrName, sint32 position,
-		const std::string& key, CObject::TSmartPtr value);
+		const std::string& key, const CObject::TSmartPtr &value);
 
 	bool eraseNode(const std::string&  instanceId, const std::string & attrName, sint32 position);
 

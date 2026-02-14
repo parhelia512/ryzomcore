@@ -95,7 +95,7 @@ public:
 
 	bool isRefId(const std::string & prop="") const;
 
-	virtual bool insert(const std::string & key, CObject::TSmartPtr value, sint32 position = -1);
+	virtual bool insert(const std::string & key, const CObject::TSmartPtr &value, sint32 position = -1);
 
 	// to Value
 	double toNumber(const std::string & prop="") const;
@@ -128,9 +128,9 @@ public:
 
 	// add Value
 
-	void add(const std::string & key, CObject::TSmartPtr value);
+	void add(const std::string & key, const CObject::TSmartPtr &value);
 
-	void add(CObject::TSmartPtr value);
+	void add(const CObject::TSmartPtr &value);
 
 	void add(const std::string& key, const std::string & value);
 
@@ -349,7 +349,7 @@ public:
 
 	virtual const char *getTypeAsString() const;
 
-	virtual bool insert(const std::string & key, CObject::TSmartPtr value, sint32 pos);
+	virtual bool insert(const std::string & key, const CObject::TSmartPtr &value, sint32 pos);
 
 	virtual TSmartPtr clone() const;
 
