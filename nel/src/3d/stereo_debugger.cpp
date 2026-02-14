@@ -346,39 +346,34 @@ void CStereoDebugger::getOriginalFrustum(uint cid, NL3D::UCamera *camera) const
 }
 
 /// Is there a next pass
+/// Filled mode stages: 1=L reflect, 2=R reflect, 3=L scene, 4=R scene, 5=composite
+/// Non-filled mode stages: 1=reflect, 3=scene (skips 2 so want* conditions are shared)
 bool CStereoDebugger::nextPass()
 {
 	if (m_Driver->getPolygonMode() == UDriver::Filled)
 	{
-		switch (m_Stage)
+		++m_Stage;
+		m_SubStage = 0;
+		if (m_Stage > 5)
 		{
-		case 0:
-			++m_Stage;
-			m_SubStage = 0;
-			return true;
-		case 1:
-			++m_Stage;
-			m_SubStage = 0;
-			return true;
-		case 2:
-			++m_Stage;
-			m_SubStage = 0;
-			return true;
-		case 3:
 			m_Stage = 0;
-			m_SubStage = 0;
 			return false;
 		}
+		return true;
 	}
 	else
 	{
 		switch (m_Stage)
 		{
 		case 0:
-			++m_Stage;
+			m_Stage = 1;
 			m_SubStage = 0;
 			return true;
 		case 1:
+			m_Stage = 3;
+			m_SubStage = 0;
+			return true;
+		case 3:
 			m_Stage = 0;
 			m_SubStage = 0;
 			return false;
@@ -416,50 +411,56 @@ void CStereoDebugger::getCurrentMatrix(uint cid, NL3D::UCamera *camera) const
 bool CStereoDebugger::wantClear()
 {
 	m_SubStage = 1;
-	return m_Stage != 3;
+	return m_Stage >= 3 && m_Stage <= 4;
 }
-	
+
+/// Render scene reflections
+bool CStereoDebugger::wantSceneReflections()
+{
+	return m_Stage >= 1 && m_Stage <= 2;
+}
+
 /// The 3D scene
 bool CStereoDebugger::wantScene()
 {
 	m_SubStage = 2;
-	return m_Stage != 3;
+	return m_Stage >= 3 && m_Stage <= 4;
 }
 
 /// The 3D scene end (after multiple wantScene)
 bool CStereoDebugger::wantSceneEffects()
 {
-	return m_Stage != 3;
+	return m_Stage >= 3 && m_Stage <= 4;
 }
 
 /// Interface within the 3D scene
 bool CStereoDebugger::wantInterface3D()
 {
 	m_SubStage = 3;
-	return m_Stage == 3;
+	return m_Stage == 5;
 }
-	
+
 /// 2D Interface
 bool CStereoDebugger::wantInterface2D()
 {
 	m_SubStage = 4;
-	return m_Stage == 3;
+	return m_Stage == 5;
 }
 
 bool CStereoDebugger::isSceneFirst()
 {
-	return m_Stage != 3;
+	return m_Stage >= 3 && m_Stage <= 4;
 }
 
 bool CStereoDebugger::isSceneLast()
 {
-	return m_Stage != 3;
+	return m_Stage >= 3 && m_Stage <= 4;
 }
 
 /// Returns true if a new render target was set, always fase if not using render targets
 bool CStereoDebugger::beginRenderTarget()
 {
-	if (m_Stage != 3 && m_Driver && (m_Driver->getPolygonMode() == UDriver::Filled))
+	if (m_Stage >= 3 && m_Stage <= 4 && m_Driver && (m_Driver->getPolygonMode() == UDriver::Filled))
 	{
 		if (!m_LeftTexU) getTextures();
 		if (m_Stage % 2) static_cast<CDriverUser *>(m_Driver)->setRenderTarget(*m_RightTexU, 0, 0, 0, 0);
@@ -472,7 +473,7 @@ bool CStereoDebugger::beginRenderTarget()
 /// Returns true if a render target was fully drawn, always false if not using render targets
 bool CStereoDebugger::endRenderTarget()
 {
-	if (m_Stage != 3 && m_Driver && (m_Driver->getPolygonMode() == UDriver::Filled))
+	if (m_Stage >= 3 && m_Stage <= 4 && m_Driver && (m_Driver->getPolygonMode() == UDriver::Filled))
 	{
 		CTextureUser cu;
 		(static_cast<CDriverUser *>(m_Driver))->setRenderTarget(cu);

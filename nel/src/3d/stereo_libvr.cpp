@@ -390,7 +390,12 @@ bool CStereoLibVR::wantClear()
 	}
 	return m_Driver->getPolygonMode() != UDriver::Filled;
 }
-	
+
+bool CStereoLibVR::wantSceneReflections()
+{
+	return false;
+}
+
 bool CStereoLibVR::wantScene()
 {
 	switch (m_Stage)

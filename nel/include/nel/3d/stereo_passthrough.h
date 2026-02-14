@@ -54,6 +54,7 @@ public:
 	virtual void getCurrentMatrix(uint cid, NL3D::UCamera *camera) const;
 
 	virtual bool wantClear();
+	virtual bool wantSceneReflections();
 	virtual bool wantScene();
 	virtual bool wantSceneEffects();
 	virtual bool wantInterface3D();
@@ -69,7 +70,7 @@ private:
 	UDriver *m_Driver;
 	CViewport m_Viewport;
 	CFrustum m_Frustum[NL_STEREO_MAX_USER_CAMERAS];
-	bool m_PassDone;
+	int m_Stage; // 0: before first pass, 1: reflection pass, 2: normal pass
 
 }; /* class CStereoPassthrough */
 

@@ -103,7 +103,9 @@ public:
 	virtual void getCurrentMatrix(uint cid, NL3D::UCamera *camera) const;
 
 	/// At the start of a new render target
-	virtual bool wantClear();	
+	virtual bool wantClear();
+	/// Render scene reflections
+	virtual bool wantSceneReflections();
 	/// The 3D scene
 	virtual bool wantScene();
 	/// Interface within the 3D scene

@@ -1700,7 +1700,7 @@ bool mainLoop()
 			//////////////////////////
 
 			bool stereoRenderTarget = StereoDisplay->beginRenderTarget();
-			if (!stereoRenderTarget && haveEffects && !defaultRenderTarget)
+			if (!stereoRenderTarget && haveEffects && !defaultRenderTarget && StereoDisplay->wantClear())
 			{
 				Driver->beginDefaultRenderTarget();
 				defaultRenderTarget = true;
@@ -1710,6 +1710,12 @@ bool mainLoop()
 			{
 				// Clear buffers
 				clearBuffers();
+			}
+
+			if (StereoDisplay->wantSceneReflections())
+			{
+				// Render water planar reflections to RTT
+				// TODO: water reflection system renders here
 			}
 
 			if (StereoDisplay->wantScene())

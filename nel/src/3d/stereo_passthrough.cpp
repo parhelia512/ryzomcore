@@ -26,7 +26,7 @@
 
 namespace NL3D {
 
-CStereoPassthrough::CStereoPassthrough() : m_Driver(NULL), m_PassDone(false)
+CStereoPassthrough::CStereoPassthrough() : m_Driver(NULL), m_Stage(0)
 {
 
 }
@@ -74,12 +74,13 @@ void CStereoPassthrough::getOriginalFrustum(uint cid, NL3D::UCamera *camera) con
 
 bool CStereoPassthrough::nextPass()
 {
-	if (m_PassDone)
+	// Stage 0 -> 1 (reflection pass), 1 -> 2 (normal pass), 2 -> 0 (done)
+	++m_Stage;
+	if (m_Stage > 2)
 	{
-		m_PassDone = false;
+		m_Stage = 0;
 		return false;
 	}
-	m_PassDone = true;
 	return true;
 }
 
@@ -105,27 +106,32 @@ void CStereoPassthrough::getCurrentMatrix(uint cid, NL3D::UCamera *camera) const
 
 bool CStereoPassthrough::wantClear()
 {
-	return true;
+	return m_Stage == 2; // only on normal pass
+}
+
+bool CStereoPassthrough::wantSceneReflections()
+{
+	return m_Stage == 1; // only on reflection pass
 }
 
 bool CStereoPassthrough::wantScene()
 {
-	return true;
+	return m_Stage == 2; // only on normal pass
 }
 
 bool CStereoPassthrough::wantSceneEffects()
 {
-	return true;
+	return m_Stage == 2; // only on normal pass
 }
 
 bool CStereoPassthrough::wantInterface3D()
 {
-	return true;
+	return m_Stage == 2; // only on normal pass
 }
 
 bool CStereoPassthrough::wantInterface2D()
 {
-	return true;
+	return m_Stage == 2; // only on normal pass
 }
 
 bool CStereoPassthrough::isSceneFirst()

@@ -579,7 +579,12 @@ bool CStereoOVR::wantClear()
 	}
 	return m_Driver->getPolygonMode() != UDriver::Filled;
 }
-	
+
+bool CStereoOVR::wantSceneReflections()
+{
+	return false;
+}
+
 bool CStereoOVR::wantScene()
 {
 	switch (m_Stage)
