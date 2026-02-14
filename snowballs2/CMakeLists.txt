@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.27..4.1.1)
 
 project(Snowballs VERSION 2.0.0 LANGUAGES CXX)
 
-find_package(Vorbis REQUIRED) # required by nel sound but
 find_package(NeL ${RyzomCore_VERSION} REQUIRED COMPONENTS 3d misc net pacs sound)
 
 IF(WIN32)
