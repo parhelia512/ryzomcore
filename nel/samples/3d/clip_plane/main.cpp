@@ -89,7 +89,7 @@ sint main(int /* argc */, char ** /* argv */)
 	try
 	{
 		// Create driver
-		UDriver *driver = UDriver::createDriver(0, true);
+		UDriver *driver = UDriver::createDriver(0, false); // Switch between D3D and OpenGL here
 		if (!driver)
 			return EXIT_FAILURE;
 
@@ -102,23 +102,11 @@ sint main(int /* argc */, char ** /* argv */)
 		mat.setZWrite(true);
 		mat.setZFunc(UMaterial::lessequal);
 
-		// Camera setup: look at origin from a distance
-		// NeL coords: X right, Y forward, Z up
-		// setViewMatrix expects inverse of camera world matrix (world-to-camera)
-		CVector eye(-4.f, -6.f, 4.f);
-		CVector target(0.f, 0.f, 0.f);
-		CVector up(0.f, 0.f, 1.f);
-		CVector j = (target - eye).normed(); // forward
-		CVector i = (j ^ up).normed();       // right
-		CVector k = i ^ j;                   // up
-		CMatrix camWorld;
-		camWorld.setRot(i, j, k, true);
-		camWorld.setPos(eye);
-		CMatrix viewMatrix = camWorld;
-		viewMatrix.invert();
-
 		CFrustum frustum;
 		frustum.initPerspective(float(Pi / 3.0), 800.f / 600.f, 0.1f, 100.f);
+
+		float camDist = 8.f;
+		float camHeight = 4.f;
 
 		double startTime = CTime::ticksToSecond(CTime::getPerformanceTime());
 
@@ -133,7 +121,20 @@ sint main(int /* argc */, char ** /* argv */)
 
 			driver->clearBuffers(CRGBA(40, 40, 40));
 
-			// Set up camera
+			// Orbit camera around the scene
+			float camAngle = float(now * 0.3);
+			CVector eye(cosf(camAngle) * camDist, sinf(camAngle) * camDist, camHeight);
+			CVector target(0.f, 0.f, 0.f);
+			CVector up(0.f, 0.f, 1.f);
+			CVector jj = (target - eye).normed();
+			CVector ii = (jj ^ up).normed();
+			CVector kk = ii ^ jj;
+			CMatrix camWorld;
+			camWorld.setRot(ii, jj, kk, true);
+			camWorld.setPos(eye);
+			CMatrix viewMatrix = camWorld;
+			viewMatrix.invert();
+
 			driver->setFrustum(frustum);
 			driver->setViewMatrix(viewMatrix);
 
@@ -148,11 +149,13 @@ sint main(int /* argc */, char ** /* argv */)
 			cubeTransform.rotateZ(float(now * 0.5));
 			cubeTransform.rotateX(float(now * 0.3));
 
-			// Animate clip plane: Z = oscillating height
-			// Plane normal points up (0, 0, 1), clips below the plane
-			// ax + by + cz + d = 0 => z + d = 0 => z = -d
+			// Animate clip plane: wobble along both axes + oscillate height
+			float tiltX = float(sin(now * 0.4) * 0.3);
+			float tiltY = float(sin(now * 0.5) * 0.3);
 			float clipHeight = float(sin(now * 0.7) * 1.2);
-			CPlane clipPlane(0.f, 0.f, 1.f, -clipHeight);
+			CVector normal(tiltX, tiltY, 1.f);
+			normal.normalize();
+			CPlane clipPlane(normal.x, normal.y, normal.z, -clipHeight * normal.z);
 
 			// Enable and set the clip plane
 			driver->setClipPlane(0, clipPlane);
@@ -172,12 +175,25 @@ sint main(int /* argc */, char ** /* argv */)
 				planeMat.setBlend(true);
 				planeMat.setBlendFunc(UMaterial::srcalpha, UMaterial::invsrcalpha);
 
+				// Build a quad on the tilted plane
+				// Find two tangent vectors to the plane normal
+				CVector tangentU = (normal ^ CVector(0.f, 1.f, 0.f));
+				if (tangentU.norm() < 0.001f)
+					tangentU = normal ^ CVector(1.f, 0.f, 0.f);
+				tangentU.normalize();
+				CVector tangentV = normal ^ tangentU;
+				tangentV.normalize();
+
+				// (0, 0, clipHeight) always lies on our plane since
+				// d = -clipHeight * normal.z
+				CVector center(0.f, 0.f, clipHeight);
 				float planeSize = 3.f;
+
 				CQuadColor planeQuad;
-				planeQuad.V0 = CVector(-planeSize, -planeSize, clipHeight);
-				planeQuad.V1 = CVector( planeSize, -planeSize, clipHeight);
-				planeQuad.V2 = CVector( planeSize,  planeSize, clipHeight);
-				planeQuad.V3 = CVector(-planeSize,  planeSize, clipHeight);
+				planeQuad.V0 = center - tangentU * planeSize - tangentV * planeSize;
+				planeQuad.V1 = center + tangentU * planeSize - tangentV * planeSize;
+				planeQuad.V2 = center + tangentU * planeSize + tangentV * planeSize;
+				planeQuad.V3 = center - tangentU * planeSize + tangentV * planeSize;
 				CRGBA planeColor(100, 200, 255, 80);
 				planeQuad.Color0 = planeQuad.Color1 = planeQuad.Color2 = planeQuad.Color3 = planeColor;
 				driver->drawQuad(planeQuad, planeMat);
