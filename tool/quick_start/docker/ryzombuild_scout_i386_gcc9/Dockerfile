@@ -37,8 +37,8 @@ RUN git clone https://github.com/ninja-build/ninja.git && cd ninja && git checko
   && cd .. && rm -rf ninja && rm ninja-lfs.diff \
   && hash -r && ninja --version
 
-RUN git clone https://github.com/Kitware/CMake.git && cd CMake && git checkout release \
-  && cmake -G "Ninja" -DCMAKE_USE_OPENSSL=OFF . && ninja \
+RUN git clone https://github.com/Kitware/CMake.git && cd CMake && git checkout v3.31.11 \
+  && cmake -G "Ninja" -DCMAKE_USE_OPENSSL=ON . && ninja \
   && ninja install \
   && cd .. && rm -rf CMake \
   && hash -r && cmake --version
