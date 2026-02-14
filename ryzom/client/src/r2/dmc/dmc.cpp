@@ -93,7 +93,9 @@ void CClientInstantActionFeedBack::doRequestSetNode(const std::string& instanceI
 	// server record (must be done before client feedback because 'unchanged value' optimisation would prevent the change, else)
 	_DMC.doRequestSetNode(instanceId, attrName, value);
 	// client instant feed back
-	_DMC.nodeSet(instanceId, attrName, value->clone());
+	CObject *temp = value->clone();
+	_DMC.nodeSet(instanceId, attrName, temp);
+	delete temp;
 }
 
 //========

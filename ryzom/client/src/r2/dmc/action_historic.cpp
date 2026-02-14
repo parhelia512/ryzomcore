@@ -313,7 +313,9 @@ void CActionHistoric::requestSetNode(const std::string& instanceId,const std::st
 		if (value->getGhost())
 		{
 			// direct effect, assumed to be local display only
-			getEditor().getDMC().nodeSet(instanceId, attrName, value->clone());
+			CObject *temp = value->clone();
+			getEditor().getDMC().nodeSet(instanceId, attrName, temp);
+			delete temp;
 			return;
 		}
 	}
