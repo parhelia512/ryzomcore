@@ -622,14 +622,14 @@ def GenerateBuild(file, envScript, spec, generator, fv, target, buildDir):
 	if gen and gen.startswith("Visual Studio"):
 		if not fv:
 			if tc["Version"] > 16:
-				fo.write("msbuild RyzomCore.sln /t:ALL_BUILD /m:%RC_PARALLEL% /p:CL_MPCount=%RC_PARALLEL% /p:Configuration=Debug\n")
+				fo.write("msbuild ALL_BUILD.vcxproj /m:%RC_PARALLEL% /p:CL_MPCount=%RC_PARALLEL% /p:Configuration=Debug\n")
 			else:
-				fo.write("msbuild RyzomCore.sln /t:ALL_BUILD /m:%RC_PARALLEL_PROJECTS% /p:CL_MPCount=%RC_PARALLEL_FILES% /p:Configuration=Debug\n")
+				fo.write("msbuild ALL_BUILD.vcxproj /m:%RC_PARALLEL_PROJECTS% /p:CL_MPCount=%RC_PARALLEL_FILES% /p:Configuration=Debug\n")
 			WritePauseGoto(fo, ":build")
 		if tc["Version"] > 16:
-			fo.write("msbuild RyzomCore.sln /t:ALL_BUILD /m:%RC_PARALLEL% /p:CL_MPCount=%RC_PARALLEL% /p:Configuration=Release\n")
+			fo.write("msbuild ALL_BUILD.vcxproj /m:%RC_PARALLEL% /p:CL_MPCount=%RC_PARALLEL% /p:Configuration=Release\n")
 		else:
-			fo.write("msbuild RyzomCore.sln /t:ALL_BUILD /m:%RC_PARALLEL_PROJECTS% /p:CL_MPCount=%RC_PARALLEL_FILES% /p:Configuration=Release\n")
+			fo.write("msbuild ALL_BUILD.vcxproj /m:%RC_PARALLEL_PROJECTS% /p:CL_MPCount=%RC_PARALLEL_FILES% /p:Configuration=Release\n")
 	elif gen and "Ninja" in gen:
 		fo.write("ninja -j%RC_PARALLEL%\n")
 	elif gen and "JOM" in gen:
