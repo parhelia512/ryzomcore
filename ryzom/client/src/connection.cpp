@@ -199,8 +199,7 @@ bool hasPrivilegeEG() { return (UserPrivileges.find(":EG:") != std::string::npos
 // Restore the video mode (fullscreen for example) after the connection (done in a window)
 void connectionRestoreVideoMode ()
 {
-	if (StereoDisplay)
-		StereoDisplayAttached = StereoDisplay->attachToDisplay();
+	StereoDisplayAttached = StereoDisplay->attachToDisplay();
 
 	// And setup hardware mouse if we have to
 	ResetMouseCaptureState();
