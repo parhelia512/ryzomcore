@@ -3035,6 +3035,42 @@ void CDriverGL::stencilMask(uint mask)
 }
 
 // ***************************************************************************
+void CDriverGL::enableClipPlane(uint index, bool enable)
+{
+	H_AUTO_OGL(CDriverGL_enableClipPlane)
+
+	_DriverGLStates.enableClipPlane(index, enable);
+}
+
+// ***************************************************************************
+void CDriverGL::setClipPlane(uint index, const NLMISC::CPlane &plane)
+{
+	H_AUTO_OGL(CDriverGL_setClipPlane)
+
+#ifndef USE_OPENGLES
+	// Convert from NeL world space (X right, Y forward, Z up)
+	// to GL world space (X right, Y up, Z back).
+	// Adjust d for _PZBCameraPos precision optimization.
+	double equation[4];
+	equation[0] = plane.a;
+	equation[1] = plane.c;
+	equation[2] = -plane.b;
+	equation[3] = plane.d + plane.a * _PZBCameraPos.x
+	                      + plane.b * _PZBCameraPos.y
+	                      + plane.c * _PZBCameraPos.z;
+
+	// glClipPlane transforms by inverse of current modelview.
+	// Load view-only matrix (no model) so the world-space plane
+	// is correctly transformed to eye space.
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadMatrixf((const GLfloat *)_ViewMtx.get());
+	glClipPlane(GL_CLIP_PLANE0 + index, equation);
+	glPopMatrix();
+#endif
+}
+
+// ***************************************************************************
 void CDriverGL::getNumPerStageConstant(uint &lightedMaterial, uint &unlightedMaterial) const
 {
 	lightedMaterial = inlGetNumTextStages();
