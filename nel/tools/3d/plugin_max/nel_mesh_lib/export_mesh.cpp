@@ -1986,14 +1986,15 @@ NL3D::IShape				*CExportNel::buildWaterShape(INode& node, TimeValue time)
 			for (int vi = 0; vi < 3; ++vi)
 			{
 				uv[vi] = Point3(0, 0, 0);
-				for (int f = 0; f < numFaces; ++f)
+				bool found = false;
+				for (int f = 0; f < numFaces && !found; ++f)
 				{
 					for (int c = 0; c < 3; ++c)
 					{
 						if (pMesh->faces[f].v[c] == meshVertIdx[vi])
 						{
 							uv[vi] = pMesh->getTVert(pMesh->tvFace[f].getTVert(c)) * texMat;
-							f = numFaces; // break outer loop
+							found = true;
 							break;
 						}
 					}
