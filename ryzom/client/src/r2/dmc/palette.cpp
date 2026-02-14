@@ -30,7 +30,9 @@ using namespace R2;
 namespace R2
 {
 
-CObject* CPalette::getPaletteElement(const std::string& key) const
+static const CObject::TSmartPtr s_nullSmartPtr;
+
+const CObject::TSmartPtr& CPalette::getPaletteElement(const std::string& key) const
 {
 	//H_AUTO(R2_CPalette_getPaletteElement)
 	TMap::const_iterator find(_Map.find(key));
@@ -38,7 +40,7 @@ CObject* CPalette::getPaletteElement(const std::string& key) const
 	{
 		return find->second;
 	}
-	return 0;
+	return s_nullSmartPtr;
 }
 
 void CPalette::addPaletteElement(const std::string& key, CObject* paletteElement)

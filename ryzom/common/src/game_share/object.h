@@ -77,13 +77,13 @@ public:
 
 	virtual const char *getTypeAsString() const = 0;
 
-	CObject* findAttr(const std::string & first) const;
+	const TSmartPtr& findAttr(const std::string & first) const;
 
-	CObject* findAttr(const std::string & first, const std::string & second) const;
+	const TSmartPtr& findAttr(const std::string & first, const std::string & second) const;
 
-	CObject* findAttr(const std::string & first, const std::string & second, const std::string & third) const;
+	const TSmartPtr& findAttr(const std::string & first, const std::string & second, const std::string & third) const;
 
-	CObject* findAttr(const std::vector<std::string>& attrName ) const;
+	const TSmartPtr& findAttr(const std::vector<std::string>& attrName ) const;
 	// test type
 	bool isNumber(const std::string & prop="") const;
 
@@ -113,11 +113,11 @@ public:
 	virtual sint32 findIndex(const std::string &key) const;
 
 	// as table
-	virtual CObject* getAttr(const std::string & name) const;
+	virtual const TSmartPtr& getAttr(const std::string & name) const;
 
 	virtual std::string getKey(uint32 pos) const;
 
-	virtual CObject* getValueAtPos(uint32 pos) const;
+	virtual const TSmartPtr& getValueAtPos(uint32 pos) const;
 
 	virtual uint32 getSize() const;
 
@@ -355,12 +355,12 @@ public:
 
 	virtual void doSerialize(std::string& out, CSerializeContext& context) const;
 
-	virtual CObject* getAttr(const std::string & name) const;
+	virtual const TSmartPtr& getAttr(const std::string & name) const;
 
 
 	virtual std::string getKey(uint32 pos) const;
 
-	virtual CObject* getValueAtPos(uint32 pos) const;
+	virtual const TSmartPtr& getValueAtPos(uint32 pos) const;
 
 	virtual sint32 findIndex(const CObject* child) const;
 
@@ -470,7 +470,7 @@ public:
 	CObjectGenerator(CObject* objectClass, CObjectFactory* factory):
 		_ObjectClass(objectClass){ createDefaultValues(factory);}
 	~CObjectGenerator();
-	CObject* getDefaultValue(const std::string & propName) const;
+	const CObject::TSmartPtr& getDefaultValue(const std::string & propName) const;
 	std::string getBaseClass() const;
 protected:
 	void createDefaultValues(CObjectFactory* factory);

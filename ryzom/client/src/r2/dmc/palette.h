@@ -30,7 +30,7 @@ namespace R2
 	private:
 		typedef std::map<std::string, CObject::TSmartPtr> TMap;
 	public:
-		CObject* getPaletteElement(const std::string& key) const;
+		const CObject::TSmartPtr& getPaletteElement(const std::string& key) const;
 
 		void addPaletteElement(const std::string& key, CObject* paletteElement);
 

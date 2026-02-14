@@ -80,8 +80,8 @@ public:
 
 	void setMaxId(const std::string &eid, sint32 maxId);
 private:
-	/// Id to Object
-	std::map<std::string, CObject*> _Map;
+	/// Id to Object (TRefPtr detects deletion, sets to NULL if object is freed)
+	std::map<std::string, CObject::TRefPtr> _Map;
 
 	//:XXX: Must not be here
 	/// UserId -> maximum id used

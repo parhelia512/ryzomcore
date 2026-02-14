@@ -973,7 +973,7 @@ CObject* CClientEditionModule::getPropertyList(CObject* component) const
 	return component;
 }
 
-CObject* CClientEditionModule::getPaletteElement(const std::string& key)const
+const CObject::TSmartPtr& CClientEditionModule::getPaletteElement(const std::string& key)const
 {
 	//H_AUTO(R2_CClientEditionModule_getPaletteElement)
 	return _Palette->getPaletteElement(key);

@@ -389,11 +389,13 @@ CObjectTable* CObject::doToTable() const
 	return 0;
 }
 
-CObject* CObject::getAttr(const std::string & /* name */) const {  return 0;}
+static const CObject::TSmartPtr s_nullSmartPtr;
+
+const CObject::TSmartPtr& CObject::getAttr(const std::string & /* name */) const {  return s_nullSmartPtr;}
 
 std::string CObject::getKey(uint32 /* pos */) const{ BOMB("Try to call the function getKey() on an object that is not a table", return "");  return "";}
 
-CObject* CObject::getValueAtPos(uint32 /* pos */) const{ BOMB("Try to call the function getValueAtPos() on an object that is not a table", return 0);   return 0;}
+const CObject::TSmartPtr& CObject::getValueAtPos(uint32 /* pos */) const{ BOMB("Try to call the function getValueAtPos() on an object that is not a table", return s_nullSmartPtr);   return s_nullSmartPtr;}
 
 uint32 CObject::getSize() const { BOMB("Try to call the function getSize() on an object that is not a table", return 0);  return 0; }
 
@@ -475,41 +477,42 @@ void CObject::add(const std::string& key,  sint64 value)
 	this->add(key,  CObject::TSmartPtr(new CObjectNumber(value)));
 }
 
-CObject* CObject::findAttr(const std::string & first) const
+const CObject::TSmartPtr& CObject::findAttr(const std::string & first) const
 {
 	//H_AUTO(R2_CObject_findAttr)
 	return getAttr(first);
 }
 
-CObject* CObject::findAttr(const std::string & first,  const std::string & second) const
+const CObject::TSmartPtr& CObject::findAttr(const std::string & first,  const std::string & second) const
 {
 	//H_AUTO(R2_CObject_findAttr)
-	CObject* ret = getAttr(first);
-	if (ret) { ret = ret->getAttr(second); }
-	return ret;
+	const TSmartPtr& obj = getAttr(first);
+	if (!obj) return s_nullSmartPtr;
+	return obj->getAttr(second);
 }
 
-CObject* CObject::findAttr(const std::string & first,  const std::string & second,  const std::string & third) const
+const CObject::TSmartPtr& CObject::findAttr(const std::string & first,  const std::string & second,  const std::string & third) const
 {
 	//H_AUTO(R2_CObject_findAttr)
-	CObject* ret = getAttr(first);
-	if (ret) { ret = ret->getAttr(second); }
-	if (ret) { ret = ret->getAttr(third); }
-	return ret;
+	const TSmartPtr& obj = getAttr(first);
+	if (!obj) return s_nullSmartPtr;
+	const TSmartPtr& obj2 = obj->getAttr(second);
+	if (!obj2) return s_nullSmartPtr;
+	return obj2->getAttr(third);
 }
 
-CObject* CObject::findAttr(const std::vector<std::string>& attrNames ) const
+const CObject::TSmartPtr& CObject::findAttr(const std::vector<std::string>& attrNames ) const
 {
 	//H_AUTO(R2_CObject_findAttr)
-	std::vector<std::string>::const_iterator first(attrNames.begin()),  last(attrNames.end());
-
-	CObject* ret = const_cast<CObject*>(this);
-
-	for ( ; first != last && ret; ++first)
+	const CObject* current = this;
+	const TSmartPtr* result = &s_nullSmartPtr;
+	for (std::vector<std::string>::const_iterator first = attrNames.begin(), last = attrNames.end(); first != last; ++first)
 	{
-		if (ret) { ret = ret->getAttr(*first); }
+		result = &current->getAttr(*first);
+		if (!*result) return s_nullSmartPtr;
+		current = result->getPtr();
 	}
-	return ret;
+	return *result;
 }
 
 
@@ -1256,7 +1259,7 @@ void CObjectTable::doSerialize(std::string& out,  CSerializeContext& context) co
 	out += "}";
 }
 
-CObject* CObjectTable::getAttr(const std::string & name) const
+const CObject::TSmartPtr& CObjectTable::getAttr(const std::string & name) const
 {
 	//H_AUTO(R2_CObjectTable_getAttr)
 	CHECK_TABLE_INTEGRITY
@@ -1291,7 +1294,7 @@ CObject* CObjectTable::getAttr(const std::string & name) const
 
 	}
 
-	return 0;
+	return s_nullSmartPtr;
 }
 
 std::string CObjectTable::getKey(uint32 pos) const
@@ -1306,13 +1309,13 @@ std::string CObjectTable::getKey(uint32 pos) const
 	return _Value[pos].first;
 }
 
-CObject* CObjectTable::getValueAtPos(uint32 pos) const
+const CObject::TSmartPtr& CObjectTable::getValueAtPos(uint32 pos) const
 {
 	//H_AUTO(R2_CObjectTable_getValue)
 	if (pos >= _Value.size())
 	{
 		nlwarning("<CObjectTable::getValue> bad index %d", pos);
-		return NULL;
+		return s_nullSmartPtr;
 	}
 	return _Value[pos].second;
 }
@@ -1818,7 +1821,7 @@ std::string CObjectGenerator::getBaseClass() const
 	return "";
 }
 
-CObject* CObjectGenerator::getDefaultValue(const std::string & propName) const
+const CObject::TSmartPtr& CObjectGenerator::getDefaultValue(const std::string & propName) const
 {
 	//H_AUTO(R2_CObjectGenerator_getDefaultValue)
 	TDefaultValues::const_iterator found ( _DefaultValues.find(propName) );
@@ -1826,7 +1829,7 @@ CObject* CObjectGenerator::getDefaultValue(const std::string & propName) const
 	{
 		return found->second;
 	}
-	return 0;
+	return s_nullSmartPtr;
 }
 
 CObject* CObjectGenerator::instanciate(CObjectFactory* factory) const

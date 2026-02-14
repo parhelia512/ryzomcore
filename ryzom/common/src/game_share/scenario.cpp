@@ -400,7 +400,7 @@ void CInstanceMap::remove(CObject* root)
 		if ( root->isString("InstanceId") )
 		{
 			std::string instanceId = root->toString(_IdName);
-			std::map<std::string, CObject*>::iterator found(_Map.find(instanceId));
+			std::map<std::string, CObject::TRefPtr>::iterator found(_Map.find(instanceId));
 			if ( found == _Map.end())
 			{
 				nlwarning("Trying to remove object from instance map but object is not found. Objec t is :");
@@ -429,7 +429,7 @@ void CInstanceMap::set(CObject* root)
 
 CObject* CInstanceMap::find (const std::string& instanceId)
 {
-	std::map< std::string , CObject*>::const_iterator found = _Map.find(instanceId);
+	std::map< std::string , CObject::TRefPtr>::const_iterator found = _Map.find(instanceId);
 	if (found != _Map.end()) { return found->second; }
 
 	return 0;

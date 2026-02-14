@@ -5539,7 +5539,7 @@ void CEditor::createNewInstanceForObjectTableInternal(const CObject *obj)
 	CHECK_EDITOR
 	if (!obj) return;
 	if (!obj->isTable()) return; // not a table ...
-	const CObjectTable *table = (const CObjectTable *) obj;
+	CObjectTable *table = (CObjectTable *) obj;
 	std::string id = getString(obj, "InstanceId");
 	if (!id.empty())
 	{
@@ -5806,7 +5806,7 @@ void CEditor::scenarioUpdated(CObject* highLevel, bool willTP, uint32 initialAct
 	*/
 	createNewInstanceForObjectTableInternal(_DMC->getHighLevel());
 	nlassert(highLevel->isTable());
-	_Scenario = (CObjectTable *) _DMC->getHighLevel();
+	_Scenario = _DMC->getHighLevel();
 	if (_Scenario->getAttr("InstanceId"))
 	{
 		_ScenarioInstance = getInstanceFromId(_Scenario->getAttr("InstanceId")->toString());
@@ -5824,7 +5824,7 @@ void CEditor::scenarioUpdated(CObject* highLevel, bool willTP, uint32 initialAct
 		_Scenario->dump();
 	}
 	//
-	projectInLua(_Scenario); // push on the lua stack
+	projectInLua(static_cast<CObjectTable *>(_Scenario.getPtr())); // push on the lua stack
 	getLua().push(initialActIndex); // example reconnect after test in act4
 	// update value in the framework
 	callEnvFunc("onScenarioUpdated", 2);

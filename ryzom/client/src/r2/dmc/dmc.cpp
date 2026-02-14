@@ -444,7 +444,7 @@ CObject* CDynamicMapClient::getPropertyList(CObject* component) const
 	return _EditionModule->getPropertyList(component);
 }
 
-CObject* CDynamicMapClient::getPaletteElement(const std::string& key)const
+const CObject::TSmartPtr& CDynamicMapClient::getPaletteElement(const std::string& key)const
 {
 	//H_AUTO(R2_CDynamicMapClient_getPaletteElement)
 	return _EditionModule->getPaletteElement(key);
@@ -668,7 +668,7 @@ CObject *CDynamicMapClient::find(const std::string& instanceId, const std::strin
 	return _EditionModule->getCurrentScenario()->find(instanceId, attrName, position, key);
 }
 
-const CObject *CDynamicMapClient::getHighLevel() const
+CObject *CDynamicMapClient::getHighLevel() const
 {
 	//H_AUTO(R2_CDynamicMapClient_getHighLevel)
 	if (!getCurrentScenario()) { return 0;}

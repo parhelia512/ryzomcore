@@ -657,7 +657,7 @@ private:
 	CInstance::TRefPtr							_CurrentAct;
 	CInstance::TRefPtr							_BaseAct;
 	CInstance::TRefPtr							_ScenarioInstance;
-	CObjectTable								*_Scenario;
+	CObject::TSmartPtr							_Scenario;
 	std::string									_WantedActOnInit;
 	//
 	friend class CDynamicMapClientEventForwarder;
