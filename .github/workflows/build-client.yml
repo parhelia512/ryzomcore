@@ -51,7 +51,7 @@ jobs:
             cmake_preset: linux-client
           - os: macos-15
             cmake_preset: macos-client
-            cmake_options: -DHUNTER_USE_CACHE_SERVERS=NO
+            cmake_options: -DHUNTER_USE_CACHE_SERVERS=NO -DCMAKE_HAVE_LIBC_PTHREAD=ON
 
     steps:
     - uses: actions/checkout@v4
