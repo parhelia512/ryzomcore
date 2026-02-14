@@ -3048,20 +3048,22 @@ void CDriverGL::setClipPlane(uint index, const NLMISC::CPlane &plane)
 	H_AUTO_OGL(CDriverGL_setClipPlane)
 
 #ifndef USE_OPENGLES
-	// Convert from NeL world space (X right, Y forward, Z up)
-	// to GL world space (X right, Y up, Z back).
+	// Plane is in NeL world space. _ViewMtx = changeBasis * userViewMatrix
+	// already transforms from NeL world to GL eye space, so no basis
+	// conversion is needed on the plane - glClipPlane will handle it
+	// via the inverse of the modelview we load.
 	// Adjust d for _PZBCameraPos precision optimization.
 	double equation[4];
 	equation[0] = plane.a;
-	equation[1] = plane.c;
-	equation[2] = -plane.b;
+	equation[1] = plane.b;
+	equation[2] = plane.c;
 	equation[3] = plane.d + plane.a * _PZBCameraPos.x
 	                      + plane.b * _PZBCameraPos.y
 	                      + plane.c * _PZBCameraPos.z;
 
-	// glClipPlane transforms by inverse of current modelview.
-	// Load view-only matrix (no model) so the world-space plane
-	// is correctly transformed to eye space.
+	// glClipPlane transforms the plane by the inverse of the current
+	// modelview matrix. By loading _ViewMtx (NeL world -> GL eye),
+	// GL correctly converts the NeL-world-space plane to eye space.
 	glMatrixMode(GL_MODELVIEW);
 	glPushMatrix();
 	glLoadMatrixf((const GLfloat *)_ViewMtx.get());

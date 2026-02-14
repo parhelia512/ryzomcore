@@ -3581,13 +3581,14 @@ void CDriverD3D::setClipPlane(uint index, const NLMISC::CPlane &plane)
 	H_AUTO_D3D(CDriverD3D_setClipPlane);
 	nlassert(index < 6);
 
-	// Convert from NeL world space (X right, Y forward, Z up)
-	// to D3D world space (X right, Y up, Z forward).
+	// Plane is in NeL world space. The D3D World matrix operates in NeL
+	// space (basis conversion is in the View matrix), so no basis
+	// conversion is needed on the plane coefficients.
 	// Adjust d for _PZBCameraPos precision optimization.
 	float equation[4];
 	equation[0] = plane.a;
-	equation[1] = plane.c;
-	equation[2] = plane.b;
+	equation[1] = plane.b;
+	equation[2] = plane.c;
 	equation[3] = plane.d + plane.a * _PZBCameraPos.x
 	                      + plane.b * _PZBCameraPos.y
 	                      + plane.c * _PZBCameraPos.z;
