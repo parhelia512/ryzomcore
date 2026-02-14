@@ -18,17 +18,17 @@
 #define DMS_PALETTE_H
 
 #include "nel/misc/types_nl.h"
+#include "game_share/object.h"
 
 #include <string>
 #include <map>
 
 namespace R2
 {
-	class CObject;
 	class CPalette
 	{
 	private:
-		typedef std::map<std::string, CObject*> TMap;
+		typedef std::map<std::string, CObject::TSmartPtr> TMap;
 	public:
 		CObject* getPaletteElement(const std::string& key) const;
 

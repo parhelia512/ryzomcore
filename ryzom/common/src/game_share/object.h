@@ -69,7 +69,7 @@ public:
 
 	virtual ~CObject();
 
-	virtual CObject* clone() const;
+	virtual TSmartPtr clone() const;
 
 	void serialize(std::string& out) const;
 
@@ -95,7 +95,7 @@ public:
 
 	bool isRefId(const std::string & prop="") const;
 
-	virtual bool insert(const std::string & key, CObject * value, sint32 position = -1);
+	virtual bool insert(const std::string & key, CObject::TSmartPtr value, sint32 position = -1);
 
 	// to Value
 	double toNumber(const std::string & prop="") const;
@@ -121,16 +121,16 @@ public:
 
 	virtual uint32 getSize() const;
 
-	virtual CObject* take(sint32 pos);
+	virtual CObject::TSmartPtr take(sint32 pos);
 
 	virtual bool canTake(sint32 pos) const;
 
 
 	// add Value
 
-	void add(const std::string & key, CObject* value);
+	void add(const std::string & key, CObject::TSmartPtr value);
 
-	void add(CObject* value);
+	void add(CObject::TSmartPtr value);
 
 	void add(const std::string& key, const std::string & value);
 
@@ -236,7 +236,7 @@ public:
 
 	virtual const char *getTypeAsString() const;
 
-	virtual CObject* clone() const;
+	virtual TSmartPtr clone() const;
 
 	virtual bool set(const std::string& key, const std::string & value);
 
@@ -275,7 +275,7 @@ public:
 	explicit CObjectRefId(const std::string & value);
 	~CObjectRefId();
 	virtual const char *getTypeAsString() const;
-	virtual CObject* clone() const;
+	virtual TSmartPtr clone() const;
 	virtual bool equal(const CObject* other) const;
 protected:
 	virtual void visitInternal(IObjectVisitor &visitor);
@@ -299,7 +299,7 @@ public:
 
 	virtual bool setObject(const std::string& key, CObject* value) NL_OVERRIDE;
 
-	virtual CObject* clone() const NL_OVERRIDE;
+	virtual TSmartPtr clone() const NL_OVERRIDE;
 
 	double getNumberValue() const { return m_IsInteger ? m_Value.Integer : m_Value.Number; }
 	sint64 getIntegerValue() const { return m_IsInteger ? m_Value.Integer : m_Value.Number; }
@@ -349,9 +349,9 @@ public:
 
 	virtual const char *getTypeAsString() const;
 
-	virtual bool insert(const std::string & key, CObject * value, sint32 pos);
+	virtual bool insert(const std::string & key, CObject::TSmartPtr value, sint32 pos);
 
-	virtual CObject* clone() const;
+	virtual TSmartPtr clone() const;
 
 	virtual void doSerialize(std::string& out, CSerializeContext& context) const;
 
@@ -375,7 +375,7 @@ public:
 
 	virtual bool setObject(const std::string& key, CObject* value);
 
-	virtual CObject* take(sint32 pos);
+	virtual CObject::TSmartPtr take(sint32 pos);
 
 	virtual bool canTake(sint32 pos) const;
 
@@ -408,7 +408,7 @@ protected:
 	  * A negative index indicate an offset from the end of the table (-1 for the last element)
 	  */
 protected:
-	typedef std::vector< std::pair<std::string, CObject*> >  TContainer;
+	typedef std::vector< std::pair<std::string, CObject::TSmartPtr> >  TContainer;
 
 protected:
 	TContainer _Value;
@@ -475,9 +475,9 @@ public:
 protected:
 	void createDefaultValues(CObjectFactory* factory);
 private:
-	typedef std::map<std::string, CObject* > TDefaultValues;
+	typedef std::map<std::string, CObject::TSmartPtr > TDefaultValues;
 private:
-	CObject* _ObjectClass;
+	CObject::TSmartPtr _ObjectClass;
 	TDefaultValues _DefaultValues;
 };
 
@@ -526,10 +526,11 @@ protected:
 
 public:
 	void serial(NLMISC::IStream& stream);
-	CObject* getData() const;
-	// make a copy of data (the caller must handle data)
+	// Returns a clone of the internal data.
+	CObject::TSmartPtr getData() const;
+	// Stores a clone of data. The caller retains ownership of the original.
 	void setData(CObject* data);
-	// :XXX: don't delete _Data
+	// _Data is owned by this object and deleted here. Don't delete externally.
 	~CObjectSerializer();
 	static void serialStringInstanceId( NLMISC::IStream& stream, std::string& data);
 
@@ -551,7 +552,7 @@ private:
 
 
 private:
-	CObject*	_Data;
+	CObject::TSmartPtr	_Data;
 	bool		_Compressed;
 	bool		_MustUncompress;
 	uint8*		_CompressedBuffer;

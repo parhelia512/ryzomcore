@@ -45,13 +45,12 @@ void CPalette::addPaletteElement(const std::string& key, CObject* paletteElement
 {
 	//H_AUTO(R2_CPalette_addPaletteElement)
 	std::pair< TMap::iterator, bool> result;
-	result = _Map.insert( std::pair<std::string, CObject*>(key, paletteElement));
+	result = _Map.insert( std::pair<std::string, CObject::TSmartPtr>(key, paletteElement));
 
 
 	if (!result.second)
 	{
 		nlwarning("Palette element added twice : %s", key.c_str());
-		delete paletteElement;
 	}
 }
 
@@ -66,12 +65,6 @@ bool CPalette::isInPalette(const std::string &key) const
 
 CPalette::~CPalette()
 {
-	TMap::iterator first(_Map.begin()), last(_Map.end());
-	for (; first != last; ++first)
-	{
-		delete(first->second);
-	}
-	_Map.clear();
 }
 
 } // R2

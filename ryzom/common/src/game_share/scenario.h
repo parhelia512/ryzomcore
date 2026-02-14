@@ -35,14 +35,12 @@
 #include "game_share/r2_types.h"
 
 #include "r2_share_itf.h"
+#include "object.h"
 
 //#include "game_share/far_position.h"
 
 namespace R2
 {
-
-
-class CObject;
 class CInstanceMap;
 class CInstanceMap;
 class CIdMaker;
@@ -142,7 +140,7 @@ public:
 	bool setNode( const std::string& instanceId, const std::string& attrName, CObject* value);
 
 	bool insertNode(const std::string&  instanceId, const std::string & attrName, sint32 position,
-		const std::string& key, CObject* value);
+		const std::string& key, CObject::TSmartPtr value);
 
 	bool eraseNode(const std::string&  instanceId, const std::string & attrName, sint32 position);
 
@@ -200,17 +198,17 @@ private:
 
 	/// Palette used
 	// :XXX: useful?
-	CObject* _Palette;
+	CObject::TSmartPtr _Palette;
 
 /// list of chars
 	/// :XXX: useful?
 	uint32			_Mode;
 
 	// Runtime Data
-	CObject* _BasicBricks;
+	CObject::TSmartPtr _BasicBricks;
 
 
-	CObject* _HighLevel;
+	CObject::TSmartPtr _HighLevel;
 	CInstanceMap* _InstanceMap;
 	TScenarioSessionType _SessionType;
 	uint32 _InitialActIndex;

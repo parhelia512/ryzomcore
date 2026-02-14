@@ -346,11 +346,11 @@ CObjectTable* CObject::toTable(const std::string & prop) const
 
 
 
-CObject* CObject::take(sint32 /* position */)
+CObject::TSmartPtr CObject::take(sint32 /* position */)
 {
 	//H_AUTO(R2_CObject_take)
-	BOMB("Try to use the take function on an object that is not a table", return 0);
-	return 0;
+	BOMB("Try to use the take function on an object that is not a table", return NULL);
+	return NULL;
 }
 
 bool CObject::canTake(sint32 /* position */) const
@@ -397,15 +397,15 @@ CObject* CObject::getValueAtPos(uint32 /* pos */) const{ BOMB("Try to call the f
 
 uint32 CObject::getSize() const { BOMB("Try to call the function getSize() on an object that is not a table", return 0);  return 0; }
 
-CObject* CObject::clone() const { BOMB("Try to call the function clone() on an object that is not a table", return 0); return 0;}
+CObject::TSmartPtr CObject::clone() const { BOMB("Try to call the function clone() on an object that is not a table", return NULL); return NULL;}
 
-void CObject::add(const std::string & key,  CObject* value)
+void CObject::add(const std::string & key,  CObject::TSmartPtr value)
 {
 	//H_AUTO(R2_CObject_add)
 	insert(key,  value,  -1);
 }
 
-void CObject::add(CObject* value){ add("",  value); }
+void CObject::add(CObject::TSmartPtr value){ add("",  value); }
 
 bool CObject::set(const std::string& /* key */, const std::string & /* value */)
 {
@@ -437,7 +437,7 @@ void CObject::serialize(std::string& out) const
 	CSerializeContext context;
 	doSerialize(out,  context);
 }
-bool CObject::insert( const std::string& /* key */,   CObject* /* value */,  sint32 /* position */)
+bool CObject::insert( const std::string& /* key */,   CObject::TSmartPtr /* value */,  sint32 /* position */)
 {
 	//H_AUTO(R2_CObject_insert)
 	BOMB("Try to call the function insert() on an object that is not a table", return false);
@@ -462,12 +462,17 @@ void CObject::setParent(CObject* parent)
 void CObject::add(const std::string& key,  const std::string & value)
 {
 	//H_AUTO(R2_CObject_add)
-	this->add(key,  new CObjectString(value));
+	this->add(key,  CObject::TSmartPtr(new CObjectString(value)));
 }
 void CObject::add(const std::string& key,  double value)
 {
 	//H_AUTO(R2_CObject_add)
-	this->add(key,  new CObjectNumber(value));
+	this->add(key,  CObject::TSmartPtr(new CObjectNumber(value)));
+}
+void CObject::add(const std::string& key,  sint64 value)
+{
+	//H_AUTO(R2_CObject_add)
+	this->add(key,  CObject::TSmartPtr(new CObjectNumber(value)));
 }
 
 CObject* CObject::findAttr(const std::string & first) const
@@ -685,7 +690,7 @@ void CObjectString::inPlaceCopy(const CObjectString &src)
 std::string CObjectString::doToString() const { return _Value;}
 
 
-CObject* CObjectString::clone() const
+CObject::TSmartPtr CObjectString::clone() const
 {
 	//H_AUTO(R2_CObjectString_clone)
 	CObjectString *result = new CObjectString(_Value);
@@ -717,7 +722,7 @@ const char *CObjectRefId::getTypeAsString() const
 	return "RefId";
 }
 
-CObject* CObjectRefId::clone() const
+CObject::TSmartPtr CObjectRefId::clone() const
 {
 	//H_AUTO(R2_CObjectRefId_clone)
 	return new CObjectRefId(*this);
@@ -870,7 +875,7 @@ bool CObjectNumber::set(const std::string& key,  const std::string & value)
 	return false;
 }
 
-CObject* CObjectNumber::clone() const
+CObject::TSmartPtr CObjectNumber::clone() const
 {
 	//H_AUTO(R2_CObjectNumber_clone)
 	CObjectNumber *result = m_IsInteger 
@@ -1049,12 +1054,6 @@ CObjectTable::~CObjectTable()
 	{
 		CHECK_TABLE_INTEGRITY
 	}
-	TContainer::iterator first(_Value.begin()),  last(_Value.end());
-	for ( ;first != last; ++first )
-	{
-		delete first->second;
-		first->second = 0;
-	}
 	_Value.clear();
 }
 
@@ -1070,7 +1069,7 @@ void CObjectTable::sort()
 {
 	//H_AUTO(R2_CObjectTable_sort)
 	CHECK_TABLE_INTEGRITY
-	std::vector < std::pair<std::string,  CObject*> > data;
+	TContainer data;
 	std::vector<std::string> keyVector;
 
 	CObject* keys = getAttr("Keys");
@@ -1091,7 +1090,7 @@ void CObjectTable::sort()
 			if ( key == _Value[firstValue].first)
 			{
 				data.push_back( _Value[firstValue]);
-				_Value[firstValue].second = 0;
+				_Value[firstValue].second = NULL;
 			}
 		}
 	}
@@ -1100,7 +1099,7 @@ void CObjectTable::sort()
 		uint32 lastValue = (uint32)_Value.size();
 		for (; firstValue != lastValue; ++firstValue)
 		{
-			if (  _Value[firstValue].first != "Keys" && _Value[firstValue].second != 0)
+			if (  _Value[firstValue].first != "Keys" && _Value[firstValue].second != NULL)
 			{
 				data.push_back( _Value[firstValue]);
 			}
@@ -1108,21 +1107,19 @@ void CObjectTable::sort()
 
 	}
 	_Value.swap(data);
-
-	delete keys;
 }
 
-CObject* CObjectTable::clone() const
+CObject::TSmartPtr CObjectTable::clone() const
 {
 	//H_AUTO(R2_CObjectTable_clone)
 	CHECK_TABLE_INTEGRITY
-	CObject* ret = new CObjectTable();
+	CObject::TSmartPtr ret = new CObjectTable();
 	TContainer::const_iterator first(_Value.begin()),  last(_Value.end());
 	for ( ;first != last; ++first )
 	{
-		BOMB_IF(!first->second, "Try to clone a table with an NULL component", return 0);
+		BOMB_IF(!first->second, "Try to clone a table with an NULL component", return NULL);
 		nlassert(first->second->getGhost() == this->getGhost());
-		CObject* clone = first->second->clone();
+		CObject::TSmartPtr clone = first->second->clone();
 		if (clone) { clone->setParent(0); }
 		ret->add(first->first,  clone);
 	}
@@ -1396,12 +1393,6 @@ void CObjectTable::clear()
 {
 	//H_AUTO(R2_CObjectTable_clear)
 	CHECK_TABLE_INTEGRITY
-	TContainer::iterator first(_Value.begin());
-	TContainer::iterator last(_Value.end());
-	for (; first != last  ;++first)
-	{
-		delete first->second;
-	}
 	_Value.clear();
 }
 
@@ -1436,15 +1427,15 @@ sint32 CObjectTable::findIndex(const std::string &key) const
 	return first;
 }
 
-CObject* CObjectTable::take(sint32 position)
+CObject::TSmartPtr CObjectTable::take(sint32 position)
 {
 	//H_AUTO(R2_CObjectTable_take)
 	CHECK_TABLE_INTEGRITY
-	BOMB_IF(!( -1 <= position && position < static_cast<sint32>(_Value.size())), "Try to take an element that does not exist", return 0);
+	BOMB_IF(!( -1 <= position && position < static_cast<sint32>(_Value.size())), "Try to take an element that does not exist", return NULL);
 
 	if (0 <=  position && position < static_cast<sint32>(_Value.size()))
 	{
-		CObject* child = _Value[ static_cast<uint32>(position) ].second;
+		CObject::TSmartPtr child = _Value[ static_cast<uint32>(position) ].second;
 		_Value.erase(_Value.begin() + static_cast<uint32>(position));
 		child->setParent(0);
 		return child;
@@ -1454,16 +1445,16 @@ CObject* CObjectTable::take(sint32 position)
 		CObject* parent = getParent();
 		if (!parent)
 		{
-			return this;
+			return CObject::TSmartPtr(this);
 		}
 
 		uint32 pos = getParent()->findIndex(this);
-		BOMB_IF(pos >= getParent()->getSize(), "Try to take an element that does not exist", return 0);
-		CObject* child = getParent()->take(pos);
+		BOMB_IF(pos >= getParent()->getSize(), "Try to take an element that does not exist", return NULL);
+		CObject::TSmartPtr child = getParent()->take(pos);
 		return child;
 	}
 
-	return 0;
+	return NULL;
 }
 
 
@@ -1494,7 +1485,7 @@ bool CObjectTable::canTake(sint32 position) const
 
 
 
-bool CObjectTable::insert(const std::string& key,  CObject* value,  sint32 position)
+bool CObjectTable::insert(const std::string& key,  CObject::TSmartPtr value,  sint32 position)
 {
 	//H_AUTO(R2_CObjectTable_insert)
 	CHECK_TABLE_INTEGRITY
@@ -1515,12 +1506,12 @@ bool CObjectTable::insert(const std::string& key,  CObject* value,  sint32 posit
 	if (0<= position && position < static_cast<sint32>(count))
 	{
 
-		_Value.insert(_Value.begin() + position,  std::pair<std::string,  CObject*>(key,  value));
+		_Value.insert(_Value.begin() + position,  std::pair<std::string,  CObject::TSmartPtr>(key,  value));
 
 	}
 	else
 	{
-		_Value.push_back(std::pair<std::string,  CObject*>(key,  value));
+		_Value.push_back(std::pair<std::string,  CObject::TSmartPtr>(key,  value));
 	}
 	return true;
 
@@ -1766,13 +1757,6 @@ void CClass::addAttribute(const std::string & name,  const std::string & type,  
 
 CObjectGenerator::~CObjectGenerator()
 {
-	delete _ObjectClass;
-	TDefaultValues::iterator first(_DefaultValues.begin()), last(_DefaultValues.end());
-	for (;first != last; ++first)
-	{
-		CObject* data = first->second;
-		delete data;
-	}
 }
 
 
@@ -3496,7 +3480,9 @@ void CObjectSerializer::serial(NLMISC::IStream& stream)
 
 	if (!_Compressed)
 	{
-		CObjectSerializerImpl::getInstance().serialImpl(stream, _Data, this, true);
+		CObject* rawData = _Data.getPtr();
+		CObjectSerializerImpl::getInstance().serialImpl(stream, rawData, this, true);
+		_Data = rawData;
 	}
 	else
 	{
@@ -3511,12 +3497,12 @@ void CObjectSerializer::serial(NLMISC::IStream& stream)
 	}
 }
 
-CObject* CObjectSerializer::getData() const
+CObject::TSmartPtr CObjectSerializer::getData() const
 {
 	//H_AUTO(R2_CObjectSerializer_getData)
 	if (_Compressed && _MustUncompress) { uncompress(); };
-	if (_Data) return _Data->clone();
-	return 0;
+	if (_Data) return CObject::TSmartPtr(_Data->clone());
+	return NULL;
 }
 
 
@@ -3547,7 +3533,6 @@ CObjectSerializer::CObjectSerializer(CObjectFactory *factory, CObject* data)
 CObjectSerializer::~CObjectSerializer()
 {
 	if (_CompressedBuffer) { delete [] _CompressedBuffer; _CompressedBuffer = 0;}
-	delete _Data;
 }
 
 
@@ -3573,7 +3558,7 @@ void CObjectSerializer::setData(CObject* data)
 	}
 	else
 	{
-		_Data = 0;
+		_Data = NULL;
 	}
 }
 
@@ -3589,7 +3574,8 @@ void CObjectSerializer::compress()
 	NLMISC::CMemStream buffer;
 	if (buffer.isReading()) buffer.invert();
 	uint32 init =  buffer.length();
-	CObjectSerializerImpl::getInstance().serialImpl(buffer, _Data, this, true);
+	CObject* rawData = _Data.getPtr();
+	CObjectSerializerImpl::getInstance().serialImpl(buffer, rawData, this, true);
 	uint32 length =  buffer.length() - init;
 
 	uLongf destLen = length + length / 1000 + 12;
@@ -3635,11 +3621,7 @@ void CObjectSerializer::uncompressImpl()
 	if (_Compressed && _MustUncompress)
 	{
 		_MustUncompress = false;
-		if  ( _Data )
-		{
-			delete _Data;
-			_Data = 0;
-		}
+		_Data = NULL;
 
 		Bytef* data = new Bytef[_UncompressedLen];
 		uLongf dataLen = _UncompressedLen;
@@ -3664,7 +3646,9 @@ void CObjectSerializer::uncompressImpl()
 		buffer.invert();
 		buffer.seek(0, NLMISC::IStream::begin);
 
-		CObjectSerializerImpl::getInstance().serialImpl(buffer, _Data, this, true);
+		CObject* rawData = NULL;
+		CObjectSerializerImpl::getInstance().serialImpl(buffer, rawData, this, true);
+		_Data = rawData;
 
 		delete[] data;
 	}

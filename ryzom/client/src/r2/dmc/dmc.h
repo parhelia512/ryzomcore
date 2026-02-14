@@ -146,7 +146,7 @@ namespace R2
 		void testConnectionAsCreator();
 
 		void updateScenario(CObject* scenario, bool willTP);
-		CObject *translateScenario(CObject* scenario);
+		CObject::TSmartPtr translateScenario(CObject* scenario);
 
 		void save(const std::string& filename);
 

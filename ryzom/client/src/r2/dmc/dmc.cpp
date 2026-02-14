@@ -93,9 +93,8 @@ void CClientInstantActionFeedBack::doRequestSetNode(const std::string& instanceI
 	// server record (must be done before client feedback because 'unchanged value' optimisation would prevent the change, else)
 	_DMC.doRequestSetNode(instanceId, attrName, value);
 	// client instant feed back
-	CObject *temp = value->clone();
+	CObject::TSmartPtr temp = value->clone();
 	_DMC.nodeSet(instanceId, attrName, temp);
-	delete temp;
 }
 
 //========
@@ -306,7 +305,7 @@ extern bool ConnectionWanted;
 bool CDynamicMapClient::loadAnimationFromBuffer(const std::string& content, const std::string& filename, std::string& errMsg, const CScenarioValidator::TValues& values)
 {
 	//H_AUTO(R2_CDynamicMapClient_loadAnimationFromBuffer)
-	CObject* data = _ComLua->loadFromBuffer(content, filename, values);
+	CObject::TSmartPtr data = _ComLua->loadFromBuffer(content, filename, values);
 	if (!data)
 	{
 		errMsg = "Invalid Data";
@@ -400,11 +399,11 @@ void CDynamicMapClient::updateScenario(CObject* scenario, bool /* willTP */)
 	_EditionModule->updateScenario(scenario);
 }
 
-CObject *CDynamicMapClient::translateScenario(CObject* scenario)
+CObject::TSmartPtr CDynamicMapClient::translateScenario(CObject* scenario)
 {
 	//H_AUTO(R2_CDynamicMapClient_translateScenario)
 	std::string errorMsg;
-	CObject *rtdata = _ComLua->translateFeatures(scenario, errorMsg);
+	CObject::TSmartPtr rtdata = _ComLua->translateFeatures(scenario, errorMsg);
 	if( !rtdata )
 	{
 		nlwarning( errorMsg.c_str() );
