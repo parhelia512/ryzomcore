@@ -1619,7 +1619,9 @@ bool CDriverD3D::setDisplay(nlWindow wnd, const GfxMode& mode, bool show, bool r
 	_NbNeLTextureStages = min ((uint)NL_FORCE_TEXTURE_STAGE_COUNT, (uint)IDRV_MAT_MAXTEXTURES);
 #endif // NL_FORCE_TEXTURE_STAGE_COUNT
 
-	_VertexProgram = !_DisableHardwareVertexProgram && ((caps.VertexShaderVersion&0xffff) >= 0x0100);
+	_VertexProgramVersion = _DisableHardwareVertexProgram ? 0x0000 : caps.VertexShaderVersion & 0xffff;
+	nldebug("Vertex Program Version: %i.%i", (uint32)((_VertexProgramVersion & 0xFF00) >> 8), (uint32)(_VertexProgramVersion & 0xFF));
+	_VertexProgram = _VertexProgramVersion >= 0x0100;
 	_PixelProgramVersion = _DisableHardwareVertexProgram ? 0x0000 : caps.PixelShaderVersion & 0xffff;
 	nldebug("Pixel Program Version: %i.%i", (uint32)((_PixelProgramVersion & 0xFF00) >> 8), (uint32)(_PixelProgramVersion & 0xFF));
 	_PixelProgram = _PixelProgramVersion >= 0x0101;

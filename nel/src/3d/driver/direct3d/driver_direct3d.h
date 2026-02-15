@@ -2451,6 +2451,7 @@ private:
 	bool					_TextureCubeSupported;
 	bool					_VertexProgram;
 	bool					_PixelProgram;
+	uint16					_VertexProgramVersion;
 	uint16					_PixelProgramVersion;
 	bool					_DisableHardwareVertexProgram;
 	bool					_DisableHardwarePixelProgram;

@@ -1178,7 +1178,7 @@ static	void	strReplaceAll(string &strInOut, const string &tokenSrc, const string
 void CVertexProgramLighted::buildInfo()
 {
 	CVertexProgram::buildInfo();
-	if (profile() == nelvp)
+	if (profile() == nelvp || profile() == arbvp1 || profile() == vs_2_0)
 	{
 		// Fixed uniform locations
 		m_IdxLighted.Ambient = m_FeaturesLighted.CtStartNeLVP + 0;
@@ -1192,7 +1192,7 @@ void CVertexProgramLighted::buildInfo()
 			{
 				m_IdxLighted.Specular[i] = m_FeaturesLighted.CtStartNeLVP + 5 + i;
 			}
-			m_IdxLighted.DirOrPos[0] = 9;
+			m_IdxLighted.DirOrPos[0] = m_FeaturesLighted.CtStartNeLVP + 9;
 			for (uint i = 1; i < MaxLight; ++i)
 			{
 				m_IdxLighted.DirOrPos[i] = m_FeaturesLighted.CtStartNeLVP + (12 - 1) + i;

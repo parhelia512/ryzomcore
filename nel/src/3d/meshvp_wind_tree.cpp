@@ -47,6 +47,9 @@ static const uint	VPLightConstantStart = 24;
 // ***************************************************************************
 NLMISC::CSmartPtr<CVertexProgramWindTree> CMeshVPWindTree::_VertexProgram[CMeshVPWindTree::NumVp];
 
+// Precompiled Cg output for arbvp1 and vs_2_0 profiles
+#include "shaders/wind_tree_vp_embedded.h"
+
 static const char*	WindTreeVPCodeWave=
 "!!VP1.0																				\n\
   # extract from color.R the 3 factors into R0.xyz									\n\
@@ -119,7 +122,32 @@ CVertexProgramWindTree::CVertexProgramWindTree(uint numPls, bool specular, bool 
 	// constants cache
 	PerMeshSetup = false;
 
-	// nelvp
+	// Variant index: numPls * 4 + (specular ? 2 : 0) + (normalize ? 1 : 0)
+	uint vpIdx = numPls * 4 + (specular ? 2 : 0) + (normalize ? 1 : 0);
+
+	// arbvp1 source (preferred by GL ARB path)
+	{
+		CSource *source = new CSource();
+		source->DisplayName = NLMISC::toString("arbvp1/MeshVPWindTree/%i/%s/%s", numPls, specular ? "spec" : "nospec", normalize ? "normalize" : "nonormalize");
+		source->Profile = CVertexProgram::arbvp1;
+		source->setSourcePtr(s_windTreeARBVP1[vpIdx]);
+		source->ParamIndices["modelViewProjection"] = 0;
+		source->ParamIndices["fog"] = 6;
+		addSource(source);
+	}
+
+	// vs_2_0 source (preferred by D3D path)
+	{
+		CSource *source = new CSource();
+		source->DisplayName = NLMISC::toString("vs_2_0/MeshVPWindTree/%i/%s/%s", numPls, specular ? "spec" : "nospec", normalize ? "normalize" : "nonormalize");
+		source->Profile = CVertexProgram::vs_2_0;
+		source->setSourcePtr(s_windTreeVS20[vpIdx]);
+		source->ParamIndices["modelViewProjection"] = 0;
+		source->ParamIndices["fog"] = 6;
+		addSource(source);
+	}
+
+	// nelvp source (fallback for NV VP / EXT vertex shader paths)
 	{
 		std::string vpCode = std::string(WindTreeVPCodeWave)
 			+ CRenderTrav::getLightVPFragmentNeLVP(numPls, VPLightConstantStart, specular, normalize)
@@ -133,14 +161,12 @@ CVertexProgramWindTree::CVertexProgramWindTree(uint numPls, bool specular, bool 
 		source->ParamIndices["fog"] = 6;
 		addSource(source);
 	}
-
-	// TODO_VP_GLSL
 }
 
 void CVertexProgramWindTree::buildInfo()
 {
 	CVertexProgramLighted::buildInfo();
-	if (profile() == nelvp)
+	if (profile() == nelvp || profile() == arbvp1 || profile() == vs_2_0)
 	{
 		m_Idx.ProgramConstants[0] = 8;
 		m_Idx.ProgramConstants[1] = 9;
