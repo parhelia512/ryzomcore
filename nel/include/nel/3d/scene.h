@@ -300,6 +300,9 @@ public:
 	/// get the number of time render has been called
 	uint64				getNumRender() const { return _NumRender; }
 
+	/// get the frame id, incremented once per animate() call (i.e. once per real frame, not per stereo eye)
+	uint64				getFrameId() const { return _FrameId; }
+
 	/// true if currently rendering
 	bool				isRendering() const {return _IsRendering;}
 
@@ -677,6 +680,8 @@ private:
 	double	_DeltaSystemTimeBetweenRender;
 	double	_GlobalSystemTime;
 	uint64  _NumRender; // the number of time render has been called
+	uint64  _FrameId;  // incremented once per animate() call (once per real frame)
+	uint64  _LastRenderFrameId; // last _FrameId seen by renderPart (for once-per-frame operations)
 
 
 	/// \name The traversals

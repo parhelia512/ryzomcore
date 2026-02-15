@@ -162,6 +162,8 @@ CScene::CScene(bool bSmallScene) : LightTrav(bSmallScene)
 	_AsyncTextureManager= NULL;
 
 	_NumRender = 0;
+	_FrameId = 0;
+	_LastRenderFrameId = 0;
 
 	_MaxSkeletonsInNotCLodForm= 20;
 
@@ -583,8 +585,11 @@ void	CScene::renderPart(UScene::TRenderPart rp, bool	doHrcPass, bool doTrav, boo
 		RenderTrav.clearWaterModelList();
 		_FirstFlare = NULL;
 
-		if (doTrav)
+		// Update system time once per real frame
+		if (_FrameId != _LastRenderFrameId)
 		{
+			_LastRenderFrameId = _FrameId;
+
 			// update water envmap
 			//updateWaterEnvmap();
 
@@ -632,14 +637,6 @@ void	CScene::renderPart(UScene::TRenderPart rp, bool	doHrcPass, bool doTrav, boo
 		RenderTrav.setCamMatrix (CurrentCamera->getWorldMatrix());
 		LoadBalancingTrav.setCamMatrix (CurrentCamera->getWorldMatrix());
 
-		// For the second eye in stereo rendering, zero elapsed time during traversals
-		// to prevent double-accumulation of stateful effects (shadow fades, target anim
-		// ctrl, wave makers). Restored after traversals so the render phase (flares) can
-		// use the real elapsed time for per-context intensity ramping.
-		float savedEllapsedTime = _EllapsedTime;
-		if (!doTrav)
-			_EllapsedTime = 0.f;
-
 		// clip
 		ClipTrav.traverse();
 
@@ -649,21 +646,15 @@ void	CScene::renderPart(UScene::TRenderPart rp, bool	doHrcPass, bool doTrav, boo
 		// loadBalance
 		LoadBalancingTrav.traverse();
 
-		if (doTrav)
+		// Animate particles once per frame (_RequestParticlesAnimate is set in animate(), cleared after use)
+		if (_RequestParticlesAnimate)
 		{
-			//
-			if (_RequestParticlesAnimate)
-			{
-				_ParticleSystemManager.processAnimate(savedEllapsedTime); // deals with permanently animated particle systems
-				_RequestParticlesAnimate = false;
-			}
+			_ParticleSystemManager.processAnimate(_EllapsedTime);
+			_RequestParticlesAnimate = false;
 		}
 
 		// Light
 		LightTrav.traverse();
-
-		// Restore elapsed time for render pass (flares need non-zero time for intensity ramp)
-		_EllapsedTime = savedEllapsedTime;
 	}
 
 	// render
@@ -864,6 +855,8 @@ void CScene::deleteInstance(CTransformShape *pTrfmShp)
 // ***************************************************************************
 void CScene::animate( TGlobalAnimationTime atTime )
 {
+	++_FrameId;
+
 	// todo hulud remove
 	if (_FirstAnimateCall)
 	{
