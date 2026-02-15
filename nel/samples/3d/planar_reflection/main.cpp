@@ -17,11 +17,43 @@
 //
 // Planar Reflection Demo
 //
-// Draws a rotating cube above a reflective floor at Z=0.
-// The reflection is rendered from a mirrored camera into a render target,
-// then projected onto the floor using CFrustum::project() for UV mapping.
-// The floor polygon is tessellated using a screen-space grid with
-// Sutherland-Hodgman clipping at the edges (matching the NeL water approach).
+// Demonstrates HL2-era planar reflections on an arbitrary polygon.
+// A spinning colored cube floats above a hexagonal reflective floor at Z=0,
+// with a rolling checkerboard skybox for visual context.
+//
+// Technique:
+//   1. Mirror the camera across the reflection plane (negate eye.z and target.z,
+//      keep up=(0,0,1)) to create a reflected camera.
+//   2. Compute the screen-space AABB of the floor polygon as seen by the
+//      reflected camera. Add a configurable margin (for wobble in real water)
+//      and snap the dimensions to a pixel grid (rtSnap=32) to avoid RT churn.
+//   3. Build an off-center sub-frustum covering only the AABB region. Allocate
+//      a render target sized to the snapped AABB (optionally half-res or pow2).
+//   4. Render the scene from the reflected camera into the RT, with a clip plane
+//      at Z=0 to discard geometry below the reflection surface.
+//   5. Render the scene normally from the real camera.
+//   6. Tessellate the floor polygon using a screen-space grid (matching the NeL
+//      water renderer): project the polygon to grid coordinates, rasterize with
+//      computeInnerBorders/computeOuterBorders, clip border cells against the
+//      polygon edges using Sutherland-Hodgman (CPolygon::clip). For each cell,
+//      un-project grid vertices to Z=0 via ray-plane intersection, then compute
+//      reflection UVs by projecting through the reflected view matrix and
+//      sub-frustum (CFrustum::project). Draw as batched CQuadColorUV quads.
+//   7. Detach texture from material, recycle RT, swap buffers.
+//
+// Render target sizing:
+//   The RT only covers the reflected camera's view of the floor polygon,
+//   not the full screen. An off-center (asymmetric) frustum is used so that
+//   CFrustum::project() maps floor vertices to [0,1] UVs within the sub-RT.
+//   Dimensions are snapped up to multiples of rtSnap (default 32 pixels) with
+//   equal padding on all sides, preventing reallocation churn as the AABB
+//   shifts from frame to frame.
+//
+// Debug overlays (B key):
+//   Yellow quadrilateral - RT coverage projected onto the normal screen
+//     (un-project RT corners from reflected camera to Z=0, re-project through
+//     the normal camera)
+//   Cyan rectangle - floor polygon's screen footprint (normal camera AABB)
 //
 // Controls:
 //   F - Toggle wireframe rendering
@@ -30,6 +62,7 @@
 //   S - Toggle skybox roll
 //   B - Toggle render target boundary overlay
 //   H - Toggle half-resolution reflection
+//   P - Toggle power-of-two render target sizing
 //   Up/Down - Move camera closer/farther
 //
 
@@ -247,6 +280,7 @@ private:
 	bool m_AnimSkybox;
 	bool m_ShowBounds;
 	bool m_HalfRes;
+	bool m_Pow2;
 	bool m_KeyForward;
 	bool m_KeyBackward;
 	UDriver *m_Driver;
@@ -263,6 +297,7 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 	, m_AnimSkybox(true)
 	, m_ShowBounds(false)
 	, m_HalfRes(false)
+	, m_Pow2(false)
 	, m_KeyForward(false)
 	, m_KeyBackward(false)
 {
@@ -330,6 +365,7 @@ void CPlanarReflectionDemo::operator()(const CEvent &event)
 			if (keyDown.Key == KeyS) m_AnimSkybox = !m_AnimSkybox;
 			if (keyDown.Key == KeyB) m_ShowBounds = !m_ShowBounds;
 			if (keyDown.Key == KeyH) m_HalfRes = !m_HalfRes;
+			if (keyDown.Key == KeyP) m_Pow2 = !m_Pow2;
 		}
 		if (keyDown.Key == KeyUP) m_KeyForward = true;
 		if (keyDown.Key == KeyDOWN) m_KeyBackward = true;
@@ -356,6 +392,7 @@ void CPlanarReflectionDemo::run()
 
 	const int gridN = 32;
 	const float rtMargin = 0.5f; // margin in grid cells for reflection wobble
+	const uint rtSnap = 32; // RT size quantization in pixels
 
 	// Floor polygon: hexagon at Z=0
 	const int numPolyVerts = 6;
@@ -454,6 +491,20 @@ void CPlanarReflectionDemo::run()
 		reflAabbMinY -= marginScreen;
 		reflAabbMaxY += marginScreen;
 
+		// Snap RT dimensions to multiples of rtSnap, padding the AABB equally on all sides
+		{
+			uint rawW = (uint)max(1.f, ceilf((reflAabbMaxX - reflAabbMinX) * screenW));
+			uint rawH = (uint)max(1.f, ceilf((reflAabbMaxY - reflAabbMinY) * screenH));
+			uint snappedW = ((rawW + rtSnap - 1) / rtSnap) * rtSnap;
+			uint snappedH = ((rawH + rtSnap - 1) / rtSnap) * rtSnap;
+			float padX = float(snappedW - rawW) / (2.f * screenW);
+			float padY = float(snappedH - rawH) / (2.f * screenH);
+			reflAabbMinX -= padX;
+			reflAabbMaxX += padX;
+			reflAabbMinY -= padY;
+			reflAabbMaxY += padY;
+		}
+
 		// Build off-center sub-frustum covering only the reflected AABB region
 		CFrustum reflFrustum = frustum;
 		float fw = frustum.Right - frustum.Left;
@@ -463,10 +514,16 @@ void CPlanarReflectionDemo::run()
 		reflFrustum.Bottom = frustum.Bottom + reflAabbMinY * fh;
 		reflFrustum.Top = frustum.Bottom + reflAabbMaxY * fh;
 
-		// RT sized to the reflected AABB (can exceed screen size)
+		// RT sized to the snapped AABB (can exceed screen size)
 		uint rtW = (uint)max(1.f, ceilf((reflAabbMaxX - reflAabbMinX) * screenW));
 		uint rtH = (uint)max(1.f, ceilf((reflAabbMaxY - reflAabbMinY) * screenH));
 		if (m_HalfRes) { rtW = max(1u, rtW / 2); rtH = max(1u, rtH / 2); }
+		if (m_Pow2)
+		{
+			// Round down to previous power of two
+			uint pw = 1; while (pw * 2 <= rtW) pw *= 2; rtW = pw;
+			uint ph = 1; while (ph * 2 <= rtH) ph *= 2; rtH = ph;
+		}
 
 		// --- Phase 3: Render reflected scene to render target ---
 
