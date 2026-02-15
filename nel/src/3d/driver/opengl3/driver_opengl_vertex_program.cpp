@@ -234,10 +234,14 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 
 	for (int i = Weight; i < NumOffsets; ++i)
 		if (hasFlag(desc.VertexFormat, g_VertexFlags[i]) && (i != PrimaryColor) && (i != SecondaryColor))
+		{
+			// Skip texcoord output when texgen overrides that stage
+			if (i >= TexCoord0 && i <= TexCoord7 && desc.TexGenMode[i - TexCoord0] >= 0)
+				continue;
 			ss << "smooth out vec4 " << g_AttribNames[i] << "; // vertex buffer" << std::endl;
+		}
 	ss << std::endl;
 
-	// For now shader will fail to compile if both texgen and vertex buffer tex coord are provided! This is by design.
 	bool needTexGen = false;
 	bool needEyeLinear = false;
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
@@ -365,6 +369,9 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	{
 		if (hasFlag(desc.VertexFormat, g_VertexFlags[i]) && (i != PrimaryColor) && (i != SecondaryColor))
 		{
+			// Skip texcoord passthrough when texgen overrides that stage
+			if (i >= TexCoord0 && i <= TexCoord7 && desc.TexGenMode[i - TexCoord0] >= 0)
+				continue;
 			ss << g_AttribNames[i] << " = " << "v" << g_AttribNames[i] << ";" << std::endl;
 		}
 	}

@@ -375,9 +375,14 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 			// activate the texture, or disable texturing if NULL.
 			activateTexture(stage, text);
 			
-			if (vertexFormat & g_VertexFlags[TexCoord0 + stage])
+			if (text && mat.getTexCoordGen(stage))
 			{
-				// Do not allow TexGen when vertex flags set
+				// Material explicitly requests texgen — use it even if VB has texcoords
+				setTexGenFunction(stage, mat);
+			}
+			else if (vertexFormat & g_VertexFlags[TexCoord0 + stage])
+			{
+				// VB provides texcoords, no texgen requested
 				setTexGenModeVP(stage, TexGenDisabled);
 			}
 			else if (matShader != CMaterial::Specular) // Specular has it's own env function setup by startSpecularBatch
