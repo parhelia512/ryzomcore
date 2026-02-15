@@ -161,7 +161,7 @@ IDriver		*CDRU::createGl3Driver()
 		throw EDruOpengl3DriverNotFound();
 	}
 
-	nlinfo ("Using the library '"NL3D_GL3_DLL_NAME"' that is in the directory: '%s'", driverLib.getLibFileName().c_str());
+	nlinfo ("Using the library '" NL3D_GL3_DLL_NAME "' that is in the directory: '%s'", driverLib.getLibFileName().c_str());
 
 	createDriver = (IDRV_CREATE_PROC) driverLib.getSymbolAddress(IDRV_CREATE_PROC_NAME);
 	if (createDriver == NULL)

@@ -37,6 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <nel/misc/matrix.h>
 
 #include <nel/3d/uniform_buffer_format.h>
+#include <nel/3d/driver.h>
 
 #define NL3D_UNIFORM_BUFFER_DEBUG 1
 
@@ -102,14 +103,14 @@ public: // Driver-only
 class IUBDrvInfos : public NLMISC::CRefCount
 {
 protected:
-	IDriver				*m_Driver;
+	NL3D::IDriver				*m_Driver;
 private:
 	ItUBDrvInfoPtrList	m_DriverIterator;
 
 public:
 	NLMISC::CRefPtr<CUniformBuffer>	UniformBufferPtr;
 
-	IUBDrvInfos(IDriver	*drv, ItUBDrvInfoPtrList it, CUniformBuffer *ub) { m_Driver = drv; m_DriverIterator = it; UniformBufferPtr = ub; }
+	IUBDrvInfos(NL3D::IDriver	*drv, ItUBDrvInfoPtrList it, CUniformBuffer *ub) { m_Driver = drv; m_DriverIterator = it; UniformBufferPtr = ub; }
 
 	virtual ~IUBDrvInfos();
 };
