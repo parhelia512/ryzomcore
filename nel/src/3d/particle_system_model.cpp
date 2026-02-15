@@ -665,17 +665,9 @@ void	CParticleSystemModel::doAnimate()
 		}
 		if (isAutoGetEllapsedTimeEnabled())
 		{
-			// Only animate once per real frame (avoid double-animation and RNG divergence in stereo)
+			// Always pass real elapsed time; CParticleSystem::step(Anim) deduplicates via frame ID
 			CScene *scene = ps->getScene();
-			if (scene->getFrameId() != _LastFrameId)
-			{
-				_LastFrameId = scene->getFrameId();
-				setEllapsedTime(scene->getEllapsedTime() * getEllapsedTimeRatio());
-			}
-			else
-			{
-				setEllapsedTime(0.f);
-			}
+			setEllapsedTime(scene->getEllapsedTime() * getEllapsedTimeRatio());
 		}
 	}
 	{
