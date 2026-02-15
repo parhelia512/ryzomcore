@@ -58,8 +58,8 @@ public:
 	virtual void emulateMouseRawMode(bool enable);
 	bool         handleQuitRequest();
 
-	virtual bool copyTextToClipboard(const ucstring &text);
-	virtual bool pasteTextFromClipboard(ucstring &text);
+	virtual bool copyTextToClipboard(const std::string &text);
+	virtual bool pasteTextFromClipboard(std::string &text);
 };
 
 }

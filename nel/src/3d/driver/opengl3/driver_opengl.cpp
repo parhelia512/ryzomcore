@@ -35,7 +35,6 @@
 #include "nel/misc/hierarchical_timer.h"
 #include "nel/misc/dynloadlib.h"
 #include "driver_opengl_vertex_buffer.h"
-#include "driver_glsl_shader_generator.h"
 #include "driver_opengl_uniform_buffer.h"
 
 

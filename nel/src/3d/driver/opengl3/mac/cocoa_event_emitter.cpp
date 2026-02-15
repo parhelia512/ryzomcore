@@ -18,6 +18,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "cocoa_event_emitter.h"
+#include "nel/misc/utf_string_view.h"
 
 namespace NLMISC
 {
@@ -150,28 +151,28 @@ static NLMISC::TKey virtualKeycodeToNelKey(unsigned short keycode)
 	return NLMISC::KeyNOKEY;
 }
 
-bool CCocoaEventEmitter::pasteTextFromClipboard(ucstring &text)
+bool CCocoaEventEmitter::pasteTextFromClipboard(std::string &text)
 {
 	NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
 	NSArray *classArray = [NSArray arrayWithObject:[NSString class]];
 	NSDictionary *options = [NSDictionary dictionary];
-	
+
 	BOOL ok = [pasteboard canReadObjectForClasses:classArray options:options];
-	if (ok) 
+	if (ok)
 	{
 		NSArray *objectsToPaste = [pasteboard readObjectsForClasses:classArray options:options];
 		NSString *nstext = [objectsToPaste objectAtIndex:0];
-		text.fromUtf8([nstext UTF8String]);
+		text = [nstext UTF8String];
 		return true;
 	}
 	return false;
 }
 
-bool CCocoaEventEmitter::copyTextToClipboard(const ucstring &text)
+bool CCocoaEventEmitter::copyTextToClipboard(const std::string &text)
 {
 	NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
 	[pasteboard clearContents];
-	NSArray *copiedObjects = [NSArray arrayWithObject:[NSString stringWithUTF8String:text.toUtf8().c_str()]];
+	NSArray *copiedObjects = [NSArray arrayWithObject:[NSString stringWithUTF8String:text.c_str()]];
 	[pasteboard writeObjects:copiedObjects];
 	return true;
 }
@@ -382,10 +383,7 @@ bool CCocoaEventEmitter::processMessage(NSEvent* event, CEventServer* server)
 		// if this was a text event
 		if(isTextKeyEvent(event))
 		{
-			ucstring ucstr;
-
-			// get the string associated with the key press event
-			ucstr.fromUtf8([[event characters] UTF8String]);
+			::u32string ucstr = NLMISC::CUtfStringView([[event characters] UTF8String]).toUtf32();
 
 			// push the text event to event server as well
 			server->postEvent(new NLMISC::CEventChar(
