@@ -1253,6 +1253,9 @@ public:
 	virtual bool			supportTextureShaders() const = 0;
 	// Is the shader water supported ? If not, the driver caller should implement its own version
 	virtual bool			supportWaterShader() const = 0;
+	/// Does the cubemap face convention use +Z as forward? (D3D: true, GL: false)
+	/// GL cubemaps map forward (-Z) to NEGATIVE_Z face, D3D maps forward (+Z) to POSITIVE_Z face.
+	virtual bool			cubemapZPositiveForward() const = 0;
 	//
 	/// test whether a texture addressing mode is supported
 	virtual bool			supportTextureAddrMode(CMaterial::TTexAddressingMode mode) const = 0;

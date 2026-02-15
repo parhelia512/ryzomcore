@@ -87,6 +87,7 @@ private:
 	uint							 _EnvCubicSize;
 	uint							 _Env2DSize;
 	uint8							 _Alpha;
+	bool							 _D3DConvention; // D3D cubemap Z convention differs from GL
 private:
 	void initFlattenVB();
 	void initTestVB(); // tmp

@@ -619,6 +619,8 @@ public:
 
 	virtual bool			supportWaterShader() const;
 
+	virtual bool			cubemapZPositiveForward() const { return false; }
+
 	virtual bool			supportTextureAddrMode(CMaterial::TTexAddressingMode mode) const;
 
 	virtual void			setMatrix2DForTextureOffsetAddrMode(const uint stage, const float mat[4]);

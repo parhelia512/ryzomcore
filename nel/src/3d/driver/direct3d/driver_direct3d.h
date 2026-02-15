@@ -1073,6 +1073,9 @@ public:
 	virtual	bool			supportMADOperator() const;
 	// todo hulud d3d adressing mode
 	virtual bool			supportWaterShader() const;
+
+	virtual bool			cubemapZPositiveForward() const { return true; }
+
 	// todo hulud d3d adressing mode
 	virtual bool			supportTextureAddrMode(CMaterial::TTexAddressingMode /* mode */) const {return false;};
 	// todo hulud d3d adressing mode
