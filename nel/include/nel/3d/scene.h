@@ -576,8 +576,13 @@ public:
 
 	/** \name Flare contexts
 	  * The flare objects are designed to work with a single scene, because they simulate 'retinian persistence' based on the visibility in the current scene.
-	  * Several context allow to deals with a flare rendered from several points of views.
-	  * There's a limited number of contexts (MaxNumFlareContexts)
+	  * Several contexts allow to deal with a flare rendered from several points of view.
+	  * There's a limited number of contexts (MaxNumFlareContexts).
+	  * Context allocation:
+	  *   0 - Main scene (default)
+	  *   1 - Interface 3D scenes (character/item previews)
+	  *   2 - Stereo right eye (via IStereoDisplay::getFlareContext)
+	  *   3 - Reserved
 	  */
 	// @{
 		// The max number of contexts for flares

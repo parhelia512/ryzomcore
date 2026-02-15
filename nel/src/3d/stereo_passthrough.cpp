@@ -144,6 +144,11 @@ bool CStereoPassthrough::isSceneLast()
 	return true;
 }
 
+uint CStereoPassthrough::getFlareContext()
+{
+	return 0;
+}
+
 bool CStereoPassthrough::beginRenderTarget()
 {
 	return false;

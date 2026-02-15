@@ -135,6 +135,9 @@ public:
 	/// Is this the last 3D scene of the frame
 	virtual bool isSceneLast() = 0;
 
+	/// Get the flare context for the current pass (0-3). Different eyes must use different contexts.
+	virtual uint getFlareContext() = 0;
+
 	/// Returns true if a new render target was set, always fase if not using render targets
 	virtual bool beginRenderTarget() = 0;
 	/// Returns true if a render target was fully drawn, always false if not using render targets

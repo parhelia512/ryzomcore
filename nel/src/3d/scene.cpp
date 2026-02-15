@@ -394,8 +394,9 @@ void	CScene::endPartRender(bool keepTrav)
 	drv->activePixelProgram(NULL);
 	drv->activeGeometryProgram(NULL);
 
-	// Ensure nothing animates on subsequent renders
-	_EllapsedTime = 0.f;
+	// Ensure nothing animates on subsequent renders (but keep for stereo second eye)
+	if (!keepTrav)
+		_EllapsedTime = 0.f;
 
 	/*
 	uint64 total = PSStatsRegisterPSModelObserver +
@@ -580,12 +581,12 @@ void	CScene::renderPart(UScene::TRenderPart rp, bool	doHrcPass, bool doTrav, boo
 	if (_RenderedPart == UScene::RenderNothing)
 	{
 		RenderTrav.clearWaterModelList();
+		_FirstFlare = NULL;
 
 		if (doTrav)
 		{
 			// update water envmap
 			//updateWaterEnvmap();
-			_FirstFlare = NULL;
 
 			double fNewGlobalSystemTime = NLMISC::CTime::ticksToSecond(NLMISC::CTime::getPerformanceTime());
 			if(_GlobalSystemTime==0)
@@ -631,6 +632,14 @@ void	CScene::renderPart(UScene::TRenderPart rp, bool	doHrcPass, bool doTrav, boo
 		RenderTrav.setCamMatrix (CurrentCamera->getWorldMatrix());
 		LoadBalancingTrav.setCamMatrix (CurrentCamera->getWorldMatrix());
 
+		// For the second eye in stereo rendering, zero elapsed time during traversals
+		// to prevent double-accumulation of stateful effects (shadow fades, target anim
+		// ctrl, wave makers). Restored after traversals so the render phase (flares) can
+		// use the real elapsed time for per-context intensity ramping.
+		float savedEllapsedTime = _EllapsedTime;
+		if (!doTrav)
+			_EllapsedTime = 0.f;
+
 		// clip
 		ClipTrav.traverse();
 
@@ -645,13 +654,16 @@ void	CScene::renderPart(UScene::TRenderPart rp, bool	doHrcPass, bool doTrav, boo
 			//
 			if (_RequestParticlesAnimate)
 			{
-				_ParticleSystemManager.processAnimate(_EllapsedTime); // deals with permanently animated particle systems
+				_ParticleSystemManager.processAnimate(savedEllapsedTime); // deals with permanently animated particle systems
 				_RequestParticlesAnimate = false;
 			}
 		}
 
 		// Light
 		LightTrav.traverse();
+
+		// Restore elapsed time for render pass (flares need non-zero time for intensity ramp)
+		_EllapsedTime = savedEllapsedTime;
 	}
 
 	// render
@@ -665,25 +677,18 @@ void	CScene::renderPart(UScene::TRenderPart rp, bool	doHrcPass, bool doTrav, boo
 	// render flare
 	if (rp & UScene::RenderFlare)
 	{
-		if (doTrav)
+		if (_FirstFlare)
 		{
-			if (_FirstFlare)
+			IDriver *drv = getDriver();
+			CFlareModel::updateOcclusionQueryBegin(drv);
+			CFlareModel	*currFlare = _FirstFlare;
+			do
 			{
-				IDriver *drv = getDriver();
-				CFlareModel::updateOcclusionQueryBegin(drv);
-				CFlareModel	*currFlare = _FirstFlare;
-				do
-				{
-					currFlare->updateOcclusionQuery(drv);
-					currFlare = currFlare->Next;
-				}
-				while(currFlare);
-				CFlareModel::updateOcclusionQueryEnd(drv);
+				currFlare->updateOcclusionQuery(drv);
+				currFlare = currFlare->Next;
 			}
-		}
-		else
-		{
-			_FirstFlare = NULL;
+			while(currFlare);
+			CFlareModel::updateOcclusionQueryEnd(drv);
 		}
 	}
 	_RenderedPart = (UScene::TRenderPart) (_RenderedPart | rp);

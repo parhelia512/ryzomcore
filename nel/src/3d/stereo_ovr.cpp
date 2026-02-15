@@ -597,6 +597,16 @@ bool CStereoOVR::wantScene()
 	return m_Driver->getPolygonMode() != UDriver::Filled;
 }
 
+bool CStereoOVR::wantSceneEffects()
+{
+	switch (m_Stage)
+	{
+	case 4:
+		return true;
+	}
+	return m_Driver->getPolygonMode() != UDriver::Filled;
+}
+
 bool CStereoOVR::wantInterface3D()
 {
 	switch (m_Stage)
@@ -618,6 +628,21 @@ bool CStereoOVR::wantInterface2D()
 		return true;
 	}
 	return m_Driver->getPolygonMode() != UDriver::Filled;
+}
+
+bool CStereoOVR::isSceneFirst()
+{
+	return m_Stage == 3;
+}
+
+bool CStereoOVR::isSceneLast()
+{
+	return m_Stage == 4;
+}
+
+uint CStereoOVR::getFlareContext()
+{
+	return (m_Stage % 2) ? 0 : 2;
 }
 
 /// Returns non-NULL if a new render target was set

@@ -1695,6 +1695,9 @@ bool mainLoop()
 			// Commit camera changes
 			commitCamera();
 
+			// Set flare context for this pass (separate context per eye for stereo)
+			Scene->setFlareContext(StereoDisplay->getFlareContext());
+
 			//////////////////////////
 			// RENDER THE FRAME  3D //
 			//////////////////////////

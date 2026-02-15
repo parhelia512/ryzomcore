@@ -761,6 +761,11 @@ bool CStereoOVR::isSceneLast()
 	return m_Driver->getPolygonMode() != UDriver::Filled;
 }
 
+uint CStereoOVR::getFlareContext()
+{
+	return (m_Stage % 2) ? 0 : 2;
+}
+
 /// Returns non-NULL if a new render target was set
 bool CStereoOVR::beginRenderTarget()
 {

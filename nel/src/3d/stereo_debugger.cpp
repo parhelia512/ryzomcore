@@ -40,6 +40,7 @@
 #include "nel/3d/driver_user.h"
 #include "nel/3d/u_texture.h"
 #include "nel/3d/render_target_manager.h"
+#include "nel/misc/command.h"
 
 using namespace std;
 // using namespace NLMISC;
@@ -132,9 +133,20 @@ public:
 
 } /* anonymous namespace */
 
+// 0 = comparison (default), 1 = left only, 2 = right only
+static int s_StereoDisplayMode = 0;
+
+NLMISC_CATEGORISED_COMMAND(nel, stereoDisplayMode, "Set stereo debugger display mode (0=compare, 1=left, 2=right)", "<mode>")
+{
+	if (args.size() != 1) return false;
+	NLMISC::fromString(args[0], s_StereoDisplayMode);
+	if (s_StereoDisplayMode < 0 || s_StereoDisplayMode > 2) s_StereoDisplayMode = 0;
+	return true;
+}
+
 CStereoDebugger::CStereoDebugger() : m_Driver(NULL), m_Stage(0), m_SubStage(0), m_LeftTexU(NULL), m_RightTexU(NULL), m_PixelProgram(NULL)
 {
-	
+
 }
 
 CStereoDebugger::~CStereoDebugger()
@@ -449,12 +461,21 @@ bool CStereoDebugger::wantInterface2D()
 
 bool CStereoDebugger::isSceneFirst()
 {
-	return m_Stage >= 3 && m_Stage <= 4;
+	return m_Stage == 3;
 }
 
 bool CStereoDebugger::isSceneLast()
 {
-	return m_Stage >= 3 && m_Stage <= 4;
+	if (m_Driver->getPolygonMode() == UDriver::Filled)
+		return m_Stage == 4;
+	else
+		return m_Stage == 3;
+}
+
+uint CStereoDebugger::getFlareContext()
+{
+	// Odd stages (1,3,5) = left eye → context 0, even stages (2,4) = right eye → context 2
+	return (m_Stage % 2) ? 0 : 2;
 }
 
 /// Returns true if a new render target was set, always fase if not using render targets
@@ -463,8 +484,8 @@ bool CStereoDebugger::beginRenderTarget()
 	if (m_Stage >= 3 && m_Stage <= 4 && m_Driver && (m_Driver->getPolygonMode() == UDriver::Filled))
 	{
 		if (!m_LeftTexU) getTextures();
-		if (m_Stage % 2) static_cast<CDriverUser *>(m_Driver)->setRenderTarget(*m_RightTexU, 0, 0, 0, 0);
-		else static_cast<CDriverUser *>(m_Driver)->setRenderTarget(*m_LeftTexU, 0, 0, 0, 0);
+		if (m_Stage == 3) static_cast<CDriverUser *>(m_Driver)->setRenderTarget(*m_LeftTexU, 0, 0, 0, 0);
+		else static_cast<CDriverUser *>(m_Driver)->setRenderTarget(*m_RightTexU, 0, 0, 0, 0);
 		return true;
 	}
 	return false;
@@ -477,24 +498,46 @@ bool CStereoDebugger::endRenderTarget()
 	{
 		CTextureUser cu;
 		(static_cast<CDriverUser *>(m_Driver))->setRenderTarget(cu);
-		bool fogEnabled = m_Driver->fogEnabled();
-		m_Driver->enableFog(false);
 
-		m_Driver->setMatrixMode2D11();
-		CViewport vp = CViewport();
-		m_Driver->setViewport(vp);
-		uint32 width, height;
-		NL3D::IDriver *drvInternal = (static_cast<CDriverUser *>(m_Driver))->getDriver();
-		NL3D::CMaterial *mat = m_Mat.getObjectPtr();
-		mat->setTexture(0, m_LeftTexU->getITexture());
-		mat->setTexture(1, m_RightTexU->getITexture());
-		drvInternal->activePixelProgram(m_PixelProgram);
+		// Only draw composite after both eyes are rendered
+		if (m_Stage == 4)
+		{
+			bool fogEnabled = m_Driver->fogEnabled();
+			m_Driver->enableFog(false);
 
-		m_Driver->drawQuad(m_QuadUV, m_Mat);
+			m_Driver->setMatrixMode2D11();
+			CViewport vp = CViewport();
+			m_Driver->setViewport(vp);
+			NL3D::IDriver *drvInternal = (static_cast<CDriverUser *>(m_Driver))->getDriver();
+			NL3D::CMaterial *mat = m_Mat.getObjectPtr();
+			if (s_StereoDisplayMode == 1)
+			{
+				// Left only
+				mat->setTexture(0, m_LeftTexU->getITexture());
+				mat->setTexture(1, NULL);
+				drvInternal->activePixelProgram(NULL);
+			}
+			else if (s_StereoDisplayMode == 2)
+			{
+				// Right only
+				mat->setTexture(0, m_RightTexU->getITexture());
+				mat->setTexture(1, NULL);
+				drvInternal->activePixelProgram(NULL);
+			}
+			else
+			{
+				// Comparison
+				mat->setTexture(0, m_LeftTexU->getITexture());
+				mat->setTexture(1, m_RightTexU->getITexture());
+				drvInternal->activePixelProgram(m_PixelProgram);
+			}
 
-		drvInternal->activePixelProgram(NULL);
-		m_Driver->enableFog(fogEnabled);
-		recycleTextures();
+			m_Driver->drawQuad(m_QuadUV, m_Mat);
+
+			drvInternal->activePixelProgram(NULL);
+			m_Driver->enableFog(fogEnabled);
+			recycleTextures();
+		}
 
 		return true;
 	}

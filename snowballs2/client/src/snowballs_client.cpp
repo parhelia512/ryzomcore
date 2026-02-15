@@ -746,6 +746,8 @@ void loopIngame()
 				StereoDisplay->getCurrentFrustum(0, &SkyCamera);
 				StereoDisplay->getCurrentMatrix(0, &Camera);
 
+				Scene->setFlareContext(StereoDisplay->getFlareContext());
+
 				bool stereoRenderTarget = StereoDisplay->beginRenderTarget();
 				if (!stereoRenderTarget && haveEffects && !defaultRenderTarget && StereoDisplay->wantClear())
 				{

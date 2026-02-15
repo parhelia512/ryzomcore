@@ -129,6 +129,8 @@ public:
 	virtual bool isSceneFirst();
 	/// Is this the last 3D scene of the frame
 	virtual bool isSceneLast();
+	/// Get the flare context for the current pass
+	virtual uint getFlareContext();
 
 	/// Returns true if a new render target was set, always fase if not using render targets
 	virtual bool beginRenderTarget();

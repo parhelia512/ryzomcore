@@ -62,6 +62,7 @@ public:
 
 	virtual bool isSceneFirst();
 	virtual bool isSceneLast();
+	virtual uint getFlareContext();
 
 	virtual bool beginRenderTarget();
 	virtual bool endRenderTarget();
