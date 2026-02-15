@@ -776,6 +776,9 @@ struct CClientConfig
 	// Time to update water envmap
 	float			WaterEnvMapUpdateTime;
 
+	// Force all water bodies to use scene water envmap (DEV)
+	bool			ForceWaterEnvMap;
+
 	// number of frames to profile (0 for start/stop scheme)
 	uint			NumFrameForProfile;
 

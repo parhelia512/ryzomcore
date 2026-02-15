@@ -921,7 +921,7 @@ void CWaterModel::setupMaterialNVertexShader(IDriver *drv, CWaterShape *shape, c
 	CScene *scene = getOwnerScene();
 	if (!above && shape->_EnvMap[1])
 	{
-		if (shape->_UsesSceneWaterEnvMap[1])
+		if (shape->_UsesSceneWaterEnvMap[1] || scene->getForceWaterEnvMap())
 		{
 			if (scene->getWaterEnvMap())
 			{
@@ -939,7 +939,7 @@ void CWaterModel::setupMaterialNVertexShader(IDriver *drv, CWaterShape *shape, c
 	}
 	else
 	{
-		if (shape->_UsesSceneWaterEnvMap[0])
+		if (shape->_UsesSceneWaterEnvMap[0] || scene->getForceWaterEnvMap())
 		{
 			if (scene->getWaterEnvMap())
 			{
@@ -1015,7 +1015,7 @@ void CWaterModel::setupSimpleRender(CWaterShape *shape, const NLMISC::CVector &o
 	CScene *scene = getOwnerScene();
 	if (!above && shape->_EnvMap[1])
 	{
-		if (shape->_UsesSceneWaterEnvMap[1])
+		if (shape->_UsesSceneWaterEnvMap[1] || scene->getForceWaterEnvMap())
 		{
 			if (scene->getWaterEnvMap())
 			{
@@ -1033,7 +1033,7 @@ void CWaterModel::setupSimpleRender(CWaterShape *shape, const NLMISC::CVector &o
 	}
 	else
 	{
-		if (shape->_UsesSceneWaterEnvMap[0])
+		if (shape->_UsesSceneWaterEnvMap[0] || scene->getForceWaterEnvMap())
 		{
 			if (scene->getWaterEnvMap())
 			{

@@ -607,7 +607,7 @@ void renderScene(bool forceFullDetail, bool bloom)
 void updateWaterEnvMap()
 {
 	#ifdef USE_WATER_ENV_MAP
-	if (WaterEnvMapRefCount > 0) // water env map needed
+	if (WaterEnvMapRefCount > 0 || ClientCfg.ForceWaterEnvMap) // water env map needed
 	{
 		if (!WaterEnvMap)
 		{
@@ -638,7 +638,7 @@ void updateWaterEnvMap()
 		WaterEnvMapRdr.CurrTime = TimeInSec - FirstTimeInSec;
 		WaterEnvMapRdr.CurrWeather = WeatherManager.getWeatherValue();
 		CSky &sky = ContinentMngr.cur()->CurrentSky;
-		WaterEnvMap->setAlpha(sky.getWaterEnvMapAlpha());
+		WaterEnvMap->setAlpha(255); // Not useful and does not work under D3D, use alpha map instead on your water shape! // sky.getWaterEnvMapAlpha())
 		Scene->updateWaterEnvMaps(TimeInSec - FirstTimeInSec);
 	}
 	#endif
