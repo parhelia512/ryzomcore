@@ -30,6 +30,7 @@
 #include <nel/misc/geom_ext.h>
 #include <nel/misc/plane.h>
 #include <nel/misc/time_nl.h>
+#include <nel/misc/vector_2f.h>
 
 #include <nel/3d/u_driver.h>
 #include <nel/3d/u_material.h>
@@ -61,6 +62,21 @@ static CMatrix buildViewMatrix(const CVector &eye, const CVector &target, const 
 	CMatrix viewMatrix = camWorld;
 	viewMatrix.invert();
 	return viewMatrix;
+}
+
+// Test if a point is inside a convex polygon (CCW winding, XY plane)
+static bool isInsideConvexPoly(float px, float py, const CVector2f *poly, int numVerts)
+{
+	for (int i = 0; i < numVerts; ++i)
+	{
+		int j = (i + 1) % numVerts;
+		float ex = poly[j].x - poly[i].x;
+		float ey = poly[j].y - poly[i].y;
+		// Cross product: positive means left side (inside for CCW)
+		if (ex * (py - poly[i].y) - ey * (px - poly[i].x) < 0.f)
+			return false;
+	}
+	return true;
 }
 
 // Draw a colored quad (one face of the cube)
@@ -254,11 +270,23 @@ void CPlanarReflectionDemo::run()
 		// Set reflection texture on floor material
 		m_FloorMat.setTexture(0, reflectRT);
 
+		// Floor polygon shape (hexagon at Z=0, CCW winding)
+		const int numPolyVerts = 6;
+		CVector2f floorPoly[numPolyVerts];
+		{
+			float radius = 5.f;
+			for (int i = 0; i < numPolyVerts; ++i)
+			{
+				float a = float(i) * float(2.0 * Pi) / float(numPolyVerts);
+				floorPoly[i] = CVector2f(cosf(a) * radius, sinf(a) * radius);
+			}
+		}
+
 		// Screen-space grid tessellation (matching NeL water approach):
 		// 1. Subdivide the screen into a fixed grid
 		// 2. Un-project each grid vertex to the Z=0 floor plane
-		// 3. Compute reflection UVs from the reflected camera
-		// This gives uniform screen-space density and correct projective UVs.
+		// 3. Test against the floor polygon
+		// 4. Compute reflection UVs from the reflected camera
 		{
 			const int gridN = 32;
 			float stepX = 1.f / float(gridN);
@@ -317,6 +345,19 @@ void CPlanarReflectionDemo::run()
 					}
 
 					if (!valid)
+						continue;
+
+					// Skip cells entirely outside the floor polygon
+					bool anyInside = false;
+					for (int i = 0; i < 4; ++i)
+					{
+						if (isInsideConvexPoly(corners[i].x, corners[i].y, floorPoly, numPolyVerts))
+						{
+							anyInside = true;
+							break;
+						}
+					}
+					if (!anyInside)
 						continue;
 
 					CQuadColorUV q;
