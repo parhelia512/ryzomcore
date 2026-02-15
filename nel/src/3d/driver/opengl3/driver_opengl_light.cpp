@@ -147,7 +147,7 @@ void	CDriverGL3::enableLightInternal(uint8 num, bool enable)
 void	CDriverGL3::setAmbientColor (CRGBA color)
 {
 	H_AUTO_OGL(CDriverGL3_setAmbientColor)
-	
+	_AmbientGlobal = color;
 }
 
 

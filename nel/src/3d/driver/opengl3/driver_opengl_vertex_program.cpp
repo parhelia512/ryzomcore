@@ -47,8 +47,8 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 		return right.Specular;
 	if (left.Fog != right.Fog)
 		return right.Fog;
-//	if (left.VertexColorLighted != right.VertexColorLighted)
-//		return right.VertexColorLighted;
+	if (left.VertexColorLighted != right.VertexColorLighted)
+		return right.VertexColorLighted;
 
 	return false;
 }
@@ -70,8 +70,8 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 		return false;
 	if (left.Fog != right.Fog)
 		return false;
-	//	if (left.VertexColorLighted != right.VertexColorLighted)
-	//		return false;
+	if (left.VertexColorLighted != right.VertexColorLighted)
+		return false;
 
 	return true;
 }
@@ -85,7 +85,7 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 {
 	uint32 h;
 
-	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0));
+	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			h = NLMISC::wangHash(h ^ v.LightMode[i]);
@@ -140,9 +140,9 @@ void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
 		ss << "}" << std::endl;
 		ss << std::endl;
 
-		ss << "float getSpecIntensity" << i << "(vec3 normal3, vec3 lightDir)" << std::endl;
+		ss << "float getSpecIntensity" << i << "(vec3 normal3, vec3 lightDir, vec3 eyeDir)" << std::endl;
 		ss << "{" << std::endl;
-		ss << "vec3 halfVector = normalize(lightDir + normal3);" << std::endl;
+		ss << "vec3 halfVector = normalize(lightDir + eyeDir);" << std::endl;
 		ss << "float angle = dot(normal3, halfVector);" << std::endl;
 		ss << "angle = max(0.0, angle);" << std::endl;
 		ss << "float si = pow(angle, light" << i << "Shininess);" << std::endl;
@@ -152,15 +152,15 @@ void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
 
 		ss << "void addLight" << i << "Color(inout vec4 lightDiffuse, inout vec4 lightSpecular)" << std::endl;
 		ss << "{" << std::endl;
-		ss << "vec4 lightDir4 = viewMatrix * vec4(light" << i << "DirOrPos, 1.0);" << std::endl;
-		ss << "vec3 lightDir = lightDir4.xyz / lightDir4.w;" << std::endl;
+		ss << "vec3 lightDir = mat3(viewMatrix) * light" << i << "DirOrPos;" << std::endl;
 		ss << "lightDir = normalize(lightDir);" << std::endl;
 		ss << "vec3 normal3 = vnormal.xyz / vnormal.w;" << std::endl;
 		ss << "normal3 = normalMatrix * normal3;" << std::endl;
 		ss << "normal3 = normalize(normal3);" << std::endl;
+		ss << "vec3 eyeDir = normalize(-ecPos4.xyz);" << std::endl;
 
 		ss << "lightDiffuse = lightDiffuse + getIntensity" << i << "(normal3, lightDir) * light" << i << "ColDiff;" << std::endl;
-		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDir) * light" << i << "ColSpec;" << std::endl;
+		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDir, eyeDir) * light" << i << "ColSpec;" << std::endl;
 		ss << "}" << std::endl;
 		ss << std::endl;
 		break;
@@ -173,9 +173,9 @@ void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
 		ss << "}" << std::endl;
 		ss << std::endl;
 
-		ss << "float getSpecIntensity" << i << "(vec3 normal3, vec3 direction3)" << std::endl;
+		ss << "float getSpecIntensity" << i << "(vec3 normal3, vec3 direction3, vec3 eyeDir)" << std::endl;
 		ss << "{" << std::endl;
-		ss << "vec3 halfVector = normalize(direction3 + normal3);" << std::endl;
+		ss << "vec3 halfVector = normalize(direction3 + eyeDir);" << std::endl;
 		ss << "float angle = dot(normal3, halfVector);" << std::endl;
 		ss << "angle = max(0.0, angle);" << std::endl;
 		ss << "float si = pow(angle, light" << i << "Shininess);" << std::endl;
@@ -195,15 +195,15 @@ void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
 		ss << "float attenuation = light" << i << "ConstAttn + ";
 		ss << "light" << i << "LinAttn * lightDistance +";
 		ss << "light" << i << "QuadAttn * lightDistance * lightDistance;" << std::endl;
-		// ss << "attenuation = max(attenuation, 1.0);" << std::endl; // TEST
 
 		ss << "vec3 normal3 = vnormal.xyz / vnormal.w;" << std::endl;
 		ss << "normal3 = normalMatrix * normal3;" << std::endl;
 		ss << "normal3 = normalize(normal3);" << std::endl;
+		ss << "vec3 eyeDir = normalize(-ecPos3);" << std::endl;
 
 		ss << "float invattn = 1.0 / attenuation;" << std::endl;
 		ss << "lightDiffuse = lightDiffuse + getIntensity" << i << "(normal3, lightDirection) * invattn * light" << i << "ColDiff;" << std::endl;
-		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDirection) * invattn * light" << i << "ColSpec;" << std::endl;
+		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) * invattn * light" << i << "ColSpec;" << std::endl;
 		ss << "}" << std::endl;
 		ss << std::endl;
 		break;
@@ -327,7 +327,18 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	// Primary color
 	if (desc.VertexFormat & g_VertexFlags[PrimaryColor])
 	{
-		ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl; // Note: Might need to replace materialColor if PrimaryColor exists
+		if (desc.Lighting && desc.VertexColorLighted)
+		{
+			// GL_COLOR_MATERIAL behavior: vertex color replaces material diffuse
+			// CPU doesn't pre-multiply by matDiffuse when VertexColorLighted is set
+			ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+		}
+		else if (!desc.Lighting)
+		{
+			// Unlit: vertex color modulates materialColor
+			ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+		}
+		// When Lighting && !VertexColorLighted: vprimaryColor is ignored (matDiffuse pre-multiplied on CPU)
 	}
 	
 	// Add diffuse and specular color
@@ -336,6 +347,9 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "vertexColor.rgb = vertexColor.rgb + (specularVertex.rgb * specularVertex.a);" << std::endl; // Verify
 	if (desc.Lighting)
 		ss << "vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl; // Note: Alpha of self illumination is ignored
+
+	// Clamp vertex color to [0,1] to match OpenGL fixed-function / ARB VP behavior
+	ss << "vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
 	ss << std::endl;
 
 	for (int i = Weight; i < NumOffsets; i++)
@@ -407,6 +421,16 @@ void CDriverGL3::enableLightingVP(bool enable)
 	if (m_VPBuiltinCurrent.Lighting != enable)
 	{
 		m_VPBuiltinCurrent.Lighting = enable;
+		m_VPBuiltinTouched = true;
+	}
+}
+
+void CDriverGL3::setVertexColorLightedVP(bool enable)
+{
+	H_AUTO_OGL(CDriverGL3_setVertexColorLightedVP)
+	if (m_VPBuiltinCurrent.VertexColorLighted != enable)
+	{
+		m_VPBuiltinCurrent.VertexColorLighted = enable;
 		m_VPBuiltinTouched = true;
 	}
 }

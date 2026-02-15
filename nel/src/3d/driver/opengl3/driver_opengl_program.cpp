@@ -823,8 +823,12 @@ void CDriverGL3::setupUniforms(TProgram program)
 	if (alphaRefIdx != ~0)
 		nglProgramUniform1f(progId, alphaRefIdx, mat.getAlphaTestThreshold());
 
-	NLMISC::CRGBAF selfIllumination = NLMISC::CRGBAF(0.0f, 0.0f, 0.0f);
-	NLMISC::CRGBAF matDiffuse = NLMISC::CRGBAF(mat.getDiffuse());
+	// Global ambient light (from setAmbientColor, matches GL_LIGHT_MODEL_AMBIENT)
+	NLMISC::CRGBAF selfIllumination = NLMISC::CRGBAF(_AmbientGlobal);
+	// When VertexColorLighted, vertex color replaces material diffuse in the shader (GL_COLOR_MATERIAL behavior)
+	NLMISC::CRGBAF matDiffuse = mat.isLightedVertexColor()
+		? NLMISC::CRGBAF(1.0f, 1.0f, 1.0f, 1.0f)
+		: NLMISC::CRGBAF(mat.getDiffuse());
 	NLMISC::CRGBAF matSpecular = NLMISC::CRGBAF(mat.getSpecular());
 
 	for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)

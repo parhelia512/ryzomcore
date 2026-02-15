@@ -457,6 +457,7 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 		//=====================
 		// Light Part.
 		enableLightingVP(mat.getFlags() & IDRV_MAT_LIGHTING);
+		setVertexColorLightedVP(mat.isLightedVertexColor());
 
 		// Fog Part.
 		//=================
@@ -644,6 +645,7 @@ sint CDriverGL3::beginLightMapMultiPass()
 
 	// always enable lighting for lightmap (because of dynamic light)
 	enableLightingVP(true);
+	setVertexColorLightedVP(false);
 
 	// if the dynamic lightmap light has changed since the last render (should not happen), resetup
 	// normal way is that setupLightMapDynamicLighting() is called in setupMaterial() if shader different from prec

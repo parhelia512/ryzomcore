@@ -393,6 +393,9 @@ bool CDriverGL3::setupDisplay()
 		touchLightVP(i);
 	}
 
+	// Default global ambient matches OpenGL default (0.2, 0.2, 0.2)
+	_AmbientGlobal = NLMISC::CRGBA(51, 51, 51);
+
 	// init _DriverGLStates
 	_DriverGLStates.init();
 

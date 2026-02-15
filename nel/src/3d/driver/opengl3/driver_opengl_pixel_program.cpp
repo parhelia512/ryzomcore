@@ -342,6 +342,9 @@ void ppTexEnv(std::stringstream &ss, const CPPBuiltin &desc)
 			case CMaterial::Mad:
 				ss << "texop" << stage << "arg0.rgb * texop" << stage << "arg1.rgb + texop" << stage << "arg2.rgb";
 				break;
+			default:
+				ss << "texop" << stage << "arg0.rgb"; // Fallback (e.g. EMBM)
+				break;
 			}
 			ss << ";" << std::endl;
 
@@ -387,6 +390,9 @@ void ppTexEnv(std::stringstream &ss, const CPPBuiltin &desc)
 				break;
 			case CMaterial::Mad:
 				ss << "texop" << stage << "arg0.a * texop" << stage << "arg1.a + texop" << stage << "arg2.a";
+				break;
+			default:
+				ss << "texop" << stage << "arg0.a"; // Fallback (e.g. EMBM)
 				break;
 			}
 			ss << ";" << std::endl;

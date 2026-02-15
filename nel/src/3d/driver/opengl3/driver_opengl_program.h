@@ -33,7 +33,7 @@ static sint TexGenEyeLinear = 3; // GL_EYE_LINEAR
 /// Builtin vertex program description
 struct CVPBuiltin
 {
-	CVPBuiltin() : VertexProgram(NULL) { }
+	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false) { }
 
 	uint16 VertexFormat;
 	bool Lighting;
@@ -41,7 +41,7 @@ struct CVPBuiltin
 	sint TexGenMode[IDRV_MAT_MAXTEXTURES]; // -1 when disabled
 	bool Specular; // Reflection
 	bool Fog;
-	// bool VertexColorLighted;
+	bool VertexColorLighted;
 
 	NLMISC::CRefPtr<CVertexProgram> VertexProgram;
 };

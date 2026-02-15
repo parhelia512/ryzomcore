@@ -402,6 +402,7 @@ public:
 	void					generateBuiltinVertexProgram();
 	void					enableFogVP(bool enable);
 	void					enableLightingVP(bool enable);
+	void					setVertexColorLightedVP(bool enable);
 	void					touchLightVP(int i);
 	void					touchVertexFormatVP();
 	void					setTexGenModeVP(uint stage, sint mode);
@@ -915,6 +916,7 @@ private:
 	CLight						_UserLight0;
 	CLight						_UserLight[MaxLight];
 	bool						_UserLightEnable[MaxLight];
+	NLMISC::CRGBA				_AmbientGlobal;
 
 	//\name description of the per pixel light
 	// @{
