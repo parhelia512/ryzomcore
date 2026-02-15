@@ -91,6 +91,7 @@
 //   H - Toggle half-resolution reflection (default on)
 //   P - Toggle power-of-two render target sizing (default on)
 //   W - Toggle fixed window-sized render target (default on, avoids stutter)
+//   V - Toggle VSync (default on)
 //   Up/Down - Move camera closer/farther
 //
 
@@ -339,6 +340,7 @@ private:
 	bool m_HalfRes;
 	bool m_Pow2;
 	bool m_FixedRT;
+	bool m_VSync;
 	bool m_KeyForward;
 	bool m_KeyBackward;
 	UDriver *m_Driver;
@@ -359,6 +361,7 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 	, m_HalfRes(true)
 	, m_Pow2(true)
 	, m_FixedRT(true)
+	, m_VSync(true)
 	, m_KeyForward(false)
 	, m_KeyBackward(false)
 	, m_TextContext(NULL)
@@ -376,6 +379,7 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 
 	m_Driver->setDisplay(UDriver::CMode(800, 600, 32, true));
 	m_Driver->setWindowTitle(ucstring("NeL Planar Reflection Demo"));
+	m_Driver->setSwapVBLInterval(m_VSync ? 1 : 0);
 
 	// Initialize text renderer (optional, font may not be found)
 	std::string fontPath = findFontPath();
@@ -441,6 +445,7 @@ void CPlanarReflectionDemo::operator()(const CEvent &event)
 			if (keyDown.Key == KeyH) m_HalfRes = !m_HalfRes;
 			if (keyDown.Key == KeyP) m_Pow2 = !m_Pow2;
 			if (keyDown.Key == KeyW) m_FixedRT = !m_FixedRT;
+			if (keyDown.Key == KeyV) { m_VSync = !m_VSync; m_Driver->setSwapVBLInterval(m_VSync ? 1 : 0); }
 		}
 		if (keyDown.Key == KeyUP) m_KeyForward = true;
 		if (keyDown.Key == KeyDOWN) m_KeyBackward = true;
@@ -485,6 +490,7 @@ void CPlanarReflectionDemo::run()
 	float skyAngle = 0.f;
 
 	double lastTime = CTime::ticksToSecond(CTime::getPerformanceTime());
+	float smoothFps = 60.f;
 
 	while (m_Driver->isActive() && !m_CloseWindow)
 	{
@@ -498,6 +504,7 @@ void CPlanarReflectionDemo::run()
 		double now = CTime::ticksToSecond(CTime::getPerformanceTime());
 		float dt = float(now - lastTime);
 		lastTime = now;
+		if (dt > 0.f) smoothFps += (1.f / dt - smoothFps) * min(1.f, dt * 5.f);
 
 		if (m_AnimCamera) camAngle += dt * 0.3f;
 		if (m_AnimCube) { cubeAngleZ += dt * 0.5f; cubeAngleX += dt * 0.3f; }
@@ -847,10 +854,10 @@ void CPlanarReflectionDemo::run()
 			}
 
 			CQuadColorUV rtQuad;
-			rtQuad.V0.set(x0, y0, 0.5f); rtQuad.Uv0 = CUV(0.f, 0.f);
-			rtQuad.V1.set(x1, y0, 0.5f); rtQuad.Uv1 = CUV(1.f, 0.f);
-			rtQuad.V2.set(x1, y1, 0.5f); rtQuad.Uv2 = CUV(1.f, 1.f);
-			rtQuad.V3.set(x0, y1, 0.5f); rtQuad.Uv3 = CUV(0.f, 1.f);
+			rtQuad.V0.set(x0, y0, 0.5f); rtQuad.Uv0 = CUV(0.f, 1.f);
+			rtQuad.V1.set(x1, y0, 0.5f); rtQuad.Uv1 = CUV(1.f, 1.f);
+			rtQuad.V2.set(x1, y1, 0.5f); rtQuad.Uv2 = CUV(1.f, 0.f);
+			rtQuad.V3.set(x0, y1, 0.5f); rtQuad.Uv3 = CUV(0.f, 0.f);
 			rtQuad.Color0 = rtQuad.Color1 = rtQuad.Color2 = rtQuad.Color3 = CRGBA::White;
 			m_Driver->drawQuad(rtQuad, m_FloorMat);
 
@@ -943,10 +950,14 @@ void CPlanarReflectionDemo::run()
 			y -= lineH;
 			m_TextContext->printfAt(x, y, "[W] Fixed RT: %s", m_FixedRT ? "ON" : "OFF");
 			y -= lineH;
+			m_TextContext->printfAt(x, y, "[V] VSync: %s", m_VSync ? "ON" : "OFF");
+			y -= lineH;
 			m_TextContext->printfAt(x, y, "[Up/Down] Camera dist: %.1f", camDist);
 			y -= lineH * 1.5f;
 			m_TextContext->printfAt(x, y, "RT: %ux%u  Active: %ux%u  UV scale: %.3f x %.3f",
 				rtW, rtH, activeW, activeH, uvScale.U, uvScale.V);
+			y -= lineH;
+			m_TextContext->printfAt(x, y, "FPS: %.1f  (%.2f ms)", smoothFps, dt * 1000.f);
 		}
 
 		// --- Phase 7: Cleanup and swap ---
