@@ -238,22 +238,31 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	ss << std::endl;
 
 	// For now shader will fail to compile if both texgen and vertex buffer tex coord are provided! This is by design.
+	bool needTexGen = false;
+	bool needEyeLinear = false;
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+	{
 		if (desc.TexGenMode[i] >= 0)
-			ss << "smooth out vec4 texCoord" << i << "; // texgen (not implemented)" << std::endl;
+		{
+			ss << "smooth out vec4 texCoord" << i << "; // texgen" << std::endl;
+			needTexGen = true;
+			if (desc.TexGenMode[i] == TexGenObjectLinear || desc.TexGenMode[i] == TexGenEyeLinear)
+				ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
+			if (desc.TexGenMode[i] == TexGenEyeLinear)
+				needEyeLinear = true;
+		}
+	}
 	ss << std::endl;
-
-	// TODO: Texgen parameters
 
 	// Ambient color of all lights is precalculated and added with self illumination, and multiplied with the material ambient.
 	if (desc.Lighting)
 		ss << "uniform vec4 selfIllumination;" << std::endl;
 
-	if (desc.Fog || desc.Lighting)
+	if (desc.Fog || desc.Lighting || needEyeLinear)
 		ss << "uniform mat4 modelView;" << std::endl;
 	if (desc.Lighting)
 		ss << "uniform mat4 viewMatrix;" << std::endl;
-	if (desc.Fog || desc.Lighting)
+	if (desc.Fog || desc.Lighting || needEyeLinear)
 		ss << "vec4 ecPos4;" << std::endl;
 	if (desc.Fog)
 		ss << "smooth out vec4 ecPos;" << std::endl;
@@ -281,7 +290,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	ss << "gl_Position = modelViewProjection * " << "v" << g_AttribNames[0] << ";" << std::endl;
 	ss << std::endl;
 
-	if (desc.Fog || desc.Lighting)
+	if (desc.Fog || desc.Lighting || needEyeLinear)
 		ss << "ecPos4 = modelView * v" << g_AttribNames[0] << ";" << std::endl;
 	if (desc.Fog)
 		ss << "ecPos = ecPos4;" << std::endl;
@@ -362,11 +371,21 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 	{
-		if (desc.TexGenMode[i] >= 0)
-			ss << "texCoord" << i << " = vec4(0.0, 0.0, 0.0, 0.0);" << std::endl;
-
-		// FIXME GL3 SPECULAR: TEXGEN REFLECTION CUBE
-		// TODO: Texgen calculation
+		if (desc.TexGenMode[i] == TexGenObjectLinear)
+		{
+			// Object-linear: texCoord = texMatrix * objectPosition (identity object planes)
+			ss << "texCoord" << i << " = texMatrix" << i << " * v" << g_AttribNames[0] << ";" << std::endl;
+		}
+		else if (desc.TexGenMode[i] == TexGenEyeLinear)
+		{
+			// Eye-linear: texCoord = texMatrix * eyePosition (identity eye planes)
+			ss << "texCoord" << i << " = texMatrix" << i << " * ecPos4;" << std::endl;
+		}
+		else if (desc.TexGenMode[i] == TexGenReflectionMap || desc.TexGenMode[i] == TexGenSphereMap)
+		{
+			// TODO: Reflection/sphere map texgen
+			ss << "texCoord" << i << " = vec4(0.0, 0.0, 0.0, 0.0); // TODO: reflection/sphere texgen" << std::endl;
+		}
 	}
 
 	ss << "}" << std::endl;
