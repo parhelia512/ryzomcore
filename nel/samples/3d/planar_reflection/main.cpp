@@ -20,6 +20,14 @@
 // Draws a rotating cube above a reflective floor at Z=0.
 // The reflection is rendered from a mirrored camera into a render target,
 // then projected onto the floor using CFrustum::project() for UV mapping.
+// The floor polygon is tessellated using a screen-space grid with
+// Sutherland-Hodgman clipping at the edges (matching the NeL water approach).
+//
+// Controls:
+//   F - Toggle wireframe rendering
+//   C - Toggle camera orbit
+//   R - Toggle cube rotation
+//   S - Toggle skybox roll
 //
 
 #include <nel/misc/types_nl.h>
@@ -131,6 +139,55 @@ static void emitClippedPoly(const CPolygon &clipPoly, int gridN,
 	}
 }
 
+// Draw a checkerboard skybox that rolls forward (rotates around X axis).
+// Only the odd cells are drawn on top of the clear color.
+static void drawSkybox(UDriver *driver, UMaterial &mat, const CVector &center, float angle)
+{
+	const float s = 50.f;
+	const int grid = 16;
+	float cs = 2.f * s / float(grid);
+	CRGBA color(50, 50, 55);
+
+	// Roll the skybox forward around the X axis
+	CMatrix rot;
+	rot.identity();
+	rot.rotateX(angle);
+
+	// Each face defined by origin corner (relative to center), U-axis, V-axis
+	struct Face { CVector org, u, v; };
+	Face faces[6] = {
+		{ CVector(-s, -s,  s), CVector(1, 0, 0), CVector(0, 1, 0) }, // +Z top
+		{ CVector(-s, -s, -s), CVector(1, 0, 0), CVector(0, 1, 0) }, // -Z bottom
+		{ CVector( s, -s, -s), CVector(0, 1, 0), CVector(0, 0, 1) }, // +X right
+		{ CVector(-s, -s, -s), CVector(0, 1, 0), CVector(0, 0, 1) }, // -X left
+		{ CVector(-s,  s, -s), CVector(1, 0, 0), CVector(0, 0, 1) }, // +Y front
+		{ CVector(-s, -s, -s), CVector(1, 0, 0), CVector(0, 0, 1) }, // -Y back
+	};
+
+	CQuadColor q;
+	q.Color0 = q.Color1 = q.Color2 = q.Color3 = color;
+
+	for (int f = 0; f < 6; ++f)
+	{
+		CVector org = center + rot * faces[f].org;
+		CVector du = rot * (faces[f].u * cs);
+		CVector dv = rot * (faces[f].v * cs);
+
+		for (int j = 0; j < grid; ++j)
+		{
+			for (int i = 0; i < grid; ++i)
+			{
+				if ((i + j) % 2 == 0) continue;
+				q.V0 = org + du * float(i)     + dv * float(j);
+				q.V1 = org + du * float(i + 1) + dv * float(j);
+				q.V2 = org + du * float(i + 1) + dv * float(j + 1);
+				q.V3 = org + du * float(i)     + dv * float(j + 1);
+				driver->drawQuad(q, mat);
+			}
+		}
+	}
+}
+
 // Draw a colored quad (one face of the cube)
 static void drawFace(UDriver *driver, UMaterial &mat,
 	const CVector &v0, const CVector &v1, const CVector &v2, const CVector &v3,
@@ -182,7 +239,11 @@ public:
 private:
 	bool m_CloseWindow;
 	bool m_Wireframe;
+	bool m_AnimCamera;
+	bool m_AnimCube;
+	bool m_AnimSkybox;
 	UDriver *m_Driver;
+	UMaterial m_SkyMat;
 	UMaterial m_CubeMat;
 	UMaterial m_FloorMat;
 };
@@ -190,6 +251,9 @@ private:
 CPlanarReflectionDemo::CPlanarReflectionDemo()
 	: m_CloseWindow(false)
 	, m_Wireframe(false)
+	, m_AnimCamera(true)
+	, m_AnimCube(true)
+	, m_AnimSkybox(true)
 {
 	m_Driver = UDriver::createDriver(0, false);
 	if (!m_Driver)
@@ -203,6 +267,13 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 
 	m_Driver->setDisplay(UDriver::CMode(800, 600, 32, true));
 	m_Driver->setWindowTitle(ucstring("NeL Planar Reflection Demo"));
+
+	// Skybox material: no depth write, always passes depth test, double-sided
+	m_SkyMat = m_Driver->createMaterial();
+	m_SkyMat.initUnlit();
+	m_SkyMat.setZWrite(false);
+	m_SkyMat.setZFunc(UMaterial::always);
+	m_SkyMat.setDoubleSided(true);
 
 	// Opaque material for the cube
 	m_CubeMat = m_Driver->createMaterial();
@@ -225,6 +296,7 @@ CPlanarReflectionDemo::~CPlanarReflectionDemo()
 	m_FloorMat.setTexture(0, NULL);
 	m_Driver->deleteMaterial(m_FloorMat);
 	m_Driver->deleteMaterial(m_CubeMat);
+	m_Driver->deleteMaterial(m_SkyMat);
 	m_Driver->release();
 	delete m_Driver;
 }
@@ -238,9 +310,12 @@ void CPlanarReflectionDemo::operator()(const CEvent &event)
 	else if (event == EventKeyDownId)
 	{
 		CEventKeyDown &keyDown = (CEventKeyDown &)event;
-		if (keyDown.Key == KeyF && keyDown.FirstTime)
+		if (keyDown.FirstTime)
 		{
-			m_Wireframe = !m_Wireframe;
+			if (keyDown.Key == KeyF) m_Wireframe = !m_Wireframe;
+			if (keyDown.Key == KeyC) m_AnimCamera = !m_AnimCamera;
+			if (keyDown.Key == KeyR) m_AnimCube = !m_AnimCube;
+			if (keyDown.Key == KeyS) m_AnimSkybox = !m_AnimSkybox;
 		}
 	}
 }
@@ -259,19 +334,29 @@ void CPlanarReflectionDemo::run()
 	// CDriverUser provides setRenderTarget, which is not on the UDriver interface
 	CDriverUser *dru = static_cast<CDriverUser *>(m_Driver);
 
-	double startTime = CTime::ticksToSecond(CTime::getPerformanceTime());
+	float camAngle = 0.f;
+	float cubeAngleZ = 0.f;
+	float cubeAngleX = 0.f;
+	float skyAngle = 0.f;
+
+	double lastTime = CTime::ticksToSecond(CTime::getPerformanceTime());
 
 	while (m_Driver->isActive() && !m_CloseWindow)
 	{
 		m_Driver->EventServer.pump();
 
-		double now = CTime::ticksToSecond(CTime::getPerformanceTime()) - startTime;
+		double now = CTime::ticksToSecond(CTime::getPerformanceTime());
+		float dt = float(now - lastTime);
+		lastTime = now;
+
+		if (m_AnimCamera) camAngle += dt * 0.3f;
+		if (m_AnimCube) { cubeAngleZ += dt * 0.5f; cubeAngleX += dt * 0.3f; }
+		if (m_AnimSkybox) skyAngle += dt * 0.1f;
 
 		m_Driver->setPolygonMode(m_Wireframe ? UDriver::Line : UDriver::Filled);
 
 		// --- Phase 1: Per-frame setup ---
 
-		float camAngle = float(now * 0.3);
 		CVector eye(cosf(camAngle) * camDist, sinf(camAngle) * camDist, camHeight);
 		CVector target(0.f, 0.f, cubeHeight * 0.5f);
 		CVector up(0.f, 0.f, 1.f);
@@ -282,8 +367,8 @@ void CPlanarReflectionDemo::run()
 		CMatrix cubeTransform;
 		cubeTransform.identity();
 		cubeTransform.setPos(CVector(0.f, 0.f, cubeHeight));
-		cubeTransform.rotateZ(float(now * 0.5));
-		cubeTransform.rotateX(float(now * 0.3));
+		cubeTransform.rotateZ(cubeAngleZ);
+		cubeTransform.rotateX(cubeAngleX);
 
 		CMatrix modelMatrix;
 		modelMatrix.identity();
@@ -311,6 +396,7 @@ void CPlanarReflectionDemo::run()
 		m_Driver->setClipPlane(0, CPlane(0.f, 0.f, 1.f, 0.f));
 		m_Driver->enableClipPlane(0, true);
 
+		drawSkybox(m_Driver, m_SkyMat, reflectedEye, skyAngle);
 		drawCube(m_Driver, m_CubeMat, cubeTransform, cubeHalfSize);
 
 		m_Driver->enableClipPlane(0, false);
@@ -328,6 +414,7 @@ void CPlanarReflectionDemo::run()
 		m_Driver->setViewMatrix(viewMatrix);
 		m_Driver->setModelMatrix(modelMatrix);
 
+		drawSkybox(m_Driver, m_SkyMat, eye, skyAngle);
 		drawCube(m_Driver, m_CubeMat, cubeTransform, cubeHalfSize);
 
 		// --- Phase 6: Render floor with reflection texture ---
