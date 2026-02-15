@@ -42,12 +42,24 @@
 //   7. Detach texture from material, recycle RT, swap buffers.
 //
 // Render target sizing:
-//   The RT only covers the reflected camera's view of the floor polygon,
-//   not the full screen. An off-center (asymmetric) frustum is used so that
+//   Two modes are available (W key toggles, default is fixed):
+//
+//   Fixed mode (default): The RT is allocated at window size plus a small
+//   margin (rtMargin). This avoids per-frame reallocation stutter on GPUs
+//   that are slow to create/destroy render targets. The off-center sub-frustum
+//   still limits rendering to the floor polygon's AABB, so geometry outside
+//   is frustum-culled and no extra draw calls are wasted.
+//
+//   Dynamic mode: The RT is sized to the reflected camera's screen-space AABB
+//   of the floor polygon. Dimensions are snapped up to multiples of rtSnap
+//   (default 32 pixels) with equal padding on all sides, preventing churn as
+//   the AABB shifts from frame to frame. This uses less VRAM but may cause
+//   stutter when the snapped size changes.
+//
+//   Both modes use an off-center (asymmetric) frustum so that
 //   CFrustum::project() maps floor vertices to [0,1] UVs within the sub-RT.
-//   Dimensions are snapped up to multiples of rtSnap (default 32 pixels) with
-//   equal padding on all sides, preventing reallocation churn as the AABB
-//   shifts from frame to frame.
+//   Half-resolution (H) and power-of-two sizing (P) can be combined with
+//   either mode.
 //
 // Debug overlays (B key):
 //   Yellow quadrilateral - RT coverage projected onto the normal screen
@@ -63,6 +75,7 @@
 //   B - Toggle render target boundary overlay
 //   H - Toggle half-resolution reflection
 //   P - Toggle power-of-two render target sizing
+//   W - Toggle fixed window-sized render target (default on, avoids stutter)
 //   Up/Down - Move camera closer/farther
 //
 
@@ -281,6 +294,7 @@ private:
 	bool m_ShowBounds;
 	bool m_HalfRes;
 	bool m_Pow2;
+	bool m_FixedRT;
 	bool m_KeyForward;
 	bool m_KeyBackward;
 	UDriver *m_Driver;
@@ -298,6 +312,7 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 	, m_ShowBounds(false)
 	, m_HalfRes(false)
 	, m_Pow2(false)
+	, m_FixedRT(true)
 	, m_KeyForward(false)
 	, m_KeyBackward(false)
 {
@@ -366,6 +381,7 @@ void CPlanarReflectionDemo::operator()(const CEvent &event)
 			if (keyDown.Key == KeyB) m_ShowBounds = !m_ShowBounds;
 			if (keyDown.Key == KeyH) m_HalfRes = !m_HalfRes;
 			if (keyDown.Key == KeyP) m_Pow2 = !m_Pow2;
+			if (keyDown.Key == KeyW) m_FixedRT = !m_FixedRT;
 		}
 		if (keyDown.Key == KeyUP) m_KeyForward = true;
 		if (keyDown.Key == KeyDOWN) m_KeyBackward = true;
@@ -493,8 +509,19 @@ void CPlanarReflectionDemo::run()
 		reflAabbMinY -= marginScreen;
 		reflAabbMaxY += marginScreen;
 
-		// Snap RT dimensions to multiples of rtSnap, padding the AABB equally on all sides
+		// Compute RT size
+		uint rtW, rtH;
+		if (m_FixedRT)
 		{
+			// Fixed RT: window size plus margin (stable allocation, no per-frame churn)
+			uint marginPx = (uint)ceilf(marginScreen * max((float)screenW, (float)screenH));
+			rtW = screenW + 2 * marginPx;
+			rtH = screenH + 2 * marginPx;
+		}
+		else
+		{
+			// Dynamic RT: snap AABB so RT dimensions are multiples of rtSnap,
+			// padding the AABB equally on all sides to keep the margin centered
 			uint rawW = (uint)max(1.f, ceilf((reflAabbMaxX - reflAabbMinX) * screenW));
 			uint rawH = (uint)max(1.f, ceilf((reflAabbMaxY - reflAabbMinY) * screenH));
 			uint snappedW = ((rawW + rtSnap - 1) / rtSnap) * rtSnap;
@@ -505,9 +532,23 @@ void CPlanarReflectionDemo::run()
 			reflAabbMaxX += padX;
 			reflAabbMinY -= padY;
 			reflAabbMaxY += padY;
+			rtW = snappedW;
+			rtH = snappedH;
 		}
 
-		// Build off-center sub-frustum covering only the reflected AABB region
+		// Snap RT to pixel grid, apply half-res and pow2
+		rtW = ((rtW + rtSnap - 1) / rtSnap) * rtSnap;
+		rtH = ((rtH + rtSnap - 1) / rtSnap) * rtSnap;
+		if (m_HalfRes) { rtW = max(1u, rtW / 2); rtH = max(1u, rtH / 2); }
+		if (m_Pow2)
+		{
+			uint pw = 1; while (pw * 2 <= rtW) pw *= 2; rtW = pw;
+			uint ph = 1; while (ph * 2 <= rtH) ph *= 2; rtH = ph;
+		}
+
+		// Build off-center sub-frustum covering only the reflected AABB region.
+		// In both fixed and dynamic modes, the sub-frustum limits rendering to
+		// the floor polygon's bounding box (geometry outside is frustum-culled).
 		CFrustum reflFrustum = frustum;
 		float fw = frustum.Right - frustum.Left;
 		float fh = frustum.Top - frustum.Bottom;
@@ -515,17 +556,6 @@ void CPlanarReflectionDemo::run()
 		reflFrustum.Right = frustum.Left + reflAabbMaxX * fw;
 		reflFrustum.Bottom = frustum.Bottom + reflAabbMinY * fh;
 		reflFrustum.Top = frustum.Bottom + reflAabbMaxY * fh;
-
-		// RT sized to the snapped AABB (can exceed screen size)
-		uint rtW = (uint)max(1.f, ceilf((reflAabbMaxX - reflAabbMinX) * screenW));
-		uint rtH = (uint)max(1.f, ceilf((reflAabbMaxY - reflAabbMinY) * screenH));
-		if (m_HalfRes) { rtW = max(1u, rtW / 2); rtH = max(1u, rtH / 2); }
-		if (m_Pow2)
-		{
-			// Round down to previous power of two
-			uint pw = 1; while (pw * 2 <= rtW) pw *= 2; rtW = pw;
-			uint ph = 1; while (ph * 2 <= rtH) ph *= 2; rtH = ph;
-		}
 
 		// --- Phase 3: Render reflected scene to render target ---
 
