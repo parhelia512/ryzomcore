@@ -249,40 +249,46 @@ void CPlanarReflectionDemo::run()
 
 		// --- Phase 6: Render floor with reflection texture ---
 
-		// Floor quad at Z=0
-		CVector floorV0(-floorExtent, -floorExtent, 0.f);
-		CVector floorV1( floorExtent, -floorExtent, 0.f);
-		CVector floorV2( floorExtent,  floorExtent, 0.f);
-		CVector floorV3(-floorExtent,  floorExtent, 0.f);
-
-		// Compute projective UVs through the reflected camera
-		CUV uv0, uv1, uv2, uv3;
-		{
-			CVector proj0 = frustum.project(reflectedViewMatrix * floorV0);
-			CVector proj1 = frustum.project(reflectedViewMatrix * floorV1);
-			CVector proj2 = frustum.project(reflectedViewMatrix * floorV2);
-			CVector proj3 = frustum.project(reflectedViewMatrix * floorV3);
-
-			uv0 = CUV(proj0.x, proj0.y);
-			uv1 = CUV(proj1.x, proj1.y);
-			uv2 = CUV(proj2.x, proj2.y);
-			uv3 = CUV(proj3.x, proj3.y);
-		}
-
 		// Set reflection texture on floor material
 		m_FloorMat.setTexture(0, reflectRT);
 
-		CQuadUV floorQuad;
-		floorQuad.V0 = floorV0;
-		floorQuad.V1 = floorV1;
-		floorQuad.V2 = floorV2;
-		floorQuad.V3 = floorV3;
-		floorQuad.Uv0 = uv0;
-		floorQuad.Uv1 = uv1;
-		floorQuad.Uv2 = uv2;
-		floorQuad.Uv3 = uv3;
+		// Draw floor as a subdivided grid for correct projective UV mapping.
+		// A single quad can't represent the nonlinear perspective projection;
+		// subdividing gives each cell small enough UVs for linear interpolation.
+		{
+			const int gridN = 32;
+			float step = (2.f * floorExtent) / float(gridN);
 
-		m_Driver->drawQuad(floorQuad, m_FloorMat);
+			for (int gy = 0; gy < gridN; ++gy)
+			{
+				for (int gx = 0; gx < gridN; ++gx)
+				{
+					float x0 = -floorExtent + gx * step;
+					float x1 = x0 + step;
+					float y0 = -floorExtent + gy * step;
+					float y1 = y0 + step;
+
+					CVector v0(x0, y0, 0.f);
+					CVector v1(x1, y0, 0.f);
+					CVector v2(x1, y1, 0.f);
+					CVector v3(x0, y1, 0.f);
+
+					CVector p0 = frustum.project(reflectedViewMatrix * v0);
+					CVector p1 = frustum.project(reflectedViewMatrix * v1);
+					CVector p2 = frustum.project(reflectedViewMatrix * v2);
+					CVector p3 = frustum.project(reflectedViewMatrix * v3);
+
+					CQuadUV q;
+					q.V0 = v0; q.V1 = v1; q.V2 = v2; q.V3 = v3;
+					q.Uv0 = CUV(p0.x, p0.y);
+					q.Uv1 = CUV(p1.x, p1.y);
+					q.Uv2 = CUV(p2.x, p2.y);
+					q.Uv3 = CUV(p3.x, p3.y);
+
+					m_Driver->drawQuad(q, m_FloorMat);
+				}
+			}
+		}
 
 		// --- Phase 7: Cleanup and swap ---
 
