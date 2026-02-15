@@ -381,9 +381,6 @@ void CPlanarReflectionDemo::operator()(const CEvent &event)
 void CPlanarReflectionDemo::run()
 {
 	CFrustum frustum;
-	frustum.initPerspective(float(Pi / 3.0), 800.f / 600.f, 0.1f, 100.f);
-
-	const uint screenW = 800, screenH = 600;
 
 	float camDist = 8.f;
 	float camHeight = 4.f;
@@ -417,6 +414,11 @@ void CPlanarReflectionDemo::run()
 	while (m_Driver->isActive() && !m_CloseWindow)
 	{
 		m_Driver->EventServer.pump();
+
+		uint32 screenW, screenH;
+		m_Driver->getWindowSize(screenW, screenH);
+		if (screenW == 0 || screenH == 0) { nlSleep(10); continue; }
+		frustum.initPerspective(float(Pi / 3.0), float(screenW) / float(screenH), 0.1f, 100.f);
 
 		double now = CTime::ticksToSecond(CTime::getPerformanceTime());
 		float dt = float(now - lastTime);
