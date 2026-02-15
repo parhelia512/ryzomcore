@@ -315,6 +315,13 @@ struct CProgramIndex
 		Light6QuadAttn,
 		Light7QuadAttn,
 
+		ClipPlane0,
+		ClipPlane1,
+		ClipPlane2,
+		ClipPlane3,
+		ClipPlane4,
+		ClipPlane5,
+
 		NUM_UNIFORMS
 	};
 	static const char *Names[NUM_UNIFORMS];

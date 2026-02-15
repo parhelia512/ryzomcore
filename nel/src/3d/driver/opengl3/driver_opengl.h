@@ -406,6 +406,7 @@ public:
 	void					touchLightVP(int i);
 	void					touchVertexFormatVP();
 	void					setTexGenModeVP(uint stage, sint mode);
+	void					touchClipPlaneVP(uint index, bool enable);
 
 	void					generateBuiltinPixelProgram(CMaterial &mat);
 
@@ -416,6 +417,10 @@ public:
 	virtual	void			setFrustumMatrix(CMatrix &frust);
 	virtual	CMatrix			getFrustumMatrix();
 	virtual float			getClipSpaceZMin() const { return -1.f; }
+	virtual bool			cubemapZPositiveForward() const { return false; }
+
+	virtual void			enableClipPlane(uint index, bool enable);
+	virtual void			setClipPlane(uint index, const NLMISC::CPlane &plane);
 
 	virtual void			setupViewMatrix(const CMatrix& mtx);
 
@@ -918,6 +923,11 @@ private:
 	bool						_UserLightEnable[MaxLight];
 	bool						_LightEnable[MaxLight];
 	NLMISC::CRGBA				_AmbientGlobal;
+
+	// Clip planes (in eye space, pre-transformed for shader)
+	enum { MaxClipPlanes = 6 };
+	bool						_ClipPlaneEnabled[MaxClipPlanes];
+	float						_ClipPlaneEye[MaxClipPlanes][4]; // Plane in eye space (for shader upload)
 
 	//\name description of the per pixel light
 	// @{

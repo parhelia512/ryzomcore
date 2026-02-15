@@ -49,6 +49,8 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 		return right.Fog;
 	if (left.VertexColorLighted != right.VertexColorLighted)
 		return right.VertexColorLighted;
+	if (left.ClipPlaneMask != right.ClipPlaneMask)
+		return left.ClipPlaneMask < right.ClipPlaneMask;
 
 	return false;
 }
@@ -72,6 +74,8 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 		return false;
 	if (left.VertexColorLighted != right.VertexColorLighted)
 		return false;
+	if (left.ClipPlaneMask != right.ClipPlaneMask)
+		return false;
 
 	return true;
 }
@@ -85,7 +89,7 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 {
 	uint32 h;
 
-	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0));
+	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0) | ((uint32)v.ClipPlaneMask << 20));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			h = NLMISC::wangHash(h ^ v.LightMode[i]);
@@ -222,9 +226,17 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
 	ss << std::endl;
 
+	// Count highest enabled clip plane for gl_ClipDistance array size
+	int maxClipPlane = -1;
+	if (desc.ClipPlaneMask)
+		for (int i = 5; i >= 0; --i)
+			if (desc.ClipPlaneMask & (1 << i)) { maxClipPlane = i; break; }
+
 	ss << "out gl_PerVertex" << std::endl;
 	ss << "{" << std::endl;
 	ss << "vec4 gl_Position;" << std::endl;
+	if (maxClipPlane >= 0)
+		ss << "float gl_ClipDistance[" << (maxClipPlane + 1) << "];" << std::endl;
 	ss << "};" << std::endl;
 	ss << std::endl;
 	ss << "uniform mat4 modelViewProjection;" << std::endl;
@@ -265,15 +277,23 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	}
 	ss << std::endl;
 
+	// Clip plane uniforms
+	bool needClipPlanes = (desc.ClipPlaneMask != 0);
+	if (needClipPlanes)
+		for (int i = 0; i <= maxClipPlane; ++i)
+			if (desc.ClipPlaneMask & (1 << i))
+				ss << "uniform vec4 clipPlane" << i << ";" << std::endl;
+
 	// Ambient color of all lights is precalculated and added with self illumination, and multiplied with the material ambient.
 	if (lighting)
 		ss << "uniform vec4 selfIllumination;" << std::endl;
 
-	if (desc.Fog || lighting || needEyeLinear || needReflection)
+	bool needEcPos = desc.Fog || lighting || needEyeLinear || needReflection || needClipPlanes;
+	if (needEcPos)
 		ss << "uniform mat4 modelView;" << std::endl;
 	if (lighting)
 		ss << "uniform mat4 viewMatrix;" << std::endl;
-	if (desc.Fog || lighting || needEyeLinear || needReflection)
+	if (needEcPos)
 		ss << "vec4 ecPos4;" << std::endl;
 	// normalMatrix needed for lighting and reflection texgen
 	if (needReflection && !lighting)
@@ -304,7 +324,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	ss << "gl_Position = modelViewProjection * " << "v" << g_AttribNames[0] << ";" << std::endl;
 	ss << std::endl;
 
-	if (desc.Fog || lighting || needEyeLinear || needReflection)
+	if (needEcPos)
 		ss << "ecPos4 = modelView * v" << g_AttribNames[0] << ";" << std::endl;
 	if (desc.Fog)
 		ss << "ecPos = ecPos4;" << std::endl;
@@ -429,6 +449,18 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		}
 	}
 
+	// Clip plane distance computation
+	if (needClipPlanes)
+	{
+		for (int i = 0; i <= maxClipPlane; ++i)
+		{
+			if (desc.ClipPlaneMask & (1 << i))
+				ss << "gl_ClipDistance[" << i << "] = dot(clipPlane" << i << ", ecPos4);" << std::endl;
+			else
+				ss << "gl_ClipDistance[" << i << "] = 1.0;" << std::endl;
+		}
+	}
+
 	ss << "}" << std::endl;
 	result = ss.str();
 }
@@ -530,6 +562,21 @@ void CDriverGL3::setTexGenModeVP(uint stage, sint mode)
 		//if (mode >= 0)
 		//	nlwarning("enable texgen %i, %i, not implemented", stage, mode);
 		m_VPBuiltinCurrent.TexGenMode[stage] = mode;
+		m_VPBuiltinTouched = true;
+	}
+}
+
+void CDriverGL3::touchClipPlaneVP(uint index, bool enable)
+{
+	H_AUTO_OGL(CDriverGL3_touchClipPlaneVP)
+	uint8 mask = m_VPBuiltinCurrent.ClipPlaneMask;
+	if (enable)
+		mask |= (1 << index);
+	else
+		mask &= ~(1 << index);
+	if (m_VPBuiltinCurrent.ClipPlaneMask != mask)
+	{
+		m_VPBuiltinCurrent.ClipPlaneMask = mask;
 		m_VPBuiltinTouched = true;
 	}
 }

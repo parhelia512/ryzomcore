@@ -207,5 +207,54 @@ void			CDriverGL3::setupLightMapDynamicLighting(bool enable)
 	}
 }
 
+// ***************************************************************************
+void CDriverGL3::enableClipPlane(uint index, bool enable)
+{
+	H_AUTO_OGL(CDriverGL3_enableClipPlane)
+
+	if (index >= MaxClipPlanes) return;
+
+	_ClipPlaneEnabled[index] = enable;
+
+	// Enable/disable GL clip distance (for builtin VPs that write gl_ClipDistance)
+	if (enable)
+		glEnable(GL_CLIP_DISTANCE0 + index);
+	else
+		glDisable(GL_CLIP_DISTANCE0 + index);
+
+	// Trigger VP regeneration to include/exclude gl_ClipDistance output
+	touchClipPlaneVP(index, enable);
+}
+
+// ***************************************************************************
+void CDriverGL3::setClipPlane(uint index, const NLMISC::CPlane &plane)
+{
+	H_AUTO_OGL(CDriverGL3_setClipPlane)
+
+	if (index >= MaxClipPlanes) return;
+
+	// Plane is in NeL world space. Adjust d for _PZBCameraPos precision optimization,
+	// then transform to eye space for the vertex shader.
+	float pa = plane.a;
+	float pb = plane.b;
+	float pc = plane.c;
+	float pd = plane.d + pa * _PZBCameraPos.x + pb * _PZBCameraPos.y + pc * _PZBCameraPos.z;
+
+	// Transform plane from PZB-adjusted world space to eye space:
+	// plane_eye = transpose(inverse(_ViewMtx)) * plane_pzb_world
+	// For rigid body transform V: (V^-1)^T maps covariant vectors (planes/normals).
+	CMatrix invView = _ViewMtx;
+	invView.invert();
+	CVector invI = invView.getI();
+	CVector invJ = invView.getJ();
+	CVector invK = invView.getK();
+	CVector invPos = invView.getPos();
+
+	_ClipPlaneEye[index][0] = invI.x * pa + invI.y * pb + invI.z * pc;
+	_ClipPlaneEye[index][1] = invJ.x * pa + invJ.y * pb + invJ.z * pc;
+	_ClipPlaneEye[index][2] = invK.x * pa + invK.y * pb + invK.z * pc;
+	_ClipPlaneEye[index][3] = invPos.x * pa + invPos.y * pb + invPos.z * pc + pd;
+}
+
 } // NLDRIVERGL3
 } // NL3D

@@ -287,7 +287,14 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"light4QuadAttn",
 	"light5QuadAttn",
 	"light6QuadAttn",
-	"light7QuadAttn"
+	"light7QuadAttn",
+
+	"clipPlane0",
+	"clipPlane1",
+	"clipPlane2",
+	"clipPlane3",
+	"clipPlane4",
+	"clipPlane5"
 };
 
 void IProgram::buildInfo(CSource *source)

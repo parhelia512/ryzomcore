@@ -397,6 +397,16 @@ bool CDriverGL3::setupDisplay()
 	// Default global ambient matches OpenGL default (0.2, 0.2, 0.2)
 	_AmbientGlobal = NLMISC::CRGBA(51, 51, 51);
 
+	// All clip planes disabled by default
+	for (uint i = 0; i < MaxClipPlanes; ++i)
+	{
+		_ClipPlaneEnabled[i] = false;
+		_ClipPlaneEye[i][0] = 0.f;
+		_ClipPlaneEye[i][1] = 0.f;
+		_ClipPlaneEye[i][2] = 0.f;
+		_ClipPlaneEye[i][3] = 0.f;
+	}
+
 	// init _DriverGLStates
 	_DriverGLStates.init();
 
@@ -1476,7 +1486,8 @@ void	CDriverGL3::endProfileVBHardLock(vector<std::string> &result)
 
 	// clear.
 	_VBHardProfiling= false;
-	NLMISC::contReset(_VBHardProfiles);
+	_VBHardProfiles.clear();
+	_VBHardProfiles.shrink_to_fit();
 }
 
 // ***************************************************************************

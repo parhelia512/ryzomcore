@@ -909,6 +909,16 @@ void CDriverGL3::setupUniforms(TProgram program)
 	{
 		nglProgramUniform4f(progId, selfIlluminationId, selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
 	}
+
+	// Upload clip plane uniforms (eye-space plane equations)
+	for (uint i = 0; i < MaxClipPlanes; ++i)
+	{
+		if (!_ClipPlaneEnabled[i])
+			continue;
+		uint cpIdx = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::ClipPlane0 + i));
+		if (cpIdx != ~0u)
+			nglProgramUniform4f(progId, cpIdx, _ClipPlaneEye[i][0], _ClipPlaneEye[i][1], _ClipPlaneEye[i][2], _ClipPlaneEye[i][3]);
+	}
 }
 
 void CDriverGL3::setupInitialUniforms(IProgram *program)
