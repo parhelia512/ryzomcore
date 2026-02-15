@@ -27,28 +27,36 @@
 //   2. Compute the screen-space AABB of the floor polygon as seen by the
 //      reflected camera. Add a configurable margin (for wobble in real water)
 //      and snap the dimensions to a pixel grid (rtSnap=32) to avoid RT churn.
-//   3. Build an off-center sub-frustum covering only the AABB region. Allocate
-//      a render target sized to the snapped AABB (optionally half-res or pow2).
-//   4. Render the scene from the reflected camera into the RT, with a clip plane
-//      at Z=0 to discard geometry below the reflection surface.
-//   5. Render the scene normally from the real camera.
-//   6. Tessellate the floor polygon using a screen-space grid (matching the NeL
+//   3. Build an off-center sub-frustum covering only the AABB region.
+//   4. Compute the "active" RT dimensions from the snapped AABB (what dynamic
+//      mode would allocate). In fixed mode, a larger RT is allocated once at
+//      window size + margin, but a viewport and scissor restrict rendering to
+//      the active sub-region. UVs are scaled by (activeSize / allocSize) to
+//      address the correct sub-region of the texture.
+//   5. Render the scene from the reflected camera into the RT, with a clip
+//      plane at Z=0 to discard geometry below the reflection surface.
+//   6. Render the scene normally from the real camera.
+//   7. Tessellate the floor polygon using a screen-space grid (matching the NeL
 //      water renderer): project the polygon to grid coordinates, rasterize with
 //      computeInnerBorders/computeOuterBorders, clip border cells against the
 //      polygon edges using Sutherland-Hodgman (CPolygon::clip). For each cell,
 //      un-project grid vertices to Z=0 via ray-plane intersection, then compute
 //      reflection UVs by projecting through the reflected view matrix and
-//      sub-frustum (CFrustum::project). Draw as batched CQuadColorUV quads.
-//   7. Detach texture from material, recycle RT, swap buffers.
+//      sub-frustum (CFrustum::project), scaled by the UV scale factor.
+//      Draw as batched CQuadColorUV quads.
+//   8. Detach texture from material, recycle RT, swap buffers.
 //
 // Render target sizing:
 //   Two modes are available (W key toggles, default is fixed):
 //
 //   Fixed mode (default): The RT is allocated at window size plus a small
 //   margin (rtMargin). This avoids per-frame reallocation stutter on GPUs
-//   that are slow to create/destroy render targets. The off-center sub-frustum
-//   still limits rendering to the floor polygon's AABB, so geometry outside
-//   is frustum-culled and no extra draw calls are wasted.
+//   that are slow to create/destroy render targets. A viewport and scissor
+//   restrict rendering to the active sub-region (same size as dynamic mode
+//   would allocate), so fill rate and texel density match the actual water
+//   coverage on screen. When the water is far away, only a small corner of
+//   the fixed RT is used, saving fill rate compared to rendering into the
+//   full allocation.
 //
 //   Dynamic mode: The RT is sized to the reflected camera's screen-space AABB
 //   of the floor polygon. Dimensions are snapped up to multiples of rtSnap
@@ -57,25 +65,31 @@
 //   stutter when the snapped size changes.
 //
 //   Both modes use an off-center (asymmetric) frustum so that
-//   CFrustum::project() maps floor vertices to [0,1] UVs within the sub-RT.
-//   Half-resolution (H) and power-of-two sizing (P) can be combined with
-//   either mode.
+//   CFrustum::project() maps floor vertices to [0,1] UVs within the viewport.
+//   Half-resolution (H, default on) and power-of-two sizing (P, default on)
+//   can be combined with either mode.
 //
-// Debug overlays (B key):
-//   Yellow quadrilateral - RT coverage projected onto the normal screen
-//     (un-project RT corners from reflected camera to Z=0, re-project through
-//     the normal camera)
-//   Cyan rectangle - floor polygon's screen footprint (normal camera AABB)
+// Debug overlays:
+//   T key cycles the render target overlay through three states:
+//     Off -> Fullscreen (RT stretched to screen) -> Corner thumbnail (default)
+//   The thumbnail shows the full RT allocation including unused regions,
+//   so you can verify the viewport sub-region optimization.
+//
+//   B key toggles boundary lines:
+//     Yellow quadrilateral - RT coverage projected onto the normal screen
+//       (un-project RT corners from reflected camera to Z=0, re-project
+//       through the normal camera)
+//     Cyan rectangle - floor polygon's screen footprint (normal camera AABB)
 //
 // Controls:
 //   F - Toggle wireframe rendering
 //   C - Toggle camera orbit
 //   R - Toggle cube rotation
 //   S - Toggle skybox roll
-//   T - Toggle full render target overlay (stretch RT to screen)
+//   T - Cycle render target overlay: off / fullscreen / corner thumbnail
 //   B - Toggle render target boundary overlay
-//   H - Toggle half-resolution reflection
-//   P - Toggle power-of-two render target sizing
+//   H - Toggle half-resolution reflection (default on)
+//   P - Toggle power-of-two render target sizing (default on)
 //   W - Toggle fixed window-sized render target (default on, avoids stutter)
 //   Up/Down - Move camera closer/farther
 //
@@ -94,6 +108,8 @@
 #include <nel/3d/u_driver.h>
 #include <nel/3d/u_material.h>
 #include <nel/3d/frustum.h>
+#include <nel/3d/viewport.h>
+#include <nel/3d/scissor.h>
 #include <nel/3d/driver_user.h>
 #include <nel/3d/texture_user.h>
 #include <nel/3d/render_target_manager.h>
@@ -129,6 +145,7 @@ static CMatrix buildViewMatrix(const CVector &eye, const CVector &target, const 
 static bool gridToWorldAndUV(float gx, float gy, int gridN,
 	const CFrustum &frustum, const CMatrix &camWorld, const CVector &eye,
 	const CFrustum &reflFrustum, const CMatrix &reflectedViewMatrix,
+	const CUV &uvScale,
 	CVector &worldPos, CUV &uv)
 {
 	float sx = gx / float(gridN);
@@ -148,7 +165,7 @@ static bool gridToWorldAndUV(float gx, float gy, int gridN,
 
 	CVector reflLocal = reflectedViewMatrix * worldPos;
 	CVector proj = reflFrustum.project(reflLocal);
-	uv = CUV(proj.x, proj.y);
+	uv = CUV(proj.x * uvScale.U, proj.y * uvScale.V);
 	return true;
 }
 
@@ -157,7 +174,8 @@ static bool gridToWorldAndUV(float gx, float gy, int gridN,
 // and given a reflection UV. Quads are appended to the output vector.
 static void emitClippedPoly(const CPolygon &clipPoly, int gridN,
 	const CFrustum &frustum, const CMatrix &camWorld, const CVector &eye,
-	const CFrustum &reflFrustum, const CMatrix &reflectedViewMatrix, CRGBA color,
+	const CFrustum &reflFrustum, const CMatrix &reflectedViewMatrix,
+	const CUV &uvScale, CRGBA color,
 	std::vector<CQuadColorUV> &outQuads)
 {
 	uint nv = (uint)clipPoly.Vertices.size();
@@ -169,7 +187,7 @@ static void emitClippedPoly(const CPolygon &clipPoly, int gridN,
 	for (uint i = 0; i < nv; ++i)
 	{
 		if (!gridToWorldAndUV(clipPoly.Vertices[i].x, clipPoly.Vertices[i].y, gridN,
-			frustum, camWorld, eye, reflFrustum, reflectedViewMatrix, wp[i], uv[i]))
+			frustum, camWorld, eye, reflFrustum, reflectedViewMatrix, uvScale, wp[i], uv[i]))
 			return;
 	}
 
@@ -293,7 +311,7 @@ private:
 	bool m_AnimCube;
 	bool m_AnimSkybox;
 	bool m_ShowBounds;
-	bool m_ShowRT;
+	int m_ShowRT; // 0=off, 1=fullscreen, 2=corner thumbnail
 	bool m_HalfRes;
 	bool m_Pow2;
 	bool m_FixedRT;
@@ -312,9 +330,9 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 	, m_AnimCube(true)
 	, m_AnimSkybox(true)
 	, m_ShowBounds(false)
-	, m_ShowRT(false)
-	, m_HalfRes(false)
-	, m_Pow2(false)
+	, m_ShowRT(2)
+	, m_HalfRes(true)
+	, m_Pow2(true)
 	, m_FixedRT(true)
 	, m_KeyForward(false)
 	, m_KeyBackward(false)
@@ -382,7 +400,7 @@ void CPlanarReflectionDemo::operator()(const CEvent &event)
 			if (keyDown.Key == KeyR) m_AnimCube = !m_AnimCube;
 			if (keyDown.Key == KeyS) m_AnimSkybox = !m_AnimSkybox;
 			if (keyDown.Key == KeyB) m_ShowBounds = !m_ShowBounds;
-			if (keyDown.Key == KeyT) m_ShowRT = !m_ShowRT;
+			if (keyDown.Key == KeyT) m_ShowRT = (m_ShowRT + 1) % 3;
 			if (keyDown.Key == KeyH) m_HalfRes = !m_HalfRes;
 			if (keyDown.Key == KeyP) m_Pow2 = !m_Pow2;
 			if (keyDown.Key == KeyW) m_FixedRT = !m_FixedRT;
@@ -513,19 +531,9 @@ void CPlanarReflectionDemo::run()
 		reflAabbMinY -= marginScreen;
 		reflAabbMaxY += marginScreen;
 
-		// Compute RT size
-		uint rtW, rtH;
-		if (m_FixedRT)
+		// Compute active RT dimensions from AABB (what dynamic mode would use)
+		uint activeW, activeH;
 		{
-			// Fixed RT: window size plus margin (stable allocation, no per-frame churn)
-			uint marginPx = (uint)ceilf(marginScreen * max((float)screenW, (float)screenH));
-			rtW = screenW + 2 * marginPx;
-			rtH = screenH + 2 * marginPx;
-		}
-		else
-		{
-			// Dynamic RT: snap AABB so RT dimensions are multiples of rtSnap,
-			// padding the AABB equally on all sides to keep the margin centered
 			uint rawW = (uint)max(1.f, ceilf((reflAabbMaxX - reflAabbMinX) * screenW));
 			uint rawH = (uint)max(1.f, ceilf((reflAabbMaxY - reflAabbMinY) * screenH));
 			uint snappedW = ((rawW + rtSnap - 1) / rtSnap) * rtSnap;
@@ -536,23 +544,51 @@ void CPlanarReflectionDemo::run()
 			reflAabbMaxX += padX;
 			reflAabbMinY -= padY;
 			reflAabbMaxY += padY;
-			rtW = snappedW;
-			rtH = snappedH;
+			activeW = snappedW;
+			activeH = snappedH;
 		}
 
-		// Snap RT to pixel grid, apply half-res and pow2
-		rtW = ((rtW + rtSnap - 1) / rtSnap) * rtSnap;
-		rtH = ((rtH + rtSnap - 1) / rtSnap) * rtSnap;
-		if (m_HalfRes) { rtW = max(1u, rtW / 2); rtH = max(1u, rtH / 2); }
+		// Apply half-res and pow2 to active dimensions
+		activeW = ((activeW + rtSnap - 1) / rtSnap) * rtSnap;
+		activeH = ((activeH + rtSnap - 1) / rtSnap) * rtSnap;
+		if (m_HalfRes) { activeW = max(1u, activeW / 2); activeH = max(1u, activeH / 2); }
 		if (m_Pow2)
 		{
-			uint pw = 1; while (pw * 2 <= rtW) pw *= 2; rtW = pw;
-			uint ph = 1; while (ph * 2 <= rtH) ph *= 2; rtH = ph;
+			uint pw = 1; while (pw * 2 <= activeW) pw *= 2; activeW = pw;
+			uint ph = 1; while (ph * 2 <= activeH) ph *= 2; activeH = ph;
 		}
 
+		// Allocation size: in fixed mode, allocate at window size + margin (stable);
+		// in dynamic mode, allocate at active size (may cause reallocation stutter).
+		uint rtW, rtH;
+		if (m_FixedRT)
+		{
+			uint marginPx = (uint)ceilf(marginScreen * max((float)screenW, (float)screenH));
+			rtW = screenW + 2 * marginPx;
+			rtH = screenH + 2 * marginPx;
+			rtW = ((rtW + rtSnap - 1) / rtSnap) * rtSnap;
+			rtH = ((rtH + rtSnap - 1) / rtSnap) * rtSnap;
+			if (m_HalfRes) { rtW = max(1u, rtW / 2); rtH = max(1u, rtH / 2); }
+			if (m_Pow2)
+			{
+				uint pw = 1; while (pw * 2 <= rtW) pw *= 2; rtW = pw;
+				uint ph = 1; while (ph * 2 <= rtH) ph *= 2; rtH = ph;
+			}
+			// Clamp active to allocation (active can't exceed the RT)
+			if (activeW > rtW) activeW = rtW;
+			if (activeH > rtH) activeH = rtH;
+		}
+		else
+		{
+			rtW = activeW;
+			rtH = activeH;
+		}
+
+		// UV scale: maps sub-frustum [0,1] output to the active sub-region of the RT
+		CUV uvScale(float(activeW) / float(rtW), float(activeH) / float(rtH));
+
 		// Build off-center sub-frustum covering only the reflected AABB region.
-		// In both fixed and dynamic modes, the sub-frustum limits rendering to
-		// the floor polygon's bounding box (geometry outside is frustum-culled).
+		// The sub-frustum limits rendering to the floor polygon's bounding box.
 		CFrustum reflFrustum = frustum;
 		float fw = frustum.Right - frustum.Left;
 		float fh = frustum.Top - frustum.Bottom;
@@ -567,6 +603,14 @@ void CPlanarReflectionDemo::run()
 		CTextureUser *reflectRT = rtm.getRenderTarget(rtW, rtH);
 
 		dru->setRenderTarget(*reflectRT);
+
+		// Set viewport and scissor to the active sub-region of the RT
+		float vpW = float(activeW) / float(rtW);
+		float vpH = float(activeH) / float(rtH);
+		CViewport activeVP;
+		activeVP.init(0.f, 0.f, vpW, vpH);
+		m_Driver->setViewport(activeVP);
+		m_Driver->setScissor(CScissor(0.f, 0.f, vpW, vpH));
 
 		m_Driver->clearBuffers(CRGBA(40, 40, 40));
 
@@ -583,10 +627,17 @@ void CPlanarReflectionDemo::run()
 
 		m_Driver->enableClipPlane(0, false);
 
-		// --- Phase 4: Unbind render target ---
+		// --- Phase 4: Unbind render target, restore viewport/scissor ---
 
 		CTextureUser texNull;
 		dru->setRenderTarget(texNull);
+
+		CViewport fullVP;
+		fullVP.initFullScreen();
+		m_Driver->setViewport(fullVP);
+		CScissor fullScissor;
+		fullScissor.initFullScreen();
+		m_Driver->setScissor(fullScissor);
 
 		// --- Phase 5: Render scene normally ---
 
@@ -682,7 +733,7 @@ void CPlanarReflectionDemo::run()
 					clipPoly.Vertices[3].set(float(x),     float(absY + 1), 0.f);
 					clipPoly.clip(clipPlanes);
 					emitClippedPoly(clipPoly, gridN, frustum, camWorld, eye,
-						reflFrustum, reflectedViewMatrix, floorColor, floorQuads);
+						reflFrustum, reflectedViewMatrix, uvScale, floorColor, floorQuads);
 				}
 
 				// Inner cells: no clipping needed
@@ -700,7 +751,7 @@ void CPlanarReflectionDemo::run()
 					for (int c = 0; c < 4; ++c)
 					{
 						if (!gridToWorldAndUV(coords[c][0], coords[c][1], gridN,
-							frustum, camWorld, eye, reflFrustum, reflectedViewMatrix, wp[c], uv[c]))
+							frustum, camWorld, eye, reflFrustum, reflectedViewMatrix, uvScale, wp[c], uv[c]))
 						{
 							valid = false;
 							break;
@@ -726,7 +777,7 @@ void CPlanarReflectionDemo::run()
 					clipPoly.Vertices[3].set(float(x),     float(absY + 1), 0.f);
 					clipPoly.clip(clipPlanes);
 					emitClippedPoly(clipPoly, gridN, frustum, camWorld, eye,
-						reflFrustum, reflectedViewMatrix, floorColor, floorQuads);
+						reflFrustum, reflectedViewMatrix, uvScale, floorColor, floorQuads);
 				}
 			}
 
@@ -739,13 +790,42 @@ void CPlanarReflectionDemo::run()
 		if (m_ShowRT)
 		{
 			m_Driver->setMatrixMode2D11();
+
+			float x0, y0, x1, y1;
+			if (m_ShowRT == 1)
+			{
+				// Fullscreen
+				x0 = 0.f; y0 = 0.f; x1 = 1.f; y1 = 1.f;
+			}
+			else
+			{
+				// Corner thumbnail: 1/4 screen in top-right
+				float thumbW = 0.25f;
+				float thumbH = 0.25f * float(rtW) / float(rtH); // preserve RT aspect ratio
+				if (thumbH > 0.25f) { thumbW *= 0.25f / thumbH; thumbH = 0.25f; }
+				x0 = 1.f - thumbW;
+				y0 = 1.f - thumbH;
+				x1 = 1.f;
+				y1 = 1.f;
+			}
+
 			CQuadColorUV rtQuad;
-			rtQuad.V0.set(0.f, 0.f, 0.5f); rtQuad.Uv0 = CUV(0.f, 0.f);
-			rtQuad.V1.set(1.f, 0.f, 0.5f); rtQuad.Uv1 = CUV(1.f, 0.f);
-			rtQuad.V2.set(1.f, 1.f, 0.5f); rtQuad.Uv2 = CUV(1.f, 1.f);
-			rtQuad.V3.set(0.f, 1.f, 0.5f); rtQuad.Uv3 = CUV(0.f, 1.f);
+			rtQuad.V0.set(x0, y0, 0.5f); rtQuad.Uv0 = CUV(0.f, 0.f);
+			rtQuad.V1.set(x1, y0, 0.5f); rtQuad.Uv1 = CUV(1.f, 0.f);
+			rtQuad.V2.set(x1, y1, 0.5f); rtQuad.Uv2 = CUV(1.f, 1.f);
+			rtQuad.V3.set(x0, y1, 0.5f); rtQuad.Uv3 = CUV(0.f, 1.f);
 			rtQuad.Color0 = rtQuad.Color1 = rtQuad.Color2 = rtQuad.Color3 = CRGBA::White;
 			m_Driver->drawQuad(rtQuad, m_FloorMat);
+
+			if (m_ShowRT == 2)
+			{
+				// White border around thumbnail
+				CRGBA borderColor(255, 255, 255);
+				m_Driver->drawLine(x0, y0, x1, y0, borderColor);
+				m_Driver->drawLine(x1, y0, x1, y1, borderColor);
+				m_Driver->drawLine(x1, y1, x0, y1, borderColor);
+				m_Driver->drawLine(x0, y1, x0, y0, borderColor);
+			}
 		}
 
 		// --- Phase 6c: Draw RT boundary overlay ---
