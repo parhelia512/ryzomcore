@@ -145,6 +145,8 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 	m_FloorMat.setZWrite(true);
 	m_FloorMat.setZFunc(UMaterial::lessequal);
 	m_FloorMat.setDoubleSided(true);
+	m_FloorMat.setBlend(true);
+	m_FloorMat.setBlendFunc(UMaterial::srcalpha, UMaterial::invsrcalpha);
 }
 
 CPlanarReflectionDemo::~CPlanarReflectionDemo()
@@ -258,6 +260,7 @@ void CPlanarReflectionDemo::run()
 		{
 			const int gridN = 32;
 			float step = (2.f * floorExtent) / float(gridN);
+			CRGBA floorColor(150, 180, 220, 180); // slight blue tint, translucent
 
 			for (int gy = 0; gy < gridN; ++gy)
 			{
@@ -278,8 +281,9 @@ void CPlanarReflectionDemo::run()
 					CVector p2 = frustum.project(reflectedViewMatrix * v2);
 					CVector p3 = frustum.project(reflectedViewMatrix * v3);
 
-					CQuadUV q;
+					CQuadColorUV q;
 					q.V0 = v0; q.V1 = v1; q.V2 = v2; q.V3 = v3;
+					q.Color0 = q.Color1 = q.Color2 = q.Color3 = floorColor;
 					q.Uv0 = CUV(p0.x, p0.y);
 					q.Uv1 = CUV(p1.x, p1.y);
 					q.Uv2 = CUV(p2.x, p2.y);
