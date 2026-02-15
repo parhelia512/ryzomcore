@@ -502,7 +502,7 @@ void CDriverGL3::setVertexColorLightedVP(bool enable)
 void CDriverGL3::touchLightVP(int i)
 {
 	H_AUTO_OGL(CDriverGL3_touchLightVP)
-	sint mode = _UserLightEnable[i] ? _LightMode[i] : -1;
+	sint mode = _LightEnable[i] ? _LightMode[i] : -1;
 	if (m_VPBuiltinCurrent.LightMode[i] != mode)
 	{
 		m_VPBuiltinCurrent.LightMode[i] = mode;

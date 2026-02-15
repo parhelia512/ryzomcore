@@ -390,6 +390,7 @@ bool CDriverGL3::setupDisplay()
 	for (uint i = 0; i < MaxLight; ++i)
 	{
 		_UserLightEnable[i] = false;
+		_LightEnable[i] = false;
 		touchLightVP(i);
 	}
 

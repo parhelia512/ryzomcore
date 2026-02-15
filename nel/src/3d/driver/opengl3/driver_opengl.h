@@ -916,6 +916,7 @@ private:
 	CLight						_UserLight0;
 	CLight						_UserLight[MaxLight];
 	bool						_UserLightEnable[MaxLight];
+	bool						_LightEnable[MaxLight];
 	NLMISC::CRGBA				_AmbientGlobal;
 
 	//\name description of the per pixel light

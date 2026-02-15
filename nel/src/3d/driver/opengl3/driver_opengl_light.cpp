@@ -109,7 +109,11 @@ void	CDriverGL3::enableLight(uint8 num, bool enable)
 {
 	H_AUTO_OGL(CDriverGL3_enableLight)
 
-	// enable the light in GL
+	// User call => set the User flag (preserved across setupLightMapDynamicLighting)
+	if (num < MaxLight)
+		_UserLightEnable[num] = enable;
+
+	// enable the light internally
 	enableLightInternal(num, enable);
 
 	// because the GL setup has changed, must dirt lightmap rendering
@@ -132,11 +136,11 @@ void	CDriverGL3::enableLightInternal(uint8 num, bool enable)
 	// Check light count is good
 	// nlassert(num < MaxLight);
 
-	// Enable glLight
+	// Set internal/active light enable state (analogous to _DriverGLStates.enableLight in original GL driver).
+	// Does NOT modify _UserLightEnable — that's only set by the public enableLight() API.
 	if (num < MaxLight)
 	{
-		// _DriverGLStates.enableLight(num, enable); // FIXME GL3 VERTEX PROGRAM
-		_UserLightEnable[num] = enable;
+		_LightEnable[num] = enable;
 		touchLightVP(num);
 	}
 }
@@ -166,7 +170,7 @@ void			CDriverGL3::setLightMapDynamicLight (bool enable, const CLight& light)
 void			CDriverGL3::setupLightMapDynamicLighting(bool enable)
 {
 	H_AUTO_OGL(CDriverGL3_setupLightMapDynamicLighting)
-	
+
 	// start lightmap dynamic lighting
 	if (enable)
 	{
@@ -196,7 +200,8 @@ void			CDriverGL3::setupLightMapDynamicLighting(bool enable)
 		// restore the light 0
 		setLightInternal(0, _UserLight0);
 
-		// restore all standard light enable states
+		// restore all standard light enable states from _UserLightEnable
+		// (which is never modified by enableLightInternal, only by the public enableLight API)
 		for (uint i = 0; i < MaxLight; ++i)
 			enableLightInternal(i, _UserLightEnable[i]);
 	}

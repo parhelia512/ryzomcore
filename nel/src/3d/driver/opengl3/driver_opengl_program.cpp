@@ -651,12 +651,12 @@ void CDriverGL3::generateShaderDesc(CShaderDesc &desc, CMaterial &mat)
 	//bool enableLights = false;
 	for (int i = 0; i < MaxLight; i++)
 	{
-		if (!_UserLightEnable[i])
+		if (!_LightEnable[i])
 		{
 			desc.setLight(i, CShaderDesc::Nolight);
 			continue;
 		}
-		//if (!_UserLightEnable[ i ])
+		//if (!_LightEnable[ i ])
 		//	continue;
 
 		//enableLights = true;
@@ -833,7 +833,7 @@ void CDriverGL3::setupUniforms(TProgram program)
 
 	for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 	{
-		if (!_UserLightEnable[i])
+		if (!_LightEnable[i])
 			continue;
 
 		selfIllumination += NLMISC::CRGBAF(_UserLight[i].getAmbiant());
