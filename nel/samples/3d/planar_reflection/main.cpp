@@ -100,6 +100,7 @@
 #include <nel/misc/debug.h>
 #include <nel/misc/event_listener.h>
 #include <nel/misc/geom_ext.h>
+#include <nel/misc/path.h>
 #include <nel/misc/plane.h>
 #include <nel/misc/polygon.h>
 #include <nel/misc/time_nl.h>
@@ -107,6 +108,7 @@
 
 #include <nel/3d/u_driver.h>
 #include <nel/3d/u_material.h>
+#include <nel/3d/u_text_context.h>
 #include <nel/3d/frustum.h>
 #include <nel/3d/viewport.h>
 #include <nel/3d/scissor.h>
@@ -294,6 +296,28 @@ static void drawCube(UDriver *driver, UMaterial &mat, const CMatrix &transform, 
 	drawFace(driver, mat, v[1], v[2], v[6], v[5], CRGBA( 50, 200, 200)); // right  (X+) cyan
 }
 
+// Find the project root by walking up from the current working directory
+// looking for a ".nel" folder, then return the font path under graphics/.
+static std::string findFontPath()
+{
+	std::string rootPath = CPath::standardizePath(CPath::getCurrentPath(), false);
+
+	while (!rootPath.empty())
+	{
+		if (CFile::isDirectory(rootPath + "/.nel"))
+		{
+			std::string fontPath = rootPath + "/graphics/fonts/n019003l.pfb";
+			if (CFile::fileExists(fontPath))
+				return fontPath;
+		}
+		std::string::size_type sep = CFile::getLastSeparator(rootPath);
+		if (sep == string::npos)
+			break;
+		rootPath = rootPath.substr(0, sep);
+	}
+	return std::string();
+}
+
 // Planar reflection demo application
 class CPlanarReflectionDemo : public IEventListener
 {
@@ -318,6 +342,7 @@ private:
 	bool m_KeyForward;
 	bool m_KeyBackward;
 	UDriver *m_Driver;
+	UTextContext *m_TextContext;
 	UMaterial m_SkyMat;
 	UMaterial m_CubeMat;
 	UMaterial m_FloorMat;
@@ -336,6 +361,7 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 	, m_FixedRT(true)
 	, m_KeyForward(false)
 	, m_KeyBackward(false)
+	, m_TextContext(NULL)
 {
 	m_Driver = UDriver::createDriver(0, false);
 	if (!m_Driver)
@@ -350,6 +376,15 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 
 	m_Driver->setDisplay(UDriver::CMode(800, 600, 32, true));
 	m_Driver->setWindowTitle(ucstring("NeL Planar Reflection Demo"));
+
+	// Initialize text renderer (optional, font may not be found)
+	std::string fontPath = findFontPath();
+	if (!fontPath.empty())
+	{
+		m_TextContext = m_Driver->createTextContext(fontPath);
+		if (m_TextContext)
+			m_TextContext->setFontSize(12);
+	}
 
 	// Skybox material: no depth write, always passes depth test, double-sided
 	m_SkyMat = m_Driver->createMaterial();
@@ -377,6 +412,8 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 CPlanarReflectionDemo::~CPlanarReflectionDemo()
 {
 	m_FloorMat.setTexture(0, NULL);
+	if (m_TextContext)
+		m_Driver->deleteTextContext(m_TextContext);
 	m_Driver->deleteMaterial(m_FloorMat);
 	m_Driver->deleteMaterial(m_CubeMat);
 	m_Driver->deleteMaterial(m_SkyMat);
@@ -872,6 +909,44 @@ void CPlanarReflectionDemo::run()
 			m_Driver->drawLine(viewAabbMaxX, viewAabbMinY, viewAabbMaxX, viewAabbMaxY, viewColor);
 			m_Driver->drawLine(viewAabbMaxX, viewAabbMaxY, viewAabbMinX, viewAabbMaxY, viewColor);
 			m_Driver->drawLine(viewAabbMinX, viewAabbMaxY, viewAabbMinX, viewAabbMinY, viewColor);
+		}
+
+		// --- Phase 6d: Draw HUD text ---
+
+		if (m_TextContext)
+		{
+			m_TextContext->setHotSpot(UTextContext::TopLeft);
+			m_TextContext->setColor(CRGBA::White);
+			m_TextContext->setFontSize(12);
+
+			float lineH = 0.025f;
+			float x = 0.01f;
+			float y = 1.f - 0.01f;
+
+			const char *rtModeNames[] = { "off", "fullscreen", "thumbnail" };
+
+			m_TextContext->printfAt(x, y, "[F] Wireframe: %s", m_Wireframe ? "ON" : "OFF");
+			y -= lineH;
+			m_TextContext->printfAt(x, y, "[C] Camera orbit: %s", m_AnimCamera ? "ON" : "OFF");
+			y -= lineH;
+			m_TextContext->printfAt(x, y, "[R] Cube rotation: %s", m_AnimCube ? "ON" : "OFF");
+			y -= lineH;
+			m_TextContext->printfAt(x, y, "[S] Skybox roll: %s", m_AnimSkybox ? "ON" : "OFF");
+			y -= lineH;
+			m_TextContext->printfAt(x, y, "[T] RT overlay: %s", rtModeNames[m_ShowRT]);
+			y -= lineH;
+			m_TextContext->printfAt(x, y, "[B] Boundary overlay: %s", m_ShowBounds ? "ON" : "OFF");
+			y -= lineH;
+			m_TextContext->printfAt(x, y, "[H] Half-res: %s", m_HalfRes ? "ON" : "OFF");
+			y -= lineH;
+			m_TextContext->printfAt(x, y, "[P] Pow2: %s", m_Pow2 ? "ON" : "OFF");
+			y -= lineH;
+			m_TextContext->printfAt(x, y, "[W] Fixed RT: %s", m_FixedRT ? "ON" : "OFF");
+			y -= lineH;
+			m_TextContext->printfAt(x, y, "[Up/Down] Camera dist: %.1f", camDist);
+			y -= lineH * 1.5f;
+			m_TextContext->printfAt(x, y, "RT: %ux%u  Active: %ux%u  UV scale: %.3f x %.3f",
+				rtW, rtH, activeW, activeH, uvScale.U, uvScale.V);
 		}
 
 		// --- Phase 7: Cleanup and swap ---
