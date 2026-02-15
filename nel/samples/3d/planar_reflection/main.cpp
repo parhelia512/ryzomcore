@@ -181,6 +181,7 @@ public:
 
 private:
 	bool m_CloseWindow;
+	bool m_Wireframe;
 	UDriver *m_Driver;
 	UMaterial m_CubeMat;
 	UMaterial m_FloorMat;
@@ -188,6 +189,7 @@ private:
 
 CPlanarReflectionDemo::CPlanarReflectionDemo()
 	: m_CloseWindow(false)
+	, m_Wireframe(false)
 {
 	m_Driver = UDriver::createDriver(0, false);
 	if (!m_Driver)
@@ -197,6 +199,7 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 	}
 
 	m_Driver->EventServer.addListener(EventCloseWindowId, this);
+	m_Driver->EventServer.addListener(EventKeyDownId, this);
 
 	m_Driver->setDisplay(UDriver::CMode(800, 600, 32, true));
 	m_Driver->setWindowTitle(ucstring("NeL Planar Reflection Demo"));
@@ -232,6 +235,14 @@ void CPlanarReflectionDemo::operator()(const CEvent &event)
 	{
 		m_CloseWindow = true;
 	}
+	else if (event == EventKeyDownId)
+	{
+		CEventKeyDown &keyDown = (CEventKeyDown &)event;
+		if (keyDown.Key == KeyF && keyDown.FirstTime)
+		{
+			m_Wireframe = !m_Wireframe;
+		}
+	}
 }
 
 void CPlanarReflectionDemo::run()
@@ -255,6 +266,8 @@ void CPlanarReflectionDemo::run()
 		m_Driver->EventServer.pump();
 
 		double now = CTime::ticksToSecond(CTime::getPerformanceTime()) - startTime;
+
+		m_Driver->setPolygonMode(m_Wireframe ? UDriver::Line : UDriver::Filled);
 
 		// --- Phase 1: Per-frame setup ---
 
