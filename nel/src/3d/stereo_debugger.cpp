@@ -495,15 +495,17 @@ bool CStereoDebugger::wantInterface2D()
 
 bool CStereoDebugger::isSceneFirst()
 {
-	return m_Stage == 3;
+	// Odd stages are left eye (1=L reflect, 3=L scene): run traversals
+	return m_Stage % 2 != 0;
 }
 
 bool CStereoDebugger::isSceneLast()
 {
+	// Even stages are right eye (2=R reflect, 4=R scene): release traversals
 	if (m_Driver->getPolygonMode() == UDriver::Filled)
-		return m_Stage == 4;
+		return m_Stage % 2 == 0;
 	else
-		return m_Stage == 3;
+		return m_Stage % 2 != 0; // wireframe: single pass per group, first=last
 }
 
 uint CStereoDebugger::getFlareContext()
