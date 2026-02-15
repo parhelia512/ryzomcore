@@ -242,7 +242,7 @@ Remove the CMakeCache.txt file and try again from another folder, e.g.:
 ENDMACRO(CHECK_OUT_OF_SOURCE)
 
 MACRO(NL_SETUP_DEFAULT_OPTIONS)
-  IF(WITH_QT)
+  IF(WITH_QT5)
     OPTION(WITH_STUDIO              "Build Core Studio"                             OFF )
   ENDIF()
 
@@ -296,8 +296,8 @@ MACRO(NL_SETUP_DEFAULT_OPTIONS)
   # GUI toolkits
   ###
   OPTION(WITH_GTK                 "With GTK Support"                              OFF)
-  OPTION(WITH_QT                  "With Qt 4 Support"                             OFF)
   OPTION(WITH_QT5                 "With Qt 5 Support"                             OFF)
+  OPTION(WITH_QT6                 "With Qt 6 Support"                             OFF)
 
   IF(WIN32 AND MFC_FOUND)
     OPTION(WITH_MFC               "With MFC Support"                              ON )
@@ -362,6 +362,7 @@ MACRO(NL_SETUP_NEL_DEFAULT_OPTIONS)
   OPTION(WITH_NEL_MAXPLUGIN       "Build NeL 3dsMax Plugin"                       OFF)
   OPTION(WITH_NEL_SAMPLES         "Build NeL Samples"                             ON )
   OPTION(WITH_NEL_TESTS           "Build NeL Unit Tests"                          ON )
+  OPTION(WITH_TESTING             "Build Tests"                                   ON )
 
   OPTION(WITH_LIBOVR              "With LibOVR support"                           OFF)
   OPTION(WITH_LIBVR               "With LibVR support"                            OFF)
@@ -1061,7 +1062,9 @@ MACRO(NL_SETUP_BUILD)
     ENDIF()
 
     # Fix undefined reference to `__stack_chk_fail' error
-    ADD_PLATFORM_LINKFLAGS("-lc")
+    IF(NOT MINGW)
+      ADD_PLATFORM_LINKFLAGS("-lc")
+    ENDIF()
 
     IF(NOT APPLE)
       ADD_PLATFORM_LINKFLAGS("-Wl,--no-undefined -Wl,--as-needed")
@@ -1071,7 +1074,7 @@ MACRO(NL_SETUP_BUILD)
       ENDIF()
     ENDIF()
 
-    IF(NOT APPLE)
+    IF(NOT APPLE AND NOT MINGW)
       # hardening
       ADD_PLATFORM_LINKFLAGS("-Wl,-Bsymbolic-functions -Wl,-z,relro -Wl,-z,now")
     ENDIF()
@@ -1092,8 +1095,8 @@ MACRO(NL_SETUP_BUILD)
 ENDMACRO()
 
 MACRO(NL_SETUP_BUILD_FLAGS)
-  SET(CMAKE_C_FLAGS ${PLATFORM_CFLAGS} CACHE STRING "" FORCE)
-  SET(CMAKE_CXX_FLAGS ${PLATFORM_CXXFLAGS} CACHE STRING "" FORCE)
+  SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_CFLAGS}" CACHE STRING "" FORCE)
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PLATFORM_CXXFLAGS}" CACHE STRING "" FORCE)
   SET(CMAKE_EXE_LINKER_FLAGS ${PLATFORM_LINKFLAGS} CACHE STRING "" FORCE)
   SET(CMAKE_MODULE_LINKER_FLAGS ${PLATFORM_LINKFLAGS} CACHE STRING "" FORCE)
   SET(CMAKE_SHARED_LINKER_FLAGS ${PLATFORM_LINKFLAGS} CACHE STRING "" FORCE)

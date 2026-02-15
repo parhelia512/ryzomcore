@@ -95,3 +95,14 @@ ELSE()
   MARK_AS_ADVANCED(MYSQL_LIBRARY_RELEASE MYSQL_LIBRARY_DEBUG)
 
 ENDIF()
+
+# alias target to get usage requirements automatically
+if(MYSQL_FOUND AND NOT TARGET MySQL::MySQL)
+    add_library(MySQL::MySQL INTERFACE IMPORTED)
+    set_target_properties(
+            MySQL::MySQL
+            PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${MYSQL_INCLUDE_DIR}"
+    )
+    target_link_libraries(MySQL::MySQL INTERFACE ${MYSQL_LIBRARIES})
+endif()

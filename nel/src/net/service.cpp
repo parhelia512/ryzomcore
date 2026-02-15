@@ -375,6 +375,9 @@ IService::IService() :
 
 IService::~IService()
 {
+	// Singleton
+	_Instance = NULL;
+
 	// unregister the singleton
 	INelContext::getInstance().releaseSingletonPointer("IService", this);
 }

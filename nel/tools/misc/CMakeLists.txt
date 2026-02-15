@@ -1,23 +1,21 @@
 # always compile crash report
-IF(WITH_QT OR WITH_QT5)
+IF(WITH_QT5)
   ADD_SUBDIRECTORY(crash_report)
 ENDIF()
 
 IF(WITH_NEL_TOOLS)
-  SUBDIRS(
-    bnp_make
-    snp_make
-    disp_sheet_id
-    extract_filename
-    lock
-    make_sheet_id
-    xml_packer
-    utf_generator
-  )
+  ADD_SUBDIRECTORY(bnp_make)
+  ADD_SUBDIRECTORY(snp_make)
+  ADD_SUBDIRECTORY(disp_sheet_id)
+  ADD_SUBDIRECTORY(extract_filename)
+  ADD_SUBDIRECTORY(lock)
+  ADD_SUBDIRECTORY(make_sheet_id)
+  ADD_SUBDIRECTORY(xml_packer)
+  ADD_SUBDIRECTORY(utf_generator)
 
-  IF(WITH_QT OR WITH_QT5)
-    ADD_SUBDIRECTORY(words_dic_qt)
+  IF(WITH_QT5)
     ADD_SUBDIRECTORY(message_box_qt)
+    ADD_SUBDIRECTORY(words_dic_qt)
   ENDIF()
 
   IF(WIN32)
