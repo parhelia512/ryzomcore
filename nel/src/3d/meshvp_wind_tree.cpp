@@ -427,8 +427,7 @@ void CMeshVPWindTree::initVertexPrograms()
 		{
 			// setup of the VPLight fragment
 			uint	numPls= i/4;
-			// FIXME: normalize=true makes trees dance, workaround for issue #160
-			bool	normalize= false; //(i&1)!=0;
+			bool	normalize= (i&1)!=0;
 			bool	specular= (i&2)!=0;
 
 			// combine
