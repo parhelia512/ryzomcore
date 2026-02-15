@@ -1884,136 +1884,85 @@ void CDriverGL::initEMBM()
 }
 
 // ***************************************************************************
-/** Water fragment program with extension ARB_fragment_program
-  */
+// Water fragment programs compiled from shaders/water_fp.cg
+// Post-processing applied to cgc output:
+//   1. Replace "program.local" with "program.env" (driver uses nglProgramEnvParameter4fARB)
+//   2. For fog variants: replace fogColor uniform (c[3]) with "state.fog.color"
+//   3. Change ARB_precision_hint_fastest to ARB_precision_hint_nicest
+
+// No diffuse, no fog (7 instructions, 1 R-reg)
 static const char *WaterCodeNoDiffuseForARBFragmentProgram =
-"!!ARBfp1.0																			\n\
-OPTION ARB_precision_hint_nicest;													\n\
-PARAM  bump0ScaleBias = program.env[0];												\n\
-PARAM  bump1ScaleBias = program.env[1];												\n\
-ATTRIB bump0TexCoord  = fragment.texcoord[0];										\n\
-ATTRIB bump1TexCoord  = fragment.texcoord[1];										\n\
-ATTRIB envMapTexCoord = fragment.texcoord[2];										\n\
-OUTPUT oCol  = result.color;														\n\
-TEMP   bmValue;																		\n\
-#read bump map 0																	\n\
-TEX    bmValue, bump0TexCoord, texture[0], 2D;										\n\
-#bias result (include scaling)														\n\
-MAD    bmValue, bmValue, bump0ScaleBias.xxxx, bump0ScaleBias.yyzz;					\n\
-ADD    bmValue, bmValue, bump1TexCoord;												\n\
-#read bump map 1																	\n\
-TEX    bmValue, bmValue, texture[1], 2D;											\n\
-#bias result (include scaling)														\n\
-MAD    bmValue, bmValue, bump1ScaleBias.xxxx, bump1ScaleBias.yyzz;					\n\
-#add envmap coord																	\n\
-ADD	   bmValue, bmValue, envMapTexCoord;											\n\
-#read envmap																		\n\
-TEX    oCol, bmValue, texture[2], 2D;												\n\
-END ";
+"!!ARBfp1.0\n"
+"OPTION ARB_precision_hint_nicest;\n"
+"PARAM c[2] = { program.env[0..1] };\n"
+"TEMP R0;\n"
+"TEX R0.xy, fragment.texcoord[0], texture[0], 2D;\n"
+"MAD R0.xy, R0, c[0].x, c[0].y;\n"
+"ADD R0.xy, R0, fragment.texcoord[1];\n"
+"TEX R0.xy, R0, texture[1], 2D;\n"
+"MAD R0.xy, R0, c[1].x, c[1].y;\n"
+"ADD R0.xy, R0, fragment.texcoord[2];\n"
+"TEX result.color, R0, texture[2], 2D;\n"
+"END\n";
 
+// No diffuse, with fog (10 instructions, 2 R-regs)
 static const char *WaterCodeNoDiffuseWithFogForARBFragmentProgram =
-"!!ARBfp1.0																			\n\
-OPTION ARB_precision_hint_nicest;													\n\
-PARAM  bump0ScaleBias = program.env[0];												\n\
-PARAM  bump1ScaleBias = program.env[1];												\n\
-PARAM  fogColor       = state.fog.color;											\n\
-PARAM  fogFactor      = program.env[2];												\n\
-ATTRIB bump0TexCoord  = fragment.texcoord[0];										\n\
-ATTRIB bump1TexCoord  = fragment.texcoord[1];										\n\
-ATTRIB envMapTexCoord = fragment.texcoord[2];										\n\
-ATTRIB fogValue		  = fragment.fogcoord;											\n\
-OUTPUT oCol  = result.color;														\n\
-TEMP   bmValue;																		\n\
-TEMP   envMap;																		\n\
-TEMP   tmpFog;																		\n\
-#read bump map 0																	\n\
-TEX    bmValue, bump0TexCoord, texture[0], 2D;										\n\
-#bias result (include scaling)														\n\
-MAD    bmValue, bmValue, bump0ScaleBias.xxxx, bump0ScaleBias.yyzz;					\n\
-ADD    bmValue, bmValue, bump1TexCoord;												\n\
-#read bump map 1																	\n\
-TEX    bmValue, bmValue, texture[1], 2D;											\n\
-#bias result (include scaling)														\n\
-MAD    bmValue, bmValue, bump1ScaleBias.xxxx, bump1ScaleBias.yyzz;					\n\
-#add envmap coord																	\n\
-ADD	   bmValue, bmValue, envMapTexCoord;											\n\
-#read envmap																		\n\
-TEX    envMap, bmValue, texture[2], 2D;												\n\
-#compute fog																		\n\
-MAD_SAT tmpFog, fogValue.x, fogFactor.x, fogFactor.y;								\n\
-LRP    oCol, tmpFog.x, envMap, fogColor;											\n\
-END ";
+"!!ARBfp1.0\n"
+"OPTION ARB_precision_hint_nicest;\n"
+"PARAM c[3] = { program.env[0..2] };\n"
+"PARAM fogColor = state.fog.color;\n"
+"TEMP R0;\n"
+"TEMP R1;\n"
+"TEX R0.xy, fragment.texcoord[0], texture[0], 2D;\n"
+"MAD R0.xy, R0, c[0].x, c[0].y;\n"
+"ADD R0.xy, R0, fragment.texcoord[1];\n"
+"TEX R0.xy, R0, texture[1], 2D;\n"
+"MAD R0.xy, R0, c[1].x, c[1].y;\n"
+"ADD R0.xy, R0, fragment.texcoord[2];\n"
+"TEX R0, R0, texture[2], 2D;\n"
+"ADD R0, R0, -fogColor;\n"
+"MAD_SAT R1.x, fragment.fogcoord, c[2], c[2].y;\n"
+"MAD result.color, R1.x, R0, fogColor;\n"
+"END\n";
 
-// **************************************************************************************
-/** Water fragment program with extension ARB_fragment_program and a diffuse map applied
-  */
+// With diffuse, no fog (9 instructions, 2 R-regs)
 static const char *WaterCodeForARBFragmentProgram =
-"!!ARBfp1.0																			\n\
-OPTION ARB_precision_hint_nicest;													\n\
-PARAM  bump0ScaleBias = program.env[0];												\n\
-PARAM  bump1ScaleBias = program.env[1];												\n\
-ATTRIB bump0TexCoord  = fragment.texcoord[0];										\n\
-ATTRIB bump1TexCoord  = fragment.texcoord[1];										\n\
-ATTRIB envMapTexCoord = fragment.texcoord[2];										\n\
-ATTRIB diffuseTexCoord = fragment.texcoord[3];										\n\
-OUTPUT oCol  = result.color;														\n\
-TEMP   bmValue;																		\n\
-TEMP   diffuse;																		\n\
-TEMP   envMap;																		\n\
-#read bump map 0																	\n\
-TEX    bmValue, bump0TexCoord, texture[0], 2D;										\n\
-#bias result (include scaling)														\n\
-MAD    bmValue, bmValue, bump0ScaleBias.xxxx, bump0ScaleBias.yyzz;					\n\
-ADD    bmValue, bmValue, bump1TexCoord;												\n\
-#read bump map 1																	\n\
-TEX    bmValue, bmValue, texture[1], 2D;											\n\
-#bias result (include scaling)														\n\
-MAD    bmValue, bmValue, bump1ScaleBias.xxxx, bump1ScaleBias.yyzz;					\n\
-#add envmap coord																	\n\
-ADD	   bmValue, bmValue, envMapTexCoord;											\n\
-#read envmap																		\n\
-TEX    envMap, bmValue, texture[2], 2D;												\n\
-#read diffuse																		\n\
-TEX    diffuse, diffuseTexCoord, texture[3], 2D;									\n\
-#modulate diffuse and envmap to get result											\n\
-MUL    oCol, diffuse, envMap;														\n\
-END ";
+"!!ARBfp1.0\n"
+"OPTION ARB_precision_hint_nicest;\n"
+"PARAM c[2] = { program.env[0..1] };\n"
+"TEMP R0;\n"
+"TEMP R1;\n"
+"TEX R0.xy, fragment.texcoord[0], texture[0], 2D;\n"
+"MAD R0.xy, R0, c[0].x, c[0].y;\n"
+"ADD R0.xy, R0, fragment.texcoord[1];\n"
+"TEX R0.xy, R0, texture[1], 2D;\n"
+"MAD R0.xy, R0, c[1].x, c[1].y;\n"
+"ADD R0.xy, R0, fragment.texcoord[2];\n"
+"TEX R1, fragment.texcoord[3], texture[3], 2D;\n"
+"TEX R0, R0, texture[2], 2D;\n"
+"MUL result.color, R0, R1;\n"
+"END\n";
 
+// With diffuse, with fog (11 instructions, 2 R-regs)
 static const char *WaterCodeWithFogForARBFragmentProgram =
-"!!ARBfp1.0																			\n\
-OPTION ARB_precision_hint_nicest;													\n\
-PARAM  bump0ScaleBias = program.env[0];												\n\
-PARAM  bump1ScaleBias = program.env[1];												\n\
-PARAM  fogColor       = state.fog.color;											\n\
-PARAM  fogFactor      = program.env[2];												\n\
-ATTRIB bump0TexCoord  = fragment.texcoord[0];										\n\
-ATTRIB bump1TexCoord  = fragment.texcoord[1];										\n\
-ATTRIB envMapTexCoord = fragment.texcoord[2];										\n\
-ATTRIB diffuseTexCoord = fragment.texcoord[3];										\n\
-ATTRIB fogValue		   = fragment.fogcoord;											\n\
-OUTPUT oCol  = result.color;														\n\
-TEMP   bmValue;																		\n\
-TEMP   diffuse;																		\n\
-TEMP   envMap;																		\n\
-TEMP   tmpFog;																		\n\
-#read bump map 0																	\n\
-TEX    bmValue, bump0TexCoord, texture[0], 2D;										\n\
-#bias result (include scaling)														\n\
-MAD    bmValue, bmValue, bump0ScaleBias.xxxx, bump0ScaleBias.yyzz;					\n\
-ADD    bmValue, bmValue, bump1TexCoord;												\n\
-#read bump map 1																	\n\
-TEX    bmValue, bmValue, texture[1], 2D;											\n\
-#bias result (include scaling)														\n\
-MAD    bmValue, bmValue, bump1ScaleBias.xxxx, bump1ScaleBias.yyzz;					\n\
-#add envmap coord																	\n\
-ADD	   bmValue, bmValue, envMapTexCoord;											\n\
-TEX    envMap, bmValue, texture[2], 2D;												\n\
-TEX    diffuse, diffuseTexCoord, texture[3], 2D;									\n\
-MAD_SAT tmpFog, fogValue.x, fogFactor.x, fogFactor.y;								\n\
-#modulate diffuse and envmap to get result											\n\
-MUL    diffuse, diffuse, envMap;													\n\
-LRP    oCol, tmpFog.x, diffuse, fogColor;											\n\
-END ";
+"!!ARBfp1.0\n"
+"OPTION ARB_precision_hint_nicest;\n"
+"PARAM c[3] = { program.env[0..2] };\n"
+"PARAM fogColor = state.fog.color;\n"
+"TEMP R0;\n"
+"TEMP R1;\n"
+"TEX R0.xy, fragment.texcoord[0], texture[0], 2D;\n"
+"MAD R0.xy, R0, c[0].x, c[0].y;\n"
+"ADD R0.xy, R0, fragment.texcoord[1];\n"
+"TEX R0.xy, R0, texture[1], 2D;\n"
+"MAD R0.xy, R0, c[1].x, c[1].y;\n"
+"ADD R0.xy, R0, fragment.texcoord[2];\n"
+"TEX R0, R0, texture[2], 2D;\n"
+"TEX R1, fragment.texcoord[3], texture[3], 2D;\n"
+"MAD R1, R0, R1, -fogColor;\n"
+"MAD_SAT R0.x, fragment.fogcoord, c[2], c[2].y;\n"
+"MAD result.color, R0.x, R1, fogColor;\n"
+"END\n";
 
 // ***************************************************************************
 /** Load a ARB_fragment_program_code, and ensure it is loaded natively
@@ -3027,6 +2976,44 @@ void CDriverGL::stencilMask(uint mask)
 	H_AUTO_OGL(CDriverGL_CDriverGL)
 
 	_DriverGLStates.stencilMask((GLuint)mask);
+}
+
+// ***************************************************************************
+void CDriverGL::enableClipPlane(uint index, bool enable)
+{
+	H_AUTO_OGL(CDriverGL_enableClipPlane)
+
+	_DriverGLStates.enableClipPlane(index, enable);
+}
+
+// ***************************************************************************
+void CDriverGL::setClipPlane(uint index, const NLMISC::CPlane &plane)
+{
+	H_AUTO_OGL(CDriverGL_setClipPlane)
+
+#ifndef USE_OPENGLES
+	// Plane is in NeL world space. _ViewMtx = changeBasis * userViewMatrix
+	// already transforms from NeL world to GL eye space, so no basis
+	// conversion is needed on the plane - glClipPlane will handle it
+	// via the inverse of the modelview we load.
+	// Adjust d for _PZBCameraPos precision optimization.
+	double equation[4];
+	equation[0] = plane.a;
+	equation[1] = plane.b;
+	equation[2] = plane.c;
+	equation[3] = plane.d + plane.a * _PZBCameraPos.x
+	                      + plane.b * _PZBCameraPos.y
+	                      + plane.c * _PZBCameraPos.z;
+
+	// glClipPlane transforms the plane by the inverse of the current
+	// modelview matrix. By loading _ViewMtx (NeL world -> GL eye),
+	// GL correctly converts the NeL-world-space plane to eye space.
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadMatrixf((const GLfloat *)_ViewMtx.get());
+	glClipPlane(GL_CLIP_PLANE0 + index, equation);
+	glPopMatrix();
+#endif
 }
 
 // ***************************************************************************

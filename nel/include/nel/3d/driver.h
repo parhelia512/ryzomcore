@@ -25,6 +25,7 @@
 #include "nel/misc/smart_ptr.h"
 #include "nel/misc/rgba.h"
 #include "nel/misc/matrix.h"
+#include "nel/misc/plane.h"
 #include "nel/misc/stream.h"
 #include "nel/misc/uv.h"
 #include "nel/misc/hierarchical_timer.h"
@@ -1252,6 +1253,9 @@ public:
 	virtual bool			supportTextureShaders() const = 0;
 	// Is the shader water supported ? If not, the driver caller should implement its own version
 	virtual bool			supportWaterShader() const = 0;
+	/// Does the cubemap face convention use +Z as forward? (D3D: true, GL: false)
+	/// GL cubemaps map forward (-Z) to NEGATIVE_Z face, D3D maps forward (+Z) to POSITIVE_Z face.
+	virtual bool			cubemapZPositiveForward() const = 0;
 	//
 	/// test whether a texture addressing mode is supported
 	virtual bool			supportTextureAddrMode(CMaterial::TTexAddressingMode mode) const = 0;
@@ -1422,6 +1426,13 @@ public:
 	virtual void			stencilFunc(TStencilFunc stencilFunc, int ref, uint mask) = 0;
 	virtual void			stencilOp(TStencilOp fail, TStencilOp zfail, TStencilOp zpass) = 0;
 	virtual void			stencilMask(uint mask) = 0;
+
+	/** Set clip planes. Plane is in NeL world space.
+	  * The driver handles coordinate system conversion internally.
+	  * Useful for water reflections to clip geometry below the water surface.
+	  */
+	virtual void			enableClipPlane(uint index, bool enable) = 0;
+	virtual void			setClipPlane(uint index, const NLMISC::CPlane &plane) = 0;
 
 protected:
 	friend	class			IVBDrvInfos;

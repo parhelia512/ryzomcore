@@ -47,6 +47,153 @@ static const uint	VPLightConstantStart = 24;
 // ***************************************************************************
 NLMISC::CSmartPtr<CVertexProgramWindTree> CMeshVPWindTree::_VertexProgram[CMeshVPWindTree::NumVp];
 
+// Precompiled Cg output for arbvp1 and vs_2_0 profiles
+#include "shaders/wind_tree_vp_embedded.h"
+
+// GLSL 330 source for GL3 driver (single source, #defines prepended at runtime)
+static const char* WindTreeVPCodeGLSL_Header =
+	"#version 330\n"
+	"#extension GL_ARB_separate_shader_objects : enable\n";
+
+static const char* WindTreeVPCodeGLSL_Body =
+	"#ifndef NUM_POINT_LIGHTS\n"
+	"#define NUM_POINT_LIGHTS 0\n"
+	"#endif\n"
+	"layout (location = 0) in vec4 vposition;\n"
+	"layout (location = 2) in vec4 vnormal;\n"
+	"layout (location = 3) in vec4 vprimaryColor;\n"
+	"layout (location = 8) in vec4 vtexCoord0;\n"
+	"out gl_PerVertex { vec4 gl_Position; };\n"
+	"smooth out vec4 vertexColor;\n"
+	"smooth out vec4 texCoord0;\n"
+	"smooth out vec4 ecPos;\n"
+	"uniform mat4 modelViewProjection;\n"
+	"uniform mat4 modelView;\n"
+	"uniform vec4 windLevel1;\n"
+	"uniform vec4 windLevel2[4];\n"
+	"uniform vec4 windLevel3[4];\n"
+	"uniform vec4 ambient;\n"
+	"uniform vec4 diffuse0;\n"
+	"#if NUM_POINT_LIGHTS >= 1\n"
+	"uniform vec4 diffuse1;\n"
+	"#endif\n"
+	"#if NUM_POINT_LIGHTS >= 2\n"
+	"uniform vec4 diffuse2;\n"
+	"#endif\n"
+	"#if NUM_POINT_LIGHTS >= 3\n"
+	"uniform vec4 diffuse3;\n"
+	"#endif\n"
+	"uniform vec4 diffuseAlpha;\n"
+	"#ifdef USE_SPECULAR\n"
+	"uniform vec4 specular0;\n"
+	"#if NUM_POINT_LIGHTS >= 1\n"
+	"uniform vec4 specular1;\n"
+	"#endif\n"
+	"#if NUM_POINT_LIGHTS >= 2\n"
+	"uniform vec4 specular2;\n"
+	"#endif\n"
+	"#if NUM_POINT_LIGHTS >= 3\n"
+	"uniform vec4 specular3;\n"
+	"#endif\n"
+	"uniform vec4 sunDir;\n"
+	"uniform vec4 eyePos;\n"
+	"#if NUM_POINT_LIGHTS >= 1\n"
+	"uniform vec4 plPos0;\n"
+	"#endif\n"
+	"#if NUM_POINT_LIGHTS >= 2\n"
+	"uniform vec4 plPos1;\n"
+	"#endif\n"
+	"#if NUM_POINT_LIGHTS >= 3\n"
+	"uniform vec4 plPos2;\n"
+	"#endif\n"
+	"#else\n"
+	"uniform vec4 dirOrPos0;\n"
+	"#if NUM_POINT_LIGHTS >= 1\n"
+	"uniform vec4 dirOrPos1;\n"
+	"#endif\n"
+	"#if NUM_POINT_LIGHTS >= 2\n"
+	"uniform vec4 dirOrPos2;\n"
+	"#endif\n"
+	"#if NUM_POINT_LIGHTS >= 3\n"
+	"uniform vec4 dirOrPos3;\n"
+	"#endif\n"
+	"#endif\n"
+	"void main()\n"
+	"{\n"
+	"  vec3 factors = clamp(vprimaryColor.xxx * 3.0 + vec3(0.0, -1.0, -2.0), 0.0, 1.0);\n"
+	"  vec4 pos = vposition;\n"
+	"  pos.xyz += windLevel1.xyz * factors.x;\n"
+	"  vec2 phase = vprimaryColor.yz * 3.99;\n"
+	"  int idx2 = int(phase.x);\n"
+	"  pos.xyz += windLevel2[idx2].xyz * factors.y;\n"
+	"  int idx3 = int(phase.y);\n"
+	"  pos.xyz += windLevel3[idx3].xyz * factors.z;\n"
+	"  vec3 N = vnormal.xyz;\n"
+	"#ifdef USE_NORMALIZE\n"
+	"  N = normalize(N);\n"
+	"#endif\n"
+	"  vec4 litColor = ambient;\n"
+	"#ifdef USE_SPECULAR\n"
+	"  float shininess = specular0.w;\n"
+	"  vec3 V = normalize(eyePos.xyz - pos.xyz);\n"
+	"  vec3 H = normalize(sunDir.xyz + V);\n"
+	"  float NdotL = max(dot(N, sunDir.xyz), 0.0);\n"
+	"  float NdotH = max(dot(N, H), 0.0);\n"
+	"  float specPow = NdotL > 0.0 ? pow(NdotH, shininess) : 0.0;\n"
+	"  litColor += NdotL * diffuse0;\n"
+	"  vec3 specAccum = specPow * specular0.xyz;\n"
+	"  #if NUM_POINT_LIGHTS >= 1\n"
+	"  {\n"
+	"    vec3 L = normalize(plPos0.xyz - pos.xyz);\n"
+	"    H = normalize(L + V);\n"
+	"    NdotL = max(dot(N, L), 0.0);\n"
+	"    NdotH = max(dot(N, H), 0.0);\n"
+	"    specPow = NdotL > 0.0 ? pow(NdotH, shininess) : 0.0;\n"
+	"    litColor += NdotL * diffuse1;\n"
+	"    specAccum += specPow * specular1.xyz;\n"
+	"  }\n"
+	"  #endif\n"
+	"  #if NUM_POINT_LIGHTS >= 2\n"
+	"  {\n"
+	"    vec3 L = normalize(plPos1.xyz - pos.xyz);\n"
+	"    H = normalize(L + V);\n"
+	"    NdotL = max(dot(N, L), 0.0);\n"
+	"    NdotH = max(dot(N, H), 0.0);\n"
+	"    specPow = NdotL > 0.0 ? pow(NdotH, shininess) : 0.0;\n"
+	"    litColor += NdotL * diffuse2;\n"
+	"    specAccum += specPow * specular2.xyz;\n"
+	"  }\n"
+	"  #endif\n"
+	"  #if NUM_POINT_LIGHTS >= 3\n"
+	"  {\n"
+	"    vec3 L = normalize(plPos2.xyz - pos.xyz);\n"
+	"    H = normalize(L + V);\n"
+	"    NdotL = max(dot(N, L), 0.0);\n"
+	"    NdotH = max(dot(N, H), 0.0);\n"
+	"    specPow = NdotL > 0.0 ? pow(NdotH, shininess) : 0.0;\n"
+	"    litColor += NdotL * diffuse3;\n"
+	"    specAccum += specPow * specular3.xyz;\n"
+	"  }\n"
+	"  #endif\n"
+	"  vertexColor = litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw + vec4(specAccum, 0.0);\n"
+	"#else\n"
+	"  litColor += max(dot(N, dirOrPos0.xyz), 0.0) * diffuse0;\n"
+	"  #if NUM_POINT_LIGHTS >= 1\n"
+	"  litColor += max(dot(N, normalize(dirOrPos1.xyz - pos.xyz)), 0.0) * diffuse1;\n"
+	"  #endif\n"
+	"  #if NUM_POINT_LIGHTS >= 2\n"
+	"  litColor += max(dot(N, normalize(dirOrPos2.xyz - pos.xyz)), 0.0) * diffuse2;\n"
+	"  #endif\n"
+	"  #if NUM_POINT_LIGHTS >= 3\n"
+	"  litColor += max(dot(N, normalize(dirOrPos3.xyz - pos.xyz)), 0.0) * diffuse3;\n"
+	"  #endif\n"
+	"  vertexColor = litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw;\n"
+	"#endif\n"
+	"  gl_Position = modelViewProjection * pos;\n"
+	"  texCoord0 = vtexCoord0;\n"
+	"  ecPos = modelView * pos;\n"
+	"}\n";
+
 static const char*	WindTreeVPCodeWave=
 "!!VP1.0																				\n\
   # extract from color.R the 3 factors into R0.xyz									\n\
@@ -119,7 +266,48 @@ CVertexProgramWindTree::CVertexProgramWindTree(uint numPls, bool specular, bool 
 	// constants cache
 	PerMeshSetup = false;
 
-	// nelvp
+	// Variant index: numPls * 4 + (specular ? 2 : 0) + (normalize ? 1 : 0)
+	uint vpIdx = numPls * 4 + (specular ? 2 : 0) + (normalize ? 1 : 0);
+
+	// glsl330v source (for GL3 driver — single source with runtime #defines)
+	{
+		std::string defines;
+		defines += "#define NUM_POINT_LIGHTS ";
+		defines += NLMISC::toString(numPls);
+		defines += "\n";
+		if (specular) defines += "#define USE_SPECULAR\n";
+		if (normalize) defines += "#define USE_NORMALIZE\n";
+
+		CSource *source = new CSource();
+		source->DisplayName = NLMISC::toString("glsl330v/MeshVPWindTree/%i/%s/%s", numPls, specular ? "spec" : "nospec", normalize ? "normalize" : "nonormalize");
+		source->Profile = CVertexProgram::glsl330v;
+		source->setSource(std::string(WindTreeVPCodeGLSL_Header) + defines + WindTreeVPCodeGLSL_Body);
+		addSource(source);
+	}
+
+	// arbvp1 source (preferred by GL ARB path)
+	{
+		CSource *source = new CSource();
+		source->DisplayName = NLMISC::toString("arbvp1/MeshVPWindTree/%i/%s/%s", numPls, specular ? "spec" : "nospec", normalize ? "normalize" : "nonormalize");
+		source->Profile = CVertexProgram::arbvp1;
+		source->setSourcePtr(s_windTreeARBVP1[vpIdx]);
+		source->ParamIndices["modelViewProjection"] = 0;
+		source->ParamIndices["fog"] = 6;
+		addSource(source);
+	}
+
+	// vs_2_0 source (preferred by D3D path)
+	{
+		CSource *source = new CSource();
+		source->DisplayName = NLMISC::toString("vs_2_0/MeshVPWindTree/%i/%s/%s", numPls, specular ? "spec" : "nospec", normalize ? "normalize" : "nonormalize");
+		source->Profile = CVertexProgram::vs_2_0;
+		source->setSourcePtr(s_windTreeVS20[vpIdx]);
+		source->ParamIndices["modelViewProjection"] = 0;
+		source->ParamIndices["fog"] = 6;
+		addSource(source);
+	}
+
+	// nelvp source (fallback for NV VP / EXT vertex shader paths)
 	{
 		std::string vpCode = std::string(WindTreeVPCodeWave)
 			+ CRenderTrav::getLightVPFragmentNeLVP(numPls, VPLightConstantStart, specular, normalize)
@@ -133,14 +321,12 @@ CVertexProgramWindTree::CVertexProgramWindTree(uint numPls, bool specular, bool 
 		source->ParamIndices["fog"] = 6;
 		addSource(source);
 	}
-
-	// TODO_VP_GLSL
 }
 
 void CVertexProgramWindTree::buildInfo()
 {
 	CVertexProgramLighted::buildInfo();
-	if (profile() == nelvp)
+	if (profile() == nelvp || profile() == arbvp1 || profile() == vs_2_0)
 	{
 		m_Idx.ProgramConstants[0] = 8;
 		m_Idx.ProgramConstants[1] = 9;
@@ -157,7 +343,19 @@ void CVertexProgramWindTree::buildInfo()
 	}
 	else
 	{
-		// TODO_VP_GLSL
+		// GLSL: utility constants are literals, not uniforms
+		m_Idx.ProgramConstants[0] = ~0;
+		m_Idx.ProgramConstants[1] = ~0;
+		m_Idx.ProgramConstants[2] = ~0;
+		m_Idx.WindLevel1 = getUniformIndex("windLevel1");
+		m_Idx.WindLevel2[0] = getUniformIndex("windLevel2[0]");
+		m_Idx.WindLevel2[1] = getUniformIndex("windLevel2[1]");
+		m_Idx.WindLevel2[2] = getUniformIndex("windLevel2[2]");
+		m_Idx.WindLevel2[3] = getUniformIndex("windLevel2[3]");
+		m_Idx.WindLevel3[0] = getUniformIndex("windLevel3[0]");
+		m_Idx.WindLevel3[1] = getUniformIndex("windLevel3[1]");
+		m_Idx.WindLevel3[2] = getUniformIndex("windLevel3[2]");
+		m_Idx.WindLevel3[3] = getUniformIndex("windLevel3[3]");
 	}
 }
 
@@ -229,8 +427,7 @@ void CMeshVPWindTree::initVertexPrograms()
 		{
 			// setup of the VPLight fragment
 			uint	numPls= i/4;
-			// FIXME: normalize=true makes trees dance, workaround for issue #160
-			bool	normalize= false; //(i&1)!=0;
+			bool	normalize= (i&1)!=0;
 			bool	specular= (i&2)!=0;
 
 			// combine
@@ -327,10 +524,12 @@ inline	void		CMeshVPWindTree::setupPerInstanceConstants(IDriver *driver, CScene 
 	setupLighting(scene, mbi, invertedModelMat);
 
 	// c[0..3] take the ModelViewProjection Matrix. After setupModelMatrix();
-	driver->setUniformMatrix(IDriver::VertexProgram, program->getUniformIndex(CProgramIndex::ModelViewProjection), 
+	driver->setUniformMatrix(IDriver::VertexProgram, program->getUniformIndex(CProgramIndex::ModelViewProjection),
 		IDriver::ModelViewProjection, IDriver::Identity);
-	// c[4..7] take the ModelView Matrix. After setupModelMatrix();00
+	// Fog: assembly profiles use dot(fog, pos), GLSL uses ecPos from modelView (no-op for ASM since index is ~0)
 	driver->setUniformFog(IDriver::VertexProgram, program->getUniformIndex(CProgramIndex::Fog));
+	driver->setUniformMatrix(IDriver::VertexProgram, program->getUniformIndex(CProgramIndex::ModelView),
+		IDriver::ModelView, IDriver::Identity);
 
 
 	// c[15] take Wind of level 0.

@@ -619,6 +619,8 @@ public:
 
 	virtual bool			supportWaterShader() const;
 
+	virtual bool			cubemapZPositiveForward() const { return false; }
+
 	virtual bool			supportTextureAddrMode(CMaterial::TTexAddressingMode mode) const;
 
 	virtual void			setMatrix2DForTextureOffsetAddrMode(const uint stage, const float mat[4]);
@@ -696,6 +698,9 @@ public:
 	virtual void			stencilFunc(TStencilFunc stencilFunc, int ref, uint mask);
 	virtual void			stencilOp(TStencilOp fail, TStencilOp zfail, TStencilOp zpass);
 	virtual void			stencilMask(uint mask);
+
+	virtual void			enableClipPlane(uint index, bool enable);
+	virtual void			setClipPlane(uint index, const NLMISC::CPlane &plane);
 
 	GfxMode						_CurrentMode;
 	sint32						_WindowX;

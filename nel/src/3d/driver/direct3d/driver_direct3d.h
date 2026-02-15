@@ -1073,6 +1073,9 @@ public:
 	virtual	bool			supportMADOperator() const;
 	// todo hulud d3d adressing mode
 	virtual bool			supportWaterShader() const;
+
+	virtual bool			cubemapZPositiveForward() const { return true; }
+
 	// todo hulud d3d adressing mode
 	virtual bool			supportTextureAddrMode(CMaterial::TTexAddressingMode /* mode */) const {return false;};
 	// todo hulud d3d adressing mode
@@ -1265,6 +1268,9 @@ public:
 	virtual void			stencilFunc(TStencilFunc stencilFunc, int ref, uint mask);
 	virtual void			stencilOp(TStencilOp fail, TStencilOp zfail, TStencilOp zpass);
 	virtual void			stencilMask(uint mask);
+
+	virtual void			enableClipPlane(uint index, bool enable);
+	virtual void			setClipPlane(uint index, const NLMISC::CPlane &plane);
 
 	uint32					getMaxVertexIndex() const { return _MaxVertexIndex; }
 
@@ -2445,6 +2451,7 @@ private:
 	bool					_TextureCubeSupported;
 	bool					_VertexProgram;
 	bool					_PixelProgram;
+	uint16					_VertexProgramVersion;
 	uint16					_PixelProgramVersion;
 	bool					_DisableHardwareVertexProgram;
 	bool					_DisableHardwarePixelProgram;
@@ -2681,6 +2688,7 @@ private:
 	DWORD			_CurStencilOpZFail;
 	DWORD			_CurStencilOpZPass;
 	DWORD			_CurStencilWriteMask;
+	DWORD			_CurClipPlaneEnable;
 
 public:
 

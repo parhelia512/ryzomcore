@@ -79,6 +79,7 @@ bool CDriverD3D::compilePixelProgram(CPixelProgram *program)
 			if (supportPixelProgram(program->getSource(i)->Profile))
 			{
 				source = program->getSource(i);
+				break;
 			}
 		}
 		if (!source)
@@ -100,12 +101,18 @@ bool CDriverD3D::compilePixelProgram(CPixelProgram *program)
 		if (D3DXAssembleShader(source->SourcePtr, source->SourceLen, NULL, NULL, 0, &pShader, &pErrorMsgs) == D3D_OK)
 		{
 			if (_DeviceInterface->CreatePixelShader((DWORD*)pShader->GetBufferPointer(), &(getPixelProgramD3D(*program)->Shader)) != D3D_OK)
+			{
+				delete drvInfo;
+				program->m_DrvInfo = NULL;
 				return false;
+			}
 		}
 		else
 		{
 			nlwarning ("Can't assemble pixel program:");
 			nlwarning ((const char*)pErrorMsgs->GetBufferPointer());
+			delete drvInfo;
+			program->m_DrvInfo = NULL;
 			return false;
 		}
 

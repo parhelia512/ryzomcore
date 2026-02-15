@@ -29,20 +29,11 @@ OPTION(HUNTER_ENABLED "Enable Hunter package manager" OFF)
 IF(HUNTER_ENABLED)
 
   INCLUDE("CMakeModules/HunterGate.cmake")
-  IF(APPLE)
-    # Use newer Hunter on macOS for Xcode 16+ compatibility (ZLIB fix)
-    HunterGate(
-      URL "https://github.com/cpp-pm/hunter/archive/v0.26.6.tar.gz"
-      SHA1 "e70c29f878f5d5f5cdf1b9ccd628fb872e8624a8"
-      FILEPATH "${CMAKE_CURRENT_LIST_DIR}/CMakeModules/HunterConfig.cmake"
-    )
-  ELSE()
-    HunterGate(
-      URL "https://github.com/cpp-pm/hunter/archive/v0.26.1.tar.gz"
-      SHA1 "e41ac7a18c49b35ebac99ff2b5244317b2638a65"
-      FILEPATH "${CMAKE_CURRENT_LIST_DIR}/CMakeModules/HunterConfig.cmake"
-    )
-  ENDIF()
+  HunterGate(
+    URL "https://github.com/cpp-pm/hunter/archive/v0.26.1.tar.gz"
+    SHA1 "e41ac7a18c49b35ebac99ff2b5244317b2638a65"
+    FILEPATH "${CMAKE_CURRENT_LIST_DIR}/CMakeModules/HunterConfig.cmake"
+  )
 
   # default options for hunterized build
   SET(WITH_STATIC         ON CACHE BOOL "static" FORCE)

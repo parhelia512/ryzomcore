@@ -670,6 +670,7 @@ CClientConfig::CClientConfig()
 	ExtendedCommands = false;
 
 	WaterEnvMapUpdateTime = 1.f;
+	ForceWaterEnvMap = false;
 
 	NumFrameForProfile = 0;
 	SimulateServerTick = false;
@@ -1680,6 +1681,7 @@ void CClientConfig::setValues()
 	READ_BOOL_DEV(Check)
 	READ_BOOL_DEV(UsePACSForAll)
 	READ_FLOAT_DEV(WaterEnvMapUpdateTime)
+	READ_BOOL_DEV(ForceWaterEnvMap)
 	READ_BOOL_DEV(BlendForward)
 
 	ClientCfg.ZCPacsPrim = "gen_bt_col_ext.pacs_prim";
@@ -1788,6 +1790,7 @@ void CClientConfig::setValues()
 	{
 		Scene->setGlobalWindPower(ClientCfg.GlobalWindPower);
 		Scene->setGlobalWindDirection(ClientCfg.GlobalWindDirection);
+		Scene->setForceWaterEnvMap(ClientCfg.ForceWaterEnvMap);
 	}
 
 	if (Driver)

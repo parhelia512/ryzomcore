@@ -1178,7 +1178,7 @@ static	void	strReplaceAll(string &strInOut, const string &tokenSrc, const string
 void CVertexProgramLighted::buildInfo()
 {
 	CVertexProgram::buildInfo();
-	if (profile() == nelvp)
+	if (profile() == nelvp || profile() == arbvp1 || profile() == vs_2_0)
 	{
 		// Fixed uniform locations
 		m_IdxLighted.Ambient = m_FeaturesLighted.CtStartNeLVP + 0;
@@ -1192,7 +1192,7 @@ void CVertexProgramLighted::buildInfo()
 			{
 				m_IdxLighted.Specular[i] = m_FeaturesLighted.CtStartNeLVP + 5 + i;
 			}
-			m_IdxLighted.DirOrPos[0] = 9;
+			m_IdxLighted.DirOrPos[0] = m_FeaturesLighted.CtStartNeLVP + 9;
 			for (uint i = 1; i < MaxLight; ++i)
 			{
 				m_IdxLighted.DirOrPos[i] = m_FeaturesLighted.CtStartNeLVP + (12 - 1) + i;
@@ -1216,10 +1216,35 @@ void CVertexProgramLighted::buildInfo()
 	}
 	else
 	{
-		// Named uniform locations
-		// TODO_VP_GLSL
-		// m_IdxLighted.Ambient = getUniformIndex("ambient");
-		// etc
+		// Named uniform locations (GLSL)
+		m_IdxLighted.Ambient = getUniformIndex("ambient");
+		m_IdxLighted.Diffuse[0] = getUniformIndex("diffuse0");
+		m_IdxLighted.Diffuse[1] = getUniformIndex("diffuse1");
+		m_IdxLighted.Diffuse[2] = getUniformIndex("diffuse2");
+		m_IdxLighted.Diffuse[3] = getUniformIndex("diffuse3");
+		m_IdxLighted.DiffuseAlpha = getUniformIndex("diffuseAlpha");
+		if (m_FeaturesLighted.SupportSpecular)
+		{
+			m_IdxLighted.Specular[0] = getUniformIndex("specular0");
+			m_IdxLighted.Specular[1] = getUniformIndex("specular1");
+			m_IdxLighted.Specular[2] = getUniformIndex("specular2");
+			m_IdxLighted.Specular[3] = getUniformIndex("specular3");
+			m_IdxLighted.DirOrPos[0] = getUniformIndex("sunDir");
+			m_IdxLighted.DirOrPos[1] = getUniformIndex("plPos0");
+			m_IdxLighted.DirOrPos[2] = getUniformIndex("plPos1");
+			m_IdxLighted.DirOrPos[3] = getUniformIndex("plPos2");
+			m_IdxLighted.EyePosition = getUniformIndex("eyePos");
+		}
+		else
+		{
+			for (uint i = 0; i < MaxLight; ++i)
+				m_IdxLighted.Specular[i] = ~0;
+			m_IdxLighted.DirOrPos[0] = getUniformIndex("dirOrPos0");
+			m_IdxLighted.DirOrPos[1] = getUniformIndex("dirOrPos1");
+			m_IdxLighted.DirOrPos[2] = getUniformIndex("dirOrPos2");
+			m_IdxLighted.DirOrPos[3] = getUniformIndex("dirOrPos3");
+			m_IdxLighted.EyePosition = ~0;
+		}
 	}
 
 	nlassert(m_IdxLighted.Diffuse[0] != std::numeric_limits<uint>::max());

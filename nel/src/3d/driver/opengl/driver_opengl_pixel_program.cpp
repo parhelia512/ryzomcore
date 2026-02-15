@@ -187,6 +187,7 @@ bool CDriverGL::setupPixelProgram(CPixelProgram *program, GLuint id/*, bool &spe
 		if (supportPixelProgram(program->getSource(i)->Profile))
 		{
 			source = program->getSource(i);
+			break;
 		}
 	}
 	if (!source)
