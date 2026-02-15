@@ -53,73 +53,103 @@ namespace NL3D {
 
 namespace {
 
+// Stereo comparison shader (compiled from shaders/stereo_debug_pp.cg):
+//   Identical pixels:           normal average image
+//   Small diff (< ~1%):         blue-tinted (darkened R and G)
+//   Significant diff (>= ~1%):  red-tinted (darkened G and B)
 const char *a_arbfp1 =
 	"!!ARBfp1.0\n"
-	"PARAM c[1] = { { 1, 0, 0.5 } };\n"
+	"OPTION ARB_precision_hint_fastest;\n"
+	"# cgc version 3.1.0013, build date Apr 18 2012\n"
+	"# command line args: -profile arbfp1 -O3 -fastmath -fastprecision\n"
+	"# source file: stereo_debug_pp.cg\n"
+	"#vendor NVIDIA Corporation\n"
+	"#version 3.1.0.13\n"
+	"#profile arbfp1\n"
+	"#program stereo_debug_pp\n"
+	"#semantic stereo_debug_pp.cTex0 : TEX0\n"
+	"#semantic stereo_debug_pp.cTex1 : TEX1\n"
+	"#var float2 texCoord : $vin.TEXCOORD0 : TEX0 : 0 : 1\n"
+	"#var sampler2D cTex0 : TEX0 : texunit 0 : 1 : 1\n"
+	"#var sampler2D cTex1 : TEX1 : texunit 1 : 2 : 1\n"
+	"#var float4 oCol : $vout.COLOR : COL : 3 : 1\n"
+	"#const c[0] = 1 0 0.0099999998 0.5\n"
+	"PARAM c[1] = { { 1, 0, 0.0099999998, 0.5 } };\n"
 	"TEMP R0;\n"
 	"TEMP R1;\n"
 	"TEMP R2;\n"
-	"TEX R0, fragment.texcoord[0], texture[0], 2D;\n"
 	"TEX R1, fragment.texcoord[0], texture[1], 2D;\n"
-	"ADD R2, R0, -R1;\n"
-	"ADD R1, R0, R1;\n"
-	"MUL R1, R1, c[0].z;\n"
-	"ABS R2, R2;\n"
-	"CMP R2, -R2, c[0].x, c[0].y;\n"
-	"ADD_SAT R2.x, R2, R2.y;\n"
-	"ADD_SAT R2.x, R2, R2.z;\n"
-	"ADD_SAT R2.x, R2, R2.w;\n"
-	"ABS R2.x, R2;\n"
+	"TEX R0, fragment.texcoord[0], texture[0], 2D;\n"
+	"ADD R2.xyz, R0, -R1;\n"
+	"ADD R0, R0, R1;\n"
+	"MUL R0, R0, c[0].w;\n"
+	"ABS R2.xyz, R2;\n"
+	"MAX R1.x, R2, R2.y;\n"
+	"MAX R1.x, R1, R2.z;\n"
+	"SLT R1.y, c[0], R1.x;\n"
+	"SGE R1.w, R1.x, c[0].z;\n"
+	"ABS R1.w, R1;\n"
+	"ABS R2.x, R1.y;\n"
+	"MAD R1.z, R0.y, c[0].w, c[0].w;\n"
+	"CMP R1.w, -R1, c[0].y, c[0].x;\n"
 	"CMP R2.x, -R2, c[0].y, c[0];\n"
-	"ABS R0.x, R2;\n"
-	"CMP R2.x, -R0, c[0].y, c[0];\n"
-	"MOV R0.xzw, R1;\n"
-	"MAD R0.y, R1, c[0].z, c[0].z;\n"
-	"CMP R0, -R2.x, R1, R0;\n"
-	"MAD R1.x, R0, c[0].z, c[0].z;\n"
-	"CMP result.color.x, -R2, R1, R0;\n"
-	"MOV result.color.yzw, R0;\n"
+	"MUL R2.x, R2, R1.w;\n"
+	"CMP result.color.y, -R2.x, R1.z, R0;\n"
+	"MAD R1.z, R0, c[0].w, c[0].w;\n"
+	"MUL R0.y, R1, R1.w;\n"
+	"CMP result.color.z, -R0.y, R1, R0;\n"
+	"MAD R0.z, R0.x, c[0].w, c[0].w;\n"
+	"ADD R0.y, R1.x, -c[0].z;\n"
+	"CMP result.color.x, R0.y, R0, R0.z;\n"
+	"MOV result.color.w, R0;\n"
 	"END\n";
+	// 24 instructions, 3 R-regs
 
-const char *a_ps_2_0 = 
+const char *a_ps_2_0 =
 	"ps_2_0\n"
-	// cgc version 3.1.0013, build date Apr 18 2012
-	// command line args: -profile ps_2_0
-	// source file: pp_stereo_debug.cg
-	//vendor NVIDIA Corporation
-	//version 3.1.0.13
-	//profile ps_2_0
-	//program pp_stereo_debug
-	//semantic pp_stereo_debug.cTex0 : TEX0
-	//semantic pp_stereo_debug.cTex1 : TEX1
-	//var float2 texCoord : $vin.TEXCOORD0 : TEX0 : 0 : 1
-	//var sampler2D cTex0 : TEX0 : texunit 0 : 1 : 1
-	//var sampler2D cTex1 : TEX1 : texunit 1 : 2 : 1
-	//var float4 oCol : $vout.COLOR : COL : 3 : 1
-	//const c[0] = 0 1 0.5
+	"// cgc version 3.1.0013, build date Apr 18 2012\n"
+	"// command line args: -profile ps_2_0 -O3 -fastmath -fastprecision\n"
+	"// source file: stereo_debug_pp.cg\n"
+	"//vendor NVIDIA Corporation\n"
+	"//version 3.1.0.13\n"
+	"//profile ps_2_0\n"
+	"//program stereo_debug_pp\n"
+	"//semantic stereo_debug_pp.cTex0 : TEX0\n"
+	"//semantic stereo_debug_pp.cTex1 : TEX1\n"
+	"//var float2 texCoord : $vin.TEXCOORD0 : TEX0 : 0 : 1\n"
+	"//var sampler2D cTex0 : TEX0 : texunit 0 : 1 : 1\n"
+	"//var sampler2D cTex1 : TEX1 : texunit 1 : 2 : 1\n"
+	"//var float4 oCol : $vout.COLOR : COL : 3 : 1\n"
+	"//const c[0] = 0.5 -0.0099999998 1 0\n"
 	"dcl_2d s0\n"
 	"dcl_2d s1\n"
-	"def c0, 0.00000000, 1.00000000, 0.50000000, 0\n"
+	"def c0, 0.50000000, -0.01000000, 1.00000000, 0.00000000\n"
 	"dcl t0.xy\n"
-	"texld r1, t0, s1\n"
-	"texld r2, t0, s0\n"
-	"add r0, r2, -r1\n"
-	"add r1, r2, r1\n"
-	"mul r1, r1, c0.z\n"
-	"abs r0, r0\n"
-	"cmp r0, -r0, c0.x, c0.y\n"
-	"add_pp_sat r0.x, r0, r0.y\n"
-	"add_pp_sat r0.x, r0, r0.z\n"
-	"add_pp_sat r0.x, r0, r0.w\n"
-	"abs_pp r0.x, r0\n"
-	"cmp_pp r0.x, -r0, c0.y, c0\n"
-	"abs_pp r0.x, r0\n"
-	"mov r2.xzw, r1\n"
-	"mad r2.y, r1, c0.z, c0.z\n"
-	"cmp r2, -r0.x, r1, r2\n"
-	"mad r1.x, r2, c0.z, c0.z\n"
-	"mov r0.yzw, r2\n"
-	"cmp r0.x, -r0, r1, r2\n"
+	"texld r0, t0, s1\n"
+	"texld r1, t0, s0\n"
+	"add r2.xyz, r1, -r0\n"
+	"add r1, r1, r0\n"
+	"mul r5, r1, c0.x\n"
+	"abs r2.xyz, r2\n"
+	"max r0.x, r2, r2.y\n"
+	"max r0.x, r0, r2.z\n"
+	"cmp r1.x, -r0, c0.w, c0.z\n"
+	"add r3.x, r0, c0.y\n"
+	"abs_pp r4.x, r1\n"
+	"cmp r3.x, r3, c0.z, c0.w\n"
+	"abs_pp r3.x, r3\n"
+	"cmp_pp r3.x, -r3, c0.z, c0.w\n"
+	"cmp_pp r4.x, -r4, c0.z, c0.w\n"
+	"mad r2.x, r5.y, c0, c0\n"
+	"mul_pp r4.x, r3, r4\n"
+	"cmp r0.y, -r4.x, r5, r2.x\n"
+	"mul_pp r1.x, r3, r1\n"
+	"mad r2.x, r5.z, c0, c0\n"
+	"cmp r0.z, -r1.x, r5, r2.x\n"
+	"mov r0.w, r5\n"
+	"mad r1.x, r5, c0, c0\n"
+	"add r0.x, r0, c0.y\n"
+	"cmp r0.x, r0, r1, r5\n"
 	"mov oC0, r0\n";
 
 class CStereoDebuggerFactory : public IStereoDeviceFactory
@@ -191,10 +221,14 @@ void CStereoDebugger::setDriver(NL3D::UDriver *driver)
 		}
 		if (!drvInternal->compilePixelProgram(m_PixelProgram))
 		{
-			nlwarning("No supported pixel program for stereo debugger");
+			nlwarning("STEREO: No supported pixel program for stereo debugger");
 
 			delete m_PixelProgram;
 			m_PixelProgram = NULL;
+		}
+		else
+		{
+			nlinfo("STEREO: Pixel program compiled successfully for stereo debugger");
 		}
 	}
 
