@@ -28,6 +28,9 @@
 //   C - Toggle camera orbit
 //   R - Toggle cube rotation
 //   S - Toggle skybox roll
+//   B - Toggle render target boundary overlay
+//   H - Toggle half-resolution reflection
+//   Up/Down - Move camera closer/farther
 //
 
 #include <nel/misc/types_nl.h>
@@ -78,7 +81,7 @@ static CMatrix buildViewMatrix(const CVector &eye, const CVector &target, const 
 // Returns false if the ray doesn't hit the floor (pointing above horizon).
 static bool gridToWorldAndUV(float gx, float gy, int gridN,
 	const CFrustum &frustum, const CMatrix &camWorld, const CVector &eye,
-	const CMatrix &reflectedViewMatrix,
+	const CFrustum &reflFrustum, const CMatrix &reflectedViewMatrix,
 	CVector &worldPos, CUV &uv)
 {
 	float sx = gx / float(gridN);
@@ -97,7 +100,7 @@ static bool gridToWorldAndUV(float gx, float gy, int gridN,
 	worldPos.z = 0.f;
 
 	CVector reflLocal = reflectedViewMatrix * worldPos;
-	CVector proj = frustum.project(reflLocal);
+	CVector proj = reflFrustum.project(reflLocal);
 	uv = CUV(proj.x, proj.y);
 	return true;
 }
@@ -107,7 +110,7 @@ static bool gridToWorldAndUV(float gx, float gy, int gridN,
 // and given a reflection UV. Quads are appended to the output vector.
 static void emitClippedPoly(const CPolygon &clipPoly, int gridN,
 	const CFrustum &frustum, const CMatrix &camWorld, const CVector &eye,
-	const CMatrix &reflectedViewMatrix, CRGBA color,
+	const CFrustum &reflFrustum, const CMatrix &reflectedViewMatrix, CRGBA color,
 	std::vector<CQuadColorUV> &outQuads)
 {
 	uint nv = (uint)clipPoly.Vertices.size();
@@ -119,7 +122,7 @@ static void emitClippedPoly(const CPolygon &clipPoly, int gridN,
 	for (uint i = 0; i < nv; ++i)
 	{
 		if (!gridToWorldAndUV(clipPoly.Vertices[i].x, clipPoly.Vertices[i].y, gridN,
-			frustum, camWorld, eye, reflectedViewMatrix, wp[i], uv[i]))
+			frustum, camWorld, eye, reflFrustum, reflectedViewMatrix, wp[i], uv[i]))
 			return;
 	}
 
@@ -242,6 +245,10 @@ private:
 	bool m_AnimCamera;
 	bool m_AnimCube;
 	bool m_AnimSkybox;
+	bool m_ShowBounds;
+	bool m_HalfRes;
+	bool m_KeyForward;
+	bool m_KeyBackward;
 	UDriver *m_Driver;
 	UMaterial m_SkyMat;
 	UMaterial m_CubeMat;
@@ -254,6 +261,10 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 	, m_AnimCamera(true)
 	, m_AnimCube(true)
 	, m_AnimSkybox(true)
+	, m_ShowBounds(false)
+	, m_HalfRes(false)
+	, m_KeyForward(false)
+	, m_KeyBackward(false)
 {
 	m_Driver = UDriver::createDriver(0, false);
 	if (!m_Driver)
@@ -264,6 +275,7 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 
 	m_Driver->EventServer.addListener(EventCloseWindowId, this);
 	m_Driver->EventServer.addListener(EventKeyDownId, this);
+	m_Driver->EventServer.addListener(EventKeyUpId, this);
 
 	m_Driver->setDisplay(UDriver::CMode(800, 600, 32, true));
 	m_Driver->setWindowTitle(ucstring("NeL Planar Reflection Demo"));
@@ -316,7 +328,17 @@ void CPlanarReflectionDemo::operator()(const CEvent &event)
 			if (keyDown.Key == KeyC) m_AnimCamera = !m_AnimCamera;
 			if (keyDown.Key == KeyR) m_AnimCube = !m_AnimCube;
 			if (keyDown.Key == KeyS) m_AnimSkybox = !m_AnimSkybox;
+			if (keyDown.Key == KeyB) m_ShowBounds = !m_ShowBounds;
+			if (keyDown.Key == KeyH) m_HalfRes = !m_HalfRes;
 		}
+		if (keyDown.Key == KeyUP) m_KeyForward = true;
+		if (keyDown.Key == KeyDOWN) m_KeyBackward = true;
+	}
+	else if (event == EventKeyUpId)
+	{
+		CEventKeyUp &keyUp = (CEventKeyUp &)event;
+		if (keyUp.Key == KeyUP) m_KeyForward = false;
+		if (keyUp.Key == KeyDOWN) m_KeyBackward = false;
 	}
 }
 
@@ -325,11 +347,25 @@ void CPlanarReflectionDemo::run()
 	CFrustum frustum;
 	frustum.initPerspective(float(Pi / 3.0), 800.f / 600.f, 0.1f, 100.f);
 
+	const uint screenW = 800, screenH = 600;
+
 	float camDist = 8.f;
 	float camHeight = 4.f;
 	float cubeHeight = 2.f;
 	float cubeHalfSize = 1.0f;
-	float floorExtent = 6.f;
+
+	const int gridN = 32;
+	const float rtMargin = 0.5f; // margin in grid cells for reflection wobble
+
+	// Floor polygon: hexagon at Z=0
+	const int numPolyVerts = 6;
+	CVector2f floorPolyWorld[6];
+	float radius = 5.f;
+	for (int i = 0; i < numPolyVerts; ++i)
+	{
+		float a = float(i) * float(2.0 * Pi) / float(numPolyVerts);
+		floorPolyWorld[i] = CVector2f(cosf(a) * radius, sinf(a) * radius);
+	}
 
 	// CDriverUser provides setRenderTarget, which is not on the UDriver interface
 	CDriverUser *dru = static_cast<CDriverUser *>(m_Driver);
@@ -352,6 +388,9 @@ void CPlanarReflectionDemo::run()
 		if (m_AnimCamera) camAngle += dt * 0.3f;
 		if (m_AnimCube) { cubeAngleZ += dt * 0.5f; cubeAngleX += dt * 0.3f; }
 		if (m_AnimSkybox) skyAngle += dt * 0.1f;
+		if (m_KeyForward) camDist -= dt * 4.f;
+		if (m_KeyBackward) camDist += dt * 4.f;
+		if (camDist < 1.f) camDist = 1.f;
 
 		m_Driver->setPolygonMode(m_Wireframe ? UDriver::Line : UDriver::Filled);
 
@@ -373,22 +412,72 @@ void CPlanarReflectionDemo::run()
 		CMatrix modelMatrix;
 		modelMatrix.identity();
 
+		CMatrix camWorld = viewMatrix;
+		camWorld.invert();
+
 		// --- Phase 2: Reflected camera ---
 
 		CVector reflectedEye(eye.x, eye.y, -eye.z);
 		CVector reflectedTarget(target.x, target.y, -target.z);
 		CMatrix reflectedViewMatrix = buildViewMatrix(reflectedEye, reflectedTarget, up);
 
+		// --- Compute reflection RT bounds ---
+		// The sub-frustum must be computed from the *reflected* camera's projection
+		// of the floor polygon, since the reflected camera has a different orientation.
+		// A separate AABB from the normal camera is used for the debug overlay.
+
+		float reflAabbMinX = 1.f, reflAabbMaxX = 0.f;
+		float reflAabbMinY = 1.f, reflAabbMaxY = 0.f;
+		float viewAabbMinX = 1.f, viewAabbMaxX = 0.f;
+		float viewAabbMinY = 1.f, viewAabbMaxY = 0.f;
+		for (int i = 0; i < numPolyVerts; ++i)
+		{
+			CVector wp(floorPolyWorld[i].x, floorPolyWorld[i].y, 0.f);
+
+			CVector reflScr = frustum.project(reflectedViewMatrix * wp);
+			if (reflScr.x < reflAabbMinX) reflAabbMinX = reflScr.x;
+			if (reflScr.x > reflAabbMaxX) reflAabbMaxX = reflScr.x;
+			if (reflScr.y < reflAabbMinY) reflAabbMinY = reflScr.y;
+			if (reflScr.y > reflAabbMaxY) reflAabbMaxY = reflScr.y;
+
+			CVector viewScr = frustum.project(viewMatrix * wp);
+			if (viewScr.x < viewAabbMinX) viewAabbMinX = viewScr.x;
+			if (viewScr.x > viewAabbMaxX) viewAabbMaxX = viewScr.x;
+			if (viewScr.y < viewAabbMinY) viewAabbMinY = viewScr.y;
+			if (viewScr.y > viewAabbMaxY) viewAabbMaxY = viewScr.y;
+		}
+
+		// Add margin (configurable, in grid cells)
+		float marginScreen = rtMargin / float(gridN);
+		reflAabbMinX -= marginScreen;
+		reflAabbMaxX += marginScreen;
+		reflAabbMinY -= marginScreen;
+		reflAabbMaxY += marginScreen;
+
+		// Build off-center sub-frustum covering only the reflected AABB region
+		CFrustum reflFrustum = frustum;
+		float fw = frustum.Right - frustum.Left;
+		float fh = frustum.Top - frustum.Bottom;
+		reflFrustum.Left = frustum.Left + reflAabbMinX * fw;
+		reflFrustum.Right = frustum.Left + reflAabbMaxX * fw;
+		reflFrustum.Bottom = frustum.Bottom + reflAabbMinY * fh;
+		reflFrustum.Top = frustum.Bottom + reflAabbMaxY * fh;
+
+		// RT sized to the reflected AABB (can exceed screen size)
+		uint rtW = (uint)max(1.f, ceilf((reflAabbMaxX - reflAabbMinX) * screenW));
+		uint rtH = (uint)max(1.f, ceilf((reflAabbMaxY - reflAabbMinY) * screenH));
+		if (m_HalfRes) { rtW = max(1u, rtW / 2); rtH = max(1u, rtH / 2); }
+
 		// --- Phase 3: Render reflected scene to render target ---
 
 		CRenderTargetManager &rtm = m_Driver->getRenderTargetManager();
-		CTextureUser *reflectRT = rtm.getRenderTarget(800, 600);
+		CTextureUser *reflectRT = rtm.getRenderTarget(rtW, rtH);
 
 		dru->setRenderTarget(*reflectRT);
 
 		m_Driver->clearBuffers(CRGBA(40, 40, 40));
 
-		m_Driver->setFrustum(frustum);
+		m_Driver->setFrustum(reflFrustum);
 		m_Driver->setViewMatrix(reflectedViewMatrix);
 		m_Driver->setModelMatrix(modelMatrix);
 
@@ -429,21 +518,7 @@ void CPlanarReflectionDemo::run()
 		// 3. Clip border cells against the polygon edges (Sutherland-Hodgman)
 		// 4. Un-project grid vertices back to Z=0, compute reflection UVs
 		{
-			const int gridN = 32;
 			CRGBA floorColor(150, 180, 220, 180);
-
-			CMatrix camWorld = viewMatrix;
-			camWorld.invert();
-
-			// Floor polygon: hexagon at Z=0
-			const int numPolyVerts = 6;
-			CVector2f floorPolyWorld[numPolyVerts];
-			float radius = 5.f;
-			for (int i = 0; i < numPolyVerts; ++i)
-			{
-				float a = float(i) * float(2.0 * Pi) / float(numPolyVerts);
-				floorPolyWorld[i] = CVector2f(cosf(a) * radius, sinf(a) * radius);
-			}
 
 			// Project floor polygon to grid coordinates [0..gridN]
 			CPolygon2D projPoly;
@@ -514,7 +589,7 @@ void CPlanarReflectionDemo::run()
 					clipPoly.Vertices[3].set(float(x),     float(absY + 1), 0.f);
 					clipPoly.clip(clipPlanes);
 					emitClippedPoly(clipPoly, gridN, frustum, camWorld, eye,
-						reflectedViewMatrix, floorColor, floorQuads);
+						reflFrustum, reflectedViewMatrix, floorColor, floorQuads);
 				}
 
 				// Inner cells: no clipping needed
@@ -532,7 +607,7 @@ void CPlanarReflectionDemo::run()
 					for (int c = 0; c < 4; ++c)
 					{
 						if (!gridToWorldAndUV(coords[c][0], coords[c][1], gridN,
-							frustum, camWorld, eye, reflectedViewMatrix, wp[c], uv[c]))
+							frustum, camWorld, eye, reflFrustum, reflectedViewMatrix, wp[c], uv[c]))
 						{
 							valid = false;
 							break;
@@ -558,12 +633,58 @@ void CPlanarReflectionDemo::run()
 					clipPoly.Vertices[3].set(float(x),     float(absY + 1), 0.f);
 					clipPoly.clip(clipPlanes);
 					emitClippedPoly(clipPoly, gridN, frustum, camWorld, eye,
-						reflectedViewMatrix, floorColor, floorQuads);
+						reflFrustum, reflectedViewMatrix, floorColor, floorQuads);
 				}
 			}
 
 			if (!floorQuads.empty())
 				m_Driver->drawQuads(floorQuads, m_FloorMat);
+		}
+
+		// --- Phase 6b: Draw RT boundary overlay ---
+
+		if (m_ShowBounds)
+		{
+			m_Driver->setMatrixMode2D11();
+
+			// Yellow: render target boundary projected onto the normal screen
+			// Un-project RT corners from reflected camera → world Z=0 → normal camera
+			CMatrix reflCamWorld = reflectedViewMatrix;
+			reflCamWorld.invert();
+
+			float rtCornersRefl[4][2] = {
+				{ reflAabbMinX, reflAabbMinY },
+				{ reflAabbMaxX, reflAabbMinY },
+				{ reflAabbMaxX, reflAabbMaxY },
+				{ reflAabbMinX, reflAabbMaxY }
+			};
+			float rtCornersScreen[4][2];
+			for (int i = 0; i < 4; ++i)
+			{
+				CVector nearLocal = frustum.unProject(CVector(rtCornersRefl[i][0], rtCornersRefl[i][1], 0.f));
+				CVector worldNear = reflCamWorld * nearLocal;
+				CVector dir = worldNear - reflectedEye;
+				float t = (fabsf(dir.z) > 0.0001f) ? (-reflectedEye.z / dir.z) : 0.f;
+				CVector wp(reflectedEye.x + t * dir.x, reflectedEye.y + t * dir.y, 0.f);
+				CVector scr = frustum.project(viewMatrix * wp);
+				rtCornersScreen[i][0] = scr.x;
+				rtCornersScreen[i][1] = scr.y;
+			}
+
+			CRGBA rtColor(255, 255, 0);
+			for (int i = 0; i < 4; ++i)
+			{
+				int j = (i + 1) % 4;
+				m_Driver->drawLine(rtCornersScreen[i][0], rtCornersScreen[i][1],
+					rtCornersScreen[j][0], rtCornersScreen[j][1], rtColor);
+			}
+
+			// Cyan: floor polygon screen footprint (normal camera AABB)
+			CRGBA viewColor(0, 255, 255);
+			m_Driver->drawLine(viewAabbMinX, viewAabbMinY, viewAabbMaxX, viewAabbMinY, viewColor);
+			m_Driver->drawLine(viewAabbMaxX, viewAabbMinY, viewAabbMaxX, viewAabbMaxY, viewColor);
+			m_Driver->drawLine(viewAabbMaxX, viewAabbMaxY, viewAabbMinX, viewAabbMaxY, viewColor);
+			m_Driver->drawLine(viewAabbMinX, viewAabbMaxY, viewAabbMinX, viewAabbMinY, viewColor);
 		}
 
 		// --- Phase 7: Cleanup and swap ---
