@@ -29,6 +29,7 @@
 #include <nel/misc/event_listener.h>
 #include <nel/misc/geom_ext.h>
 #include <nel/misc/plane.h>
+#include <nel/misc/polygon.h>
 #include <nel/misc/time_nl.h>
 #include <nel/misc/vector_2f.h>
 
@@ -64,19 +65,70 @@ static CMatrix buildViewMatrix(const CVector &eye, const CVector &target, const 
 	return viewMatrix;
 }
 
-// Test if a point is inside a convex polygon (CCW winding, XY plane)
-static bool isInsideConvexPoly(float px, float py, const CVector2f *poly, int numVerts)
+// Un-project a screen-space grid coordinate to a world position on the Z=0 plane,
+// and compute the reflection texture UV.
+// Returns false if the ray doesn't hit the floor (pointing above horizon).
+static bool gridToWorldAndUV(float gx, float gy, int gridN,
+	const CFrustum &frustum, const CMatrix &camWorld, const CVector &eye,
+	const CMatrix &reflectedViewMatrix,
+	CVector &worldPos, CUV &uv)
 {
-	for (int i = 0; i < numVerts; ++i)
-	{
-		int j = (i + 1) % numVerts;
-		float ex = poly[j].x - poly[i].x;
-		float ey = poly[j].y - poly[i].y;
-		// Cross product: positive means left side (inside for CCW)
-		if (ex * (py - poly[i].y) - ey * (px - poly[i].x) < 0.f)
-			return false;
-	}
+	float sx = gx / float(gridN);
+	float sy = gy / float(gridN);
+
+	CVector nearLocal = frustum.unProject(CVector(sx, sy, 0.f));
+	CVector worldNear = camWorld * nearLocal;
+	CVector dir = worldNear - eye;
+
+	if (dir.z >= -0.0001f)
+		return false;
+
+	float t = -eye.z / dir.z;
+	worldPos.x = eye.x + t * dir.x;
+	worldPos.y = eye.y + t * dir.y;
+	worldPos.z = 0.f;
+
+	CVector reflLocal = reflectedViewMatrix * worldPos;
+	CVector proj = frustum.project(reflLocal);
+	uv = CUV(proj.x, proj.y);
 	return true;
+}
+
+// Emit a clipped polygon as triangle-fan quads.
+// The polygon vertices are in grid coordinates; each is un-projected to Z=0
+// and given a reflection UV. Quads are appended to the output vector.
+static void emitClippedPoly(const CPolygon &clipPoly, int gridN,
+	const CFrustum &frustum, const CMatrix &camWorld, const CVector &eye,
+	const CMatrix &reflectedViewMatrix, CRGBA color,
+	std::vector<CQuadColorUV> &outQuads)
+{
+	uint nv = (uint)clipPoly.Vertices.size();
+	if (nv < 3) return;
+
+	// Pre-compute world positions and UVs for all vertices
+	std::vector<CVector> wp(nv);
+	std::vector<CUV> uv(nv);
+	for (uint i = 0; i < nv; ++i)
+	{
+		if (!gridToWorldAndUV(clipPoly.Vertices[i].x, clipPoly.Vertices[i].y, gridN,
+			frustum, camWorld, eye, reflectedViewMatrix, wp[i], uv[i]))
+			return;
+	}
+
+	// Convert triangle fan to quads: each quad covers 2 fan triangles
+	for (uint k = 0; k < (nv - 1) / 2; ++k)
+	{
+		uint i0 = 0;
+		uint i1 = 2 * k + 1;
+		uint i2 = 2 * k + 2;
+		uint i3 = (2 * k + 3 < nv) ? 2 * k + 3 : nv - 1;
+
+		CQuadColorUV q;
+		q.V0 = wp[i0]; q.V1 = wp[i1]; q.V2 = wp[i2]; q.V3 = wp[i3];
+		q.Color0 = q.Color1 = q.Color2 = q.Color3 = color;
+		q.Uv0 = uv[i0]; q.Uv1 = uv[i1]; q.Uv2 = uv[i2]; q.Uv3 = uv[i3];
+		outQuads.push_back(q);
+	}
 }
 
 // Draw a colored quad (one face of the cube)
@@ -270,104 +322,143 @@ void CPlanarReflectionDemo::run()
 		// Set reflection texture on floor material
 		m_FloorMat.setTexture(0, reflectRT);
 
-		// Floor polygon shape (hexagon at Z=0, CCW winding)
-		const int numPolyVerts = 6;
-		CVector2f floorPoly[numPolyVerts];
+		// Screen-space grid tessellation with polygon clipping
+		// (matching the NeL water rendering approach):
+		// 1. Project the floor polygon to screen-space grid coordinates
+		// 2. Rasterize to classify grid cells as inner, border, or outer
+		// 3. Clip border cells against the polygon edges (Sutherland-Hodgman)
+		// 4. Un-project grid vertices back to Z=0, compute reflection UVs
 		{
+			const int gridN = 32;
+			CRGBA floorColor(150, 180, 220, 180);
+
+			CMatrix camWorld = viewMatrix;
+			camWorld.invert();
+
+			// Floor polygon: hexagon at Z=0
+			const int numPolyVerts = 6;
+			CVector2f floorPolyWorld[numPolyVerts];
 			float radius = 5.f;
 			for (int i = 0; i < numPolyVerts; ++i)
 			{
 				float a = float(i) * float(2.0 * Pi) / float(numPolyVerts);
-				floorPoly[i] = CVector2f(cosf(a) * radius, sinf(a) * radius);
+				floorPolyWorld[i] = CVector2f(cosf(a) * radius, sinf(a) * radius);
 			}
-		}
 
-		// Screen-space grid tessellation (matching NeL water approach):
-		// 1. Subdivide the screen into a fixed grid
-		// 2. Un-project each grid vertex to the Z=0 floor plane
-		// 3. Test against the floor polygon
-		// 4. Compute reflection UVs from the reflected camera
-		{
-			const int gridN = 32;
-			float stepX = 1.f / float(gridN);
-			float stepY = 1.f / float(gridN);
-			CRGBA floorColor(150, 180, 220, 180);
+			// Project floor polygon to grid coordinates [0..gridN]
+			CPolygon2D projPoly;
+			projPoly.Vertices.resize(numPolyVerts);
+			for (int i = 0; i < numPolyVerts; ++i)
+			{
+				CVector wp(floorPolyWorld[i].x, floorPolyWorld[i].y, 0.f);
+				CVector scr = frustum.project(viewMatrix * wp);
+				projPoly.Vertices[i] = CVector2f(scr.x * gridN, scr.y * gridN);
+			}
 
-			// Camera world matrix for un-projecting screen points
-			CMatrix camWorld = viewMatrix;
-			camWorld.invert();
+			// Rasterize: find inner cells (fully inside) and outer cells (touched)
+			CPolygon2D::TRasterVect inside;
+			sint minYInside;
+			projPoly.computeInnerBorders(inside, minYInside);
+
+			CPolygon2D::TRasterVect border;
+			sint minYBorder;
+			projPoly.computeOuterBorders(border, minYBorder);
+
+			// Build clip planes from projected polygon edges (in grid space, z=0)
+			std::vector<CPlane> clipPlanes(numPolyVerts);
+			bool ccw = projPoly.isCCWOriented();
+			for (int i = 0; i < numPolyVerts; ++i)
+			{
+				int j = (i + 1) % numPolyVerts;
+				CVector v0(projPoly.Vertices[i].x, projPoly.Vertices[i].y, 0.f);
+				CVector v1(projPoly.Vertices[j].x, projPoly.Vertices[j].y, 0.f);
+				CVector2f edge = projPoly.Vertices[j] - projPoly.Vertices[i];
+				CVector v2(projPoly.Vertices[i].x, projPoly.Vertices[i].y, edge.norm());
+				clipPlanes[i].make(v0, v1, v2);
+				if (!ccw) clipPlanes[i].invert();
+			}
 
 			std::vector<CQuadColorUV> floorQuads;
 			floorQuads.reserve(gridN * gridN);
 
-			for (int gy = 0; gy < gridN; ++gy)
+			for (sint ky = 0; ky < (sint)border.size(); ++ky)
 			{
-				for (int gx = 0; gx < gridN; ++gx)
+				sint absY = minYBorder + ky;
+
+				// Look up inner range for this scanline
+				sint insideIdx = absY - minYInside;
+				sint borderFirst = border[ky].first;
+				sint borderLast = border[ky].second;
+				sint insideFirst, insideLast;
+				if (insideIdx >= 0 && insideIdx < (sint)inside.size()
+					&& inside[insideIdx].first <= inside[insideIdx].second)
 				{
-					// Screen-space corners of this cell [0..1]
-					float sx[2] = { gx * stepX, (gx + 1) * stepX };
-					float sy[2] = { gy * stepY, (gy + 1) * stepY };
+					insideFirst = inside[insideIdx].first;
+					insideLast = inside[insideIdx].second;
+				}
+				else
+				{
+					// No inside cells on this scanline — all cells are borders
+					insideFirst = borderLast + 1;
+					insideLast = borderLast;
+				}
 
-					// Un-project each corner to Z=0 plane
-					CVector corners[4];
-					CUV uvs[4];
+				// Left border cells: clip against polygon
+				for (sint x = borderFirst; x < insideFirst; ++x)
+				{
+					CPolygon clipPoly;
+					clipPoly.Vertices.resize(4);
+					clipPoly.Vertices[0].set(float(x),     float(absY),     0.f);
+					clipPoly.Vertices[1].set(float(x + 1), float(absY),     0.f);
+					clipPoly.Vertices[2].set(float(x + 1), float(absY + 1), 0.f);
+					clipPoly.Vertices[3].set(float(x),     float(absY + 1), 0.f);
+					clipPoly.clip(clipPlanes);
+					emitClippedPoly(clipPoly, gridN, frustum, camWorld, eye,
+						reflectedViewMatrix, floorColor, floorQuads);
+				}
+
+				// Inner cells: no clipping needed
+				for (sint x = insideFirst; x <= insideLast; ++x)
+				{
+					CVector wp[4];
+					CUV uv[4];
+					float coords[4][2] = {
+						{ float(x),     float(absY) },
+						{ float(x + 1), float(absY) },
+						{ float(x + 1), float(absY + 1) },
+						{ float(x),     float(absY + 1) }
+					};
 					bool valid = true;
-
-					for (int i = 0; i < 4; ++i)
+					for (int c = 0; c < 4; ++c)
 					{
-						float cx = sx[i & 1];
-						float cy = sy[(i >> 1) & 1];
-
-						// Un-project to near plane in camera-local space,
-						// then transform to world space
-						CVector nearLocal = frustum.unProject(CVector(cx, cy, 0.f));
-						CVector worldNear = camWorld * nearLocal;
-
-						// Ray from eye through this screen point
-						CVector dir = worldNear - eye;
-
-						// Intersect with Z=0 plane
-						if (dir.z >= -0.0001f)
+						if (!gridToWorldAndUV(coords[c][0], coords[c][1], gridN,
+							frustum, camWorld, eye, reflectedViewMatrix, wp[c], uv[c]))
 						{
 							valid = false;
 							break;
 						}
-						float t = -eye.z / dir.z;
-
-						corners[i].x = eye.x + t * dir.x;
-						corners[i].y = eye.y + t * dir.y;
-						corners[i].z = 0.f;
-
-						// Reflection UV: project through reflected camera
-						CVector reflLocal = reflectedViewMatrix * corners[i];
-						CVector proj = frustum.project(reflLocal);
-						uvs[i] = CUV(proj.x, proj.y);
 					}
-
-					if (!valid)
-						continue;
-
-					// Skip cells entirely outside the floor polygon
-					bool anyInside = false;
-					for (int i = 0; i < 4; ++i)
-					{
-						if (isInsideConvexPoly(corners[i].x, corners[i].y, floorPoly, numPolyVerts))
-						{
-							anyInside = true;
-							break;
-						}
-					}
-					if (!anyInside)
-						continue;
+					if (!valid) continue;
 
 					CQuadColorUV q;
-					q.V0 = corners[0]; q.V1 = corners[1];
-					q.V2 = corners[3]; q.V3 = corners[2];
+					q.V0 = wp[0]; q.V1 = wp[1]; q.V2 = wp[2]; q.V3 = wp[3];
 					q.Color0 = q.Color1 = q.Color2 = q.Color3 = floorColor;
-					q.Uv0 = uvs[0]; q.Uv1 = uvs[1];
-					q.Uv2 = uvs[3]; q.Uv3 = uvs[2];
-
+					q.Uv0 = uv[0]; q.Uv1 = uv[1]; q.Uv2 = uv[2]; q.Uv3 = uv[3];
 					floorQuads.push_back(q);
+				}
+
+				// Right border cells: clip against polygon
+				for (sint x = insideLast + 1; x <= borderLast; ++x)
+				{
+					CPolygon clipPoly;
+					clipPoly.Vertices.resize(4);
+					clipPoly.Vertices[0].set(float(x),     float(absY),     0.f);
+					clipPoly.Vertices[1].set(float(x + 1), float(absY),     0.f);
+					clipPoly.Vertices[2].set(float(x + 1), float(absY + 1), 0.f);
+					clipPoly.Vertices[3].set(float(x),     float(absY + 1), 0.f);
+					clipPoly.clip(clipPlanes);
+					emitClippedPoly(clipPoly, gridN, frustum, camWorld, eye,
+						reflectedViewMatrix, floorColor, floorQuads);
 				}
 			}
 
