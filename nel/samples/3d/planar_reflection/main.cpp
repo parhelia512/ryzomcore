@@ -254,44 +254,84 @@ void CPlanarReflectionDemo::run()
 		// Set reflection texture on floor material
 		m_FloorMat.setTexture(0, reflectRT);
 
-		// Draw floor as a subdivided grid for correct projective UV mapping.
-		// A single quad can't represent the nonlinear perspective projection;
-		// subdividing gives each cell small enough UVs for linear interpolation.
+		// Screen-space grid tessellation (matching NeL water approach):
+		// 1. Subdivide the screen into a fixed grid
+		// 2. Un-project each grid vertex to the Z=0 floor plane
+		// 3. Compute reflection UVs from the reflected camera
+		// This gives uniform screen-space density and correct projective UVs.
 		{
 			const int gridN = 32;
-			float step = (2.f * floorExtent) / float(gridN);
-			CRGBA floorColor(150, 180, 220, 180); // slight blue tint, translucent
+			float stepX = 1.f / float(gridN);
+			float stepY = 1.f / float(gridN);
+			CRGBA floorColor(150, 180, 220, 180);
+
+			// Camera world matrix for un-projecting screen points
+			CMatrix camWorld = viewMatrix;
+			camWorld.invert();
+
+			std::vector<CQuadColorUV> floorQuads;
+			floorQuads.reserve(gridN * gridN);
 
 			for (int gy = 0; gy < gridN; ++gy)
 			{
 				for (int gx = 0; gx < gridN; ++gx)
 				{
-					float x0 = -floorExtent + gx * step;
-					float x1 = x0 + step;
-					float y0 = -floorExtent + gy * step;
-					float y1 = y0 + step;
+					// Screen-space corners of this cell [0..1]
+					float sx[2] = { gx * stepX, (gx + 1) * stepX };
+					float sy[2] = { gy * stepY, (gy + 1) * stepY };
 
-					CVector v0(x0, y0, 0.f);
-					CVector v1(x1, y0, 0.f);
-					CVector v2(x1, y1, 0.f);
-					CVector v3(x0, y1, 0.f);
+					// Un-project each corner to Z=0 plane
+					CVector corners[4];
+					CUV uvs[4];
+					bool valid = true;
 
-					CVector p0 = frustum.project(reflectedViewMatrix * v0);
-					CVector p1 = frustum.project(reflectedViewMatrix * v1);
-					CVector p2 = frustum.project(reflectedViewMatrix * v2);
-					CVector p3 = frustum.project(reflectedViewMatrix * v3);
+					for (int i = 0; i < 4; ++i)
+					{
+						float cx = sx[i & 1];
+						float cy = sy[(i >> 1) & 1];
+
+						// Un-project to near plane in camera-local space,
+						// then transform to world space
+						CVector nearLocal = frustum.unProject(CVector(cx, cy, 0.f));
+						CVector worldNear = camWorld * nearLocal;
+
+						// Ray from eye through this screen point
+						CVector dir = worldNear - eye;
+
+						// Intersect with Z=0 plane
+						if (dir.z >= -0.0001f)
+						{
+							valid = false;
+							break;
+						}
+						float t = -eye.z / dir.z;
+
+						corners[i].x = eye.x + t * dir.x;
+						corners[i].y = eye.y + t * dir.y;
+						corners[i].z = 0.f;
+
+						// Reflection UV: project through reflected camera
+						CVector reflLocal = reflectedViewMatrix * corners[i];
+						CVector proj = frustum.project(reflLocal);
+						uvs[i] = CUV(proj.x, proj.y);
+					}
+
+					if (!valid)
+						continue;
 
 					CQuadColorUV q;
-					q.V0 = v0; q.V1 = v1; q.V2 = v2; q.V3 = v3;
+					q.V0 = corners[0]; q.V1 = corners[1];
+					q.V2 = corners[3]; q.V3 = corners[2];
 					q.Color0 = q.Color1 = q.Color2 = q.Color3 = floorColor;
-					q.Uv0 = CUV(p0.x, p0.y);
-					q.Uv1 = CUV(p1.x, p1.y);
-					q.Uv2 = CUV(p2.x, p2.y);
-					q.Uv3 = CUV(p3.x, p3.y);
+					q.Uv0 = uvs[0]; q.Uv1 = uvs[1];
+					q.Uv2 = uvs[3]; q.Uv3 = uvs[2];
 
-					m_Driver->drawQuad(q, m_FloorMat);
+					floorQuads.push_back(q);
 				}
 			}
+
+			if (!floorQuads.empty())
+				m_Driver->drawQuads(floorQuads, m_FloorMat);
 		}
 
 		// --- Phase 7: Cleanup and swap ---
