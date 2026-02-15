@@ -168,7 +168,7 @@ public:
 	static IDriver		*createGlDriver();
 
 	/// Portable Function which create a GL3 Driver (using gl dll...).
-	static IDriver		*createGl3Driver() throw(EDru);
+	static IDriver		*createGl3Driver();
 
 	/// Portable Function which create a GL ES Driver (using gl dll...).
 	static IDriver		*createGlEsDriver();
