@@ -72,6 +72,7 @@
 //   C - Toggle camera orbit
 //   R - Toggle cube rotation
 //   S - Toggle skybox roll
+//   T - Toggle full render target overlay (stretch RT to screen)
 //   B - Toggle render target boundary overlay
 //   H - Toggle half-resolution reflection
 //   P - Toggle power-of-two render target sizing
@@ -292,6 +293,7 @@ private:
 	bool m_AnimCube;
 	bool m_AnimSkybox;
 	bool m_ShowBounds;
+	bool m_ShowRT;
 	bool m_HalfRes;
 	bool m_Pow2;
 	bool m_FixedRT;
@@ -310,6 +312,7 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 	, m_AnimCube(true)
 	, m_AnimSkybox(true)
 	, m_ShowBounds(false)
+	, m_ShowRT(false)
 	, m_HalfRes(false)
 	, m_Pow2(false)
 	, m_FixedRT(true)
@@ -379,6 +382,7 @@ void CPlanarReflectionDemo::operator()(const CEvent &event)
 			if (keyDown.Key == KeyR) m_AnimCube = !m_AnimCube;
 			if (keyDown.Key == KeyS) m_AnimSkybox = !m_AnimSkybox;
 			if (keyDown.Key == KeyB) m_ShowBounds = !m_ShowBounds;
+			if (keyDown.Key == KeyT) m_ShowRT = !m_ShowRT;
 			if (keyDown.Key == KeyH) m_HalfRes = !m_HalfRes;
 			if (keyDown.Key == KeyP) m_Pow2 = !m_Pow2;
 			if (keyDown.Key == KeyW) m_FixedRT = !m_FixedRT;
@@ -730,7 +734,21 @@ void CPlanarReflectionDemo::run()
 				m_Driver->drawQuads(floorQuads, m_FloorMat);
 		}
 
-		// --- Phase 6b: Draw RT boundary overlay ---
+		// --- Phase 6b: Draw full RT overlay ---
+
+		if (m_ShowRT)
+		{
+			m_Driver->setMatrixMode2D11();
+			CQuadColorUV rtQuad;
+			rtQuad.V0.set(0.f, 0.f, 0.5f); rtQuad.Uv0 = CUV(0.f, 0.f);
+			rtQuad.V1.set(1.f, 0.f, 0.5f); rtQuad.Uv1 = CUV(1.f, 0.f);
+			rtQuad.V2.set(1.f, 1.f, 0.5f); rtQuad.Uv2 = CUV(1.f, 1.f);
+			rtQuad.V3.set(0.f, 1.f, 0.5f); rtQuad.Uv3 = CUV(0.f, 1.f);
+			rtQuad.Color0 = rtQuad.Color1 = rtQuad.Color2 = rtQuad.Color3 = CRGBA::White;
+			m_Driver->drawQuad(rtQuad, m_FloorMat);
+		}
+
+		// --- Phase 6c: Draw RT boundary overlay ---
 
 		if (m_ShowBounds)
 		{
