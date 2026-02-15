@@ -380,14 +380,10 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 				// Material explicitly requests texgen — use it even if VB has texcoords
 				setTexGenFunction(stage, mat);
 			}
-			else if (vertexFormat & g_VertexFlags[TexCoord0 + stage])
+			else
 			{
-				// VB provides texcoords, no texgen requested
+				// No texgen requested — disable it (prevents stale texgen from previous materials)
 				setTexGenModeVP(stage, TexGenDisabled);
-			}
-			else if (matShader != CMaterial::Specular) // Specular has it's own env function setup by startSpecularBatch
-			{
-				setTexGenFunction(stage, mat);
 			}
 		}
 	}
@@ -398,13 +394,13 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 		activateTexture(1, mat.getTexture(0));
 		setTexGenModeVP(1, TexGenDisabled);
 	}
-	else if (matShader != CMaterial::Specular) // TEMP BUGFIX
-	{// TEMP BUGFIX
+	else // LightMap, PPL, Water — main loop skipped, so reset all texgen modes
+	{
 		for (uint stage = 0; stage < IDRV_MAT_MAXTEXTURES; ++stage)
 		{
 			setTexGenModeVP(stage, TexGenDisabled);
 		}
-	}// TEMP BUGFIX
+	}
 
 	if (matShader == CMaterial::Specular)
 	{
@@ -423,6 +419,10 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 					setTexGenModeVP(1, TexGenReflectionMap);
 				else
 					setTexGenModeVP(1, TexGenSphereMap);
+			}
+			else
+			{
+				setTexGenModeVP(1, TexGenDisabled);
 			}
 		}
 	}

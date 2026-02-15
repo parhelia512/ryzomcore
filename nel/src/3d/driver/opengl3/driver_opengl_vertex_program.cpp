@@ -212,6 +212,9 @@ void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
 
 void vpGenerate(std::string &result, const CVPBuiltin &desc)
 {
+	// Lighting requires normals in VB — fall back to unlit if missing
+	bool lighting = desc.Lighting && hasFlag(desc.VertexFormat, g_VertexFlags[Normal]);
+
 	std::stringstream ss;
 	ss << "// Builtin Vertex Shader" << std::endl;
 	ss << std::endl;
@@ -244,41 +247,48 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 
 	bool needTexGen = false;
 	bool needEyeLinear = false;
+	bool needReflection = false;
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 	{
 		if (desc.TexGenMode[i] >= 0)
 		{
 			ss << "smooth out vec4 texCoord" << i << "; // texgen" << std::endl;
 			needTexGen = true;
-			if (desc.TexGenMode[i] == TexGenObjectLinear || desc.TexGenMode[i] == TexGenEyeLinear)
+			if (desc.TexGenMode[i] == TexGenObjectLinear || desc.TexGenMode[i] == TexGenEyeLinear
+				|| desc.TexGenMode[i] == TexGenReflectionMap || desc.TexGenMode[i] == TexGenSphereMap)
 				ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
 			if (desc.TexGenMode[i] == TexGenEyeLinear)
 				needEyeLinear = true;
+			if (desc.TexGenMode[i] == TexGenReflectionMap || desc.TexGenMode[i] == TexGenSphereMap)
+				needReflection = true;
 		}
 	}
 	ss << std::endl;
 
 	// Ambient color of all lights is precalculated and added with self illumination, and multiplied with the material ambient.
-	if (desc.Lighting)
+	if (lighting)
 		ss << "uniform vec4 selfIllumination;" << std::endl;
 
-	if (desc.Fog || desc.Lighting || needEyeLinear)
+	if (desc.Fog || lighting || needEyeLinear || needReflection)
 		ss << "uniform mat4 modelView;" << std::endl;
-	if (desc.Lighting)
+	if (lighting)
 		ss << "uniform mat4 viewMatrix;" << std::endl;
-	if (desc.Fog || desc.Lighting || needEyeLinear)
+	if (desc.Fog || lighting || needEyeLinear || needReflection)
 		ss << "vec4 ecPos4;" << std::endl;
+	// normalMatrix needed for lighting and reflection texgen
+	if (needReflection && !lighting)
+		ss << "uniform mat3 normalMatrix;" << std::endl;
 	if (desc.Fog)
 		ss << "smooth out vec4 ecPos;" << std::endl;
 	ss << std::endl;
 
-	if (!desc.Lighting)
+	if (!lighting)
 		ss << "uniform vec4 materialColor;" << std::endl; // Verify
 
 	ss << "smooth out vec4 vertexColor;" << std::endl;
 	ss << std::endl;
 
-	if (desc.Lighting)
+	if (lighting)
 	{
 		ss << "uniform mat3 normalMatrix;" << std::endl;
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
@@ -294,18 +304,18 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	ss << "gl_Position = modelViewProjection * " << "v" << g_AttribNames[0] << ";" << std::endl;
 	ss << std::endl;
 
-	if (desc.Fog || desc.Lighting || needEyeLinear)
+	if (desc.Fog || lighting || needEyeLinear || needReflection)
 		ss << "ecPos4 = modelView * v" << g_AttribNames[0] << ";" << std::endl;
 	if (desc.Fog)
 		ss << "ecPos = ecPos4;" << std::endl;
 	ss << std::endl;
 
-	bool specularVertex = desc.Lighting || desc.VertexFormat & g_VertexFlags[SecondaryColor];
+	bool specularVertex = lighting || (desc.VertexFormat & g_VertexFlags[SecondaryColor]);
 	ss << "vec4 diffuseVertex;" << std::endl;
 	if (specularVertex) ss << "vec4 specularVertex;" << std::endl;
 	ss << std::endl;
 
-	if (desc.Lighting)
+	if (lighting)
 	{
 		// Calculate lights
 		ss << "diffuseVertex = vec4(0.0, 0.0, 0.0, 0.0);" << std::endl;
@@ -340,25 +350,25 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	// Primary color
 	if (desc.VertexFormat & g_VertexFlags[PrimaryColor])
 	{
-		if (desc.Lighting && desc.VertexColorLighted)
+		if (lighting && desc.VertexColorLighted)
 		{
 			// GL_COLOR_MATERIAL behavior: vertex color replaces material diffuse
 			// CPU doesn't pre-multiply by matDiffuse when VertexColorLighted is set
 			ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
 		}
-		else if (!desc.Lighting)
+		else if (!lighting)
 		{
 			// Unlit: vertex color modulates materialColor
 			ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
 		}
-		// When Lighting && !VertexColorLighted: vprimaryColor is ignored (matDiffuse pre-multiplied on CPU)
+		// When lighting && !VertexColorLighted: vprimaryColor is ignored (matDiffuse pre-multiplied on CPU)
 	}
 	
 	// Add diffuse and specular color
 	ss << "vertexColor = diffuseVertex;" << std::endl;
 	if (specularVertex)
 		ss << "vertexColor.rgb = vertexColor.rgb + (specularVertex.rgb * specularVertex.a);" << std::endl; // Verify
-	if (desc.Lighting)
+	if (lighting)
 		ss << "vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl; // Note: Alpha of self illumination is ignored
 
 	// Clamp vertex color to [0,1] to match OpenGL fixed-function / ARB VP behavior
@@ -376,6 +386,22 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		}
 	}
 
+	// Compute eye-space reflection vector (shared by all reflection/sphere stages)
+	if (needReflection)
+	{
+		if (hasFlag(desc.VertexFormat, g_VertexFlags[Normal]))
+		{
+			ss << "vec3 refl_n = normalize(normalMatrix * (v" << g_AttribNames[Normal] << ".xyz / v" << g_AttribNames[Normal] << ".w));" << std::endl;
+			ss << "vec3 refl_u = normalize(ecPos4.xyz);" << std::endl; // incident: eye to vertex
+			ss << "vec3 refl_r = reflect(refl_u, refl_n);" << std::endl;
+		}
+		else
+		{
+			ss << "vec3 refl_r = vec3(0.0, 0.0, -1.0);" << std::endl; // fallback when no normals
+		}
+		ss << std::endl;
+	}
+
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 	{
 		if (desc.TexGenMode[i] == TexGenObjectLinear)
@@ -388,10 +414,18 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 			// Eye-linear: texCoord = texMatrix * eyePosition (identity eye planes)
 			ss << "texCoord" << i << " = texMatrix" << i << " * ecPos4;" << std::endl;
 		}
-		else if (desc.TexGenMode[i] == TexGenReflectionMap || desc.TexGenMode[i] == TexGenSphereMap)
+		else if (desc.TexGenMode[i] == TexGenReflectionMap)
 		{
-			// TODO: Reflection/sphere map texgen
-			ss << "texCoord" << i << " = vec4(0.0, 0.0, 0.0, 0.0); // TODO: reflection/sphere texgen" << std::endl;
+			// Reflection map (cubemap): eye-space reflection vector, transformed by texMatrix
+			ss << "texCoord" << i << " = texMatrix" << i << " * vec4(refl_r, 0.0);" << std::endl;
+		}
+		else if (desc.TexGenMode[i] == TexGenSphereMap)
+		{
+			// Sphere map (2D): OpenGL sphere mapping formula from the reflection vector
+			ss << "{" << std::endl;
+			ss << "float refl_m = 2.0 * sqrt(refl_r.x * refl_r.x + refl_r.y * refl_r.y + (refl_r.z + 1.0) * (refl_r.z + 1.0));" << std::endl;
+			ss << "texCoord" << i << " = texMatrix" << i << " * vec4(refl_r.x / refl_m + 0.5, refl_r.y / refl_m + 0.5, 0.0, 1.0);" << std::endl;
+			ss << "}" << std::endl;
 		}
 	}
 
@@ -424,6 +458,10 @@ void CDriverGL3::generateBuiltinVertexProgram()
 
 	if (!compileVertexProgram(vertexProgram))
 	{
+		nlwarning("GL3: Builtin VP compilation failed (fmt=0x%x, lit=%d, fog=%d, spec=%d, vcl=%d)",
+			m_VPBuiltinCurrent.VertexFormat, (int)m_VPBuiltinCurrent.Lighting,
+			(int)m_VPBuiltinCurrent.Fog, (int)m_VPBuiltinCurrent.Specular,
+			(int)m_VPBuiltinCurrent.VertexColorLighted);
 		delete vertexProgram; vertexProgram = NULL;
 	}
 
