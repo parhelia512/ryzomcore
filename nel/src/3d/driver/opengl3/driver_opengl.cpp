@@ -1472,7 +1472,7 @@ void	CDriverGL3::endProfileVBHardLock(vector<std::string> &result)
 
 	// clear.
 	_VBHardProfiling= false;
-	contReset(_VBHardProfiles);
+	NLMISC::contReset(_VBHardProfiles);
 }
 
 // ***************************************************************************
@@ -1552,6 +1552,15 @@ void	CDriverGL3::profileVBHardAllocation(std::vector<std::string> &result)
 				vbHard->VB->getName().c_str(), vSize*numVerts/1000, vSize, numVerts));
 		}
 	}
+}
+
+// ***************************************************************************
+sint CDriverGL3::getTotalVideoMemory() const
+{
+	H_AUTO_OGL(CDriverGL3_getTotalVideoMemory);
+
+	// TODO: Query GL_NVX_gpu_memory_info or GL_ATI_meminfo if available
+	return -1;
 }
 
 // ***************************************************************************
@@ -1642,7 +1651,7 @@ void CDriverGL3::displayBench (class NLMISC::CLog *log)
 #ifdef NL_DEBUG
 void CDriverGL3::dumpMappedBuffers()
 {
-	_AGPVertexArrayRange->dumpMappedBuffers();
+	// Vertex array ranges removed in GL3 driver
 }
 #endif
 

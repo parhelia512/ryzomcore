@@ -35,6 +35,7 @@
 #include <utility>
 #include <deque>
 #include <limits>
+#include <sstream>
 
 #ifdef NL_OS_WINDOWS
 #	define WIN32_LEAN_AND_MEAN

@@ -253,8 +253,7 @@ void *CVertexBufferGL3::lock()
 	}
 
 	#ifdef NL_DEBUG
-		_VertexArrayRange->_MappedVBList.push_front(this);
-		_IteratorInMappedVBList = _VertexArrayRange->_MappedVBList.begin();
+		// Vertex array range tracking removed in GL3 driver
 	#endif
 	m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
 	// Lock Profile?
@@ -283,16 +282,9 @@ void CVertexBufferGL3::unlock()
 	}
 	m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId[m_CurrentIndex]);
 	// double start = CTime::ticksToSecond(CTime::getPerformanceTime());
-	#ifdef NL_DEBUG
-		_Unmapping = true;
-	#endif
 	GLboolean unmapOk = GL_FALSE;
 
 	unmapOk = nglUnmapBuffer(GL_ARRAY_BUFFER);
-
-	#ifdef NL_DEBUG
-		_Unmapping = false;
-	#endif
 	// Lock Profile?
 	if (m_Driver->_VBHardProfiling)
 	{
@@ -300,9 +292,6 @@ void CVertexBufferGL3::unlock()
 		afterLock= CTime::getPerformanceTime();
 		m_Driver->appendVBHardLockProfile(afterLock-beforeLock, VB);
 	}
-	#ifdef NL_DEBUG
-		_VertexArrayRange->_MappedVBList.erase(_IteratorInMappedVBList);
-	#endif
 	m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
 	if (!unmapOk)
 	{

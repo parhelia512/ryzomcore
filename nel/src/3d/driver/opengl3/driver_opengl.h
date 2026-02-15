@@ -340,6 +340,7 @@ public:
 
 	uint32 getAvailableVertexAGPMemory () { return uint32(-1); };
 	uint32 getAvailableVertexVRAMMemory () { return uint32(-1); };
+	virtual sint			getTotalVideoMemory() const;
 
 	virtual emptyProc		getWindowProc();
 
@@ -367,6 +368,8 @@ public:
 
 	virtual void			forceDXTCCompression(bool dxtcComp);
 	virtual void			setAnisotropicFilter(sint filter);
+	virtual uint			getAnisotropicFilter() const;
+	virtual uint			getAnisotropicFilterMaximum() const;
 
 	virtual void			forceTextureResize(uint divisor);
 
