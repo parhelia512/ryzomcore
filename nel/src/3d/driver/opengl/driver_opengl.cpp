@@ -257,6 +257,8 @@ CDriverGL::CDriverGL()
 
 	_FogEnabled= false;
 	_FogEnd = _FogStart = 0.f;
+	_FogMode = FogLinear;
+	_FogDensity = 1.f;
 	_CurrentFogColor[0]= 0;
 	_CurrentFogColor[1]= 0;
 	_CurrentFogColor[2]= 0;
@@ -297,14 +299,9 @@ CDriverGL::CDriverGL()
 
 	// Compute the Flag which say if one texture has been changed in CMaterial.
 	_MaterialAllTextureTouchedFlag= 0;
-	for(i=0; i < IDRV_MAT_MAXTEXTURES; i++)
+	for(i = 0; i < IDRV_MAT_MAXTEXTURES; i++)
 	{
-		_MaterialAllTextureTouchedFlag|= IDRV_TOUCHED_TEX[i];
-#ifdef GL_NONE
-		_CurrentTexAddrMode[i] = GL_NONE;
-#else
-		_CurrentTexAddrMode[i] = 0;
-#endif
+		_MaterialAllTextureTouchedFlag |= IDRV_TOUCHED_TEX[i];
 	}
 
 	_UserTexMatEnabled = 0;
@@ -697,7 +694,7 @@ bool CDriverGL::supportNonPowerOfTwoTextures() const
 // ***************************************************************************
 bool CDriverGL::isTextureRectangle(ITexture * tex) const
 {
-	return (!supportNonPowerOfTwoTextures() && supportTextureRectangle() && tex->isBloomTexture() && tex->mipMapOff()
+	return (!supportNonPowerOfTwoTextures() && supportTextureRectangle() && tex->isOffscreenTexture() && tex->mipMapOff()
 			&& (!isPowerOf2(tex->getWidth()) || !isPowerOf2(tex->getHeight())));
 }
 
@@ -825,10 +822,10 @@ bool CDriverGL::clearZBuffer(float zval)
 }
 
 // --------------------------------------------------
-bool CDriverGL::clearStencilBuffer(float stencilval)
+bool CDriverGL::clearStencilBuffer(sint stencilval)
 {
 	H_AUTO_OGL(CDriverGL_clearStencilBuffer)
-	glClearStencil((int)stencilval);
+	glClearStencil(stencilval);
 
 	glClear(GL_STENCIL_BUFFER_BIT);
 
@@ -1489,7 +1486,15 @@ void CDriverGL::enableFog(bool enable)
 void CDriverGL::setupFog(float start, float end, CRGBA color)
 {
 	H_AUTO_OGL(CDriverGL_setupFog)
-	glFogi(GL_FOG_MODE, GL_LINEAR);
+	GLenum glMode;
+	switch (_FogMode)
+	{
+	case FogExp:  glMode = GL_EXP; break;
+	case FogExp2: glMode = GL_EXP2; break;
+	default:      glMode = GL_LINEAR; break;
+	}
+	glFogi(GL_FOG_MODE, glMode);
+	glFogf(GL_FOG_DENSITY, _FogDensity);
 	glFogf(GL_FOG_START, start);
 	glFogf(GL_FOG_END, end);
 
@@ -1550,6 +1555,36 @@ CRGBA CDriverGL::getFogColor() const
 	ret.B= (uint8)(_CurrentFogColor[2]*255);
 	ret.A= (uint8)(_CurrentFogColor[3]*255);
 	return ret;
+}
+
+// ***************************************************************************
+void CDriverGL::setupFogMode(TFogMode mode, float density)
+{
+	H_AUTO_OGL(CDriverGL_setupFogMode)
+	_FogMode = mode;
+	_FogDensity = density;
+	// Re-apply fog settings with the new mode
+	GLenum glMode;
+	switch (_FogMode)
+	{
+	case FogExp:  glMode = GL_EXP; break;
+	case FogExp2: glMode = GL_EXP2; break;
+	default:      glMode = GL_LINEAR; break;
+	}
+	glFogi(GL_FOG_MODE, glMode);
+	glFogf(GL_FOG_DENSITY, _FogDensity);
+}
+
+// ***************************************************************************
+IDriver::TFogMode CDriverGL::getFogMode() const
+{
+	return _FogMode;
+}
+
+// ***************************************************************************
+float CDriverGL::getFogDensity() const
+{
+	return _FogDensity;
 }
 
 

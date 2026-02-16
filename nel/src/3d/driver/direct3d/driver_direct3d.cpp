@@ -330,6 +330,8 @@ CDriverD3D::CDriverD3D()
 	_FrustumPerspective= false;
 	_FogStart = 0;
 	_FogEnd = 1;
+	_FogMode = FogLinear;
+	_FogDensity = 1.f;
 
 	_SumTextureMemoryUsed = false;
 
@@ -614,8 +616,12 @@ void CDriverD3D::initRenderVariables()
 	// Fog default values
 	_FogStart = 0;
 	_FogEnd = 1;
+	_FogMode = FogLinear;
+	_FogDensity = 1.f;
 	setRenderState (D3DRS_FOGSTART, *((DWORD*) (&_FogStart)));
 	setRenderState (D3DRS_FOGEND, *((DWORD*) (&_FogEnd)));
+	setRenderState (D3DRS_FOGVERTEXMODE, D3DFOG_LINEAR);
+	setRenderState (D3DRS_FOGDENSITY, *((DWORD*) (&_FogDensity)));
 	setRenderState (D3DRS_FOGVERTEXMODE, D3DFOG_LINEAR);
 
 	// Alpha render states
@@ -1989,7 +1995,7 @@ bool CDriverD3D::clearZBuffer(float zval)
 
 // ***************************************************************************
 
-bool CDriverD3D::clearStencilBuffer(float stencilval)
+bool CDriverD3D::clearStencilBuffer(sint stencilval)
 {
 	H_AUTO_D3D(CDriverD3D_clearStencilBuffer);
 	nlassert (_DeviceInterface);
@@ -2234,6 +2240,38 @@ float CDriverD3D::getFogEnd() const
 CRGBA CDriverD3D::getFogColor() const
 {
 	return D3DCOLOR_NL_RGBA(_RenderStateCache[D3DRS_FOGCOLOR].Value);
+}
+
+// ***************************************************************************
+
+void CDriverD3D::setupFogMode(TFogMode mode, float density)
+{
+	H_AUTO_D3D(CDriverD3D_setupFogMode);
+	_FogMode = mode;
+	_FogDensity = density;
+	DWORD d3dMode;
+	switch (mode)
+	{
+	case FogExp:  d3dMode = D3DFOG_EXP; break;
+	case FogExp2: d3dMode = D3DFOG_EXP2; break;
+	default:      d3dMode = D3DFOG_LINEAR; break;
+	}
+	setRenderState(D3DRS_FOGVERTEXMODE, d3dMode);
+	setRenderState(D3DRS_FOGDENSITY, *((DWORD *)(&density)));
+}
+
+// ***************************************************************************
+
+IDriver::TFogMode CDriverD3D::getFogMode() const
+{
+	return _FogMode;
+}
+
+// ***************************************************************************
+
+float CDriverD3D::getFogDensity() const
+{
+	return _FogDensity;
 }
 
 // ***************************************************************************
@@ -2925,12 +2963,101 @@ const char *CDriverD3D::getVideocardInformation ()
 
 // ***************************************************************************
 
+// Minimal DXGI declarations for dynamic loading.
+// We avoid #include <dxgi.h> so this builds with the XP SDK and VS2008.
+namespace
+{
+
+// {7b7166ec-21c7-44ae-b21a-c9ae321ae369}
+static const GUID NL_IID_IDXGIFactory =
+	{ 0x7b7166ec, 0x21c7, 0x44ae, { 0xb2, 0x1a, 0xc9, 0xae, 0x32, 0x1a, 0xe3, 0x69 } };
+
+struct NL_DXGI_ADAPTER_DESC
+{
+	WCHAR  Description[128];
+	UINT   VendorId;
+	UINT   DeviceId;
+	UINT   SubSysId;
+	UINT   Revision;
+	SIZE_T DedicatedVideoMemory;
+	SIZE_T DedicatedSystemMemory;
+	SIZE_T SharedSystemMemory;
+	LUID   AdapterLuid;
+};
+
+// Minimal COM vtable layout for IDXGIAdapter (inherits IDXGIObject <- IUnknown).
+// IUnknown:    QueryInterface, AddRef, Release          (indices 0-2)
+// IDXGIObject: SetPrivateData, ..., GetParent           (indices 3-6)
+// IDXGIAdapter: EnumOutputs, GetDesc, CheckInterfaceSupport (indices 7-9)
+struct NL_IDXGIAdapter
+{
+	struct Vtbl
+	{
+		void *methods[8]; // 0..7: skip to GetDesc
+		HRESULT (STDMETHODCALLTYPE *GetDesc)(NL_IDXGIAdapter *This, NL_DXGI_ADAPTER_DESC *pDesc);
+	};
+	Vtbl *lpVtbl;
+
+	ULONG Release() { return ((ULONG (STDMETHODCALLTYPE *)(NL_IDXGIAdapter *))lpVtbl->methods[2])(this); }
+	HRESULT GetDesc(NL_DXGI_ADAPTER_DESC *pDesc) { return lpVtbl->GetDesc(this, pDesc); }
+};
+
+// Minimal COM vtable layout for IDXGIFactory (inherits IDXGIObject <- IUnknown).
+// IDXGIFactory: EnumAdapters is index 7
+struct NL_IDXGIFactory
+{
+	struct Vtbl
+	{
+		void *methods[7]; // 0..6: skip to EnumAdapters
+		HRESULT (STDMETHODCALLTYPE *EnumAdapters)(NL_IDXGIFactory *This, UINT Adapter, NL_IDXGIAdapter **ppAdapter);
+	};
+	Vtbl *lpVtbl;
+
+	ULONG Release() { return ((ULONG (STDMETHODCALLTYPE *)(NL_IDXGIFactory *))lpVtbl->methods[2])(this); }
+	HRESULT EnumAdapters(UINT Adapter, NL_IDXGIAdapter **ppAdapter) { return lpVtbl->EnumAdapters(this, Adapter, ppAdapter); }
+};
+
+typedef HRESULT (WINAPI *PFN_CreateDXGIFactory)(REFIID riid, void **ppFactory);
+
+} // anonymous namespace
+
 sint CDriverD3D::getTotalVideoMemory () const
 {
 	H_AUTO_D3D(CDriverD3D_getTotalVideoMemory);
 
-	// Can't use _DeviceInterface->GetAvailableTextureMem() because it's not reliable
-	// Returns 4 GiB instead of 2 with my GPU
+	// Try DXGI (available on Vista+). Dynamic load so we still run on XP.
+	HMODULE hDXGI = LoadLibraryW(L"dxgi.dll");
+	if (hDXGI)
+	{
+		sint result = -1;
+		PFN_CreateDXGIFactory pCreateFactory = (PFN_CreateDXGIFactory)GetProcAddress(hDXGI, "CreateDXGIFactory1");
+		if (!pCreateFactory)
+			pCreateFactory = (PFN_CreateDXGIFactory)GetProcAddress(hDXGI, "CreateDXGIFactory");
+
+		if (pCreateFactory)
+		{
+			NL_IDXGIFactory *factory = NULL;
+			if (SUCCEEDED(pCreateFactory(NL_IID_IDXGIFactory, (void **)&factory)))
+			{
+				NL_IDXGIAdapter *adapter = NULL;
+				if (SUCCEEDED(factory->EnumAdapters(0, &adapter)))
+				{
+					NL_DXGI_ADAPTER_DESC desc;
+					if (SUCCEEDED(adapter->GetDesc(&desc)))
+					{
+						result = (sint)(desc.DedicatedVideoMemory / 1024);
+						nlinfo("3D: DXGI DedicatedVideoMemory = %u MiB", (uint32)(desc.DedicatedVideoMemory / (1024 * 1024)));
+					}
+					adapter->Release();
+				}
+				factory->Release();
+			}
+		}
+		FreeLibrary(hDXGI);
+		if (result > 0)
+			return result;
+	}
+
 	return -1;
 }
 
@@ -3207,6 +3334,13 @@ void CDriverD3D::flush()
 	endScene();
 	//nldebug("BeginScene");
 	beginScene();
+}
+
+// ***************************************************************************
+
+bool CDriverD3D::supportMonitorColorProperties () const
+{
+	return _DesktopGammaRampValid;
 }
 
 // ***************************************************************************

@@ -932,7 +932,7 @@ public:
 	// Buffer
 	virtual bool			clear2D(CRGBA rgba);
 	virtual bool			clearZBuffer(float zval=1);
-	virtual bool			clearStencilBuffer(float stencilval=0);
+	virtual bool			clearStencilBuffer(sint stencilval=0);
 	virtual void			setColorMask (bool bRed, bool bGreen, bool bBlue, bool bAlpha);
 	virtual bool			swapBuffers();
 	virtual void			getBuffer (CBitmap &bitmap);	// Only 32 bits back buffer supported
@@ -1063,9 +1063,12 @@ public:
 	virtual	bool			fogEnabled();
 	virtual	void			enableFog(bool enable);
 	virtual	void			setupFog(float start, float end, CRGBA color);
+	virtual	void			setupFogMode(TFogMode mode = FogLinear, float density = 1.f);
 	virtual	float			getFogStart() const;
 	virtual	float			getFogEnd() const;
 	virtual	CRGBA			getFogColor() const;
+	virtual	TFogMode		getFogMode() const;
+	virtual	float			getFogDensity() const;
 
 	// Texture addressing modes
 	// todo hulud d3d adressing mode
@@ -1096,6 +1099,7 @@ public:
 	virtual	NLMISC::CRGBA	getBlendConstantColor() const;
 
 	// Monitor properties
+	virtual bool			supportMonitorColorProperties () const;
 	virtual bool			setMonitorColorProperties (const CMonitorColorProperties &properties);
 
 	// Polygon smoothing
@@ -2439,6 +2443,8 @@ private:
 	float					_FrustumZFar;
 	float					_FogStart;
 	float					_FogEnd;
+	TFogMode				_FogMode;
+	float					_FogDensity;
 
 	// Vertex memory available
 	uint32					_AGPMemoryAllocated;

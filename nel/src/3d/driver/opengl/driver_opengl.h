@@ -373,7 +373,7 @@ public:
 	virtual bool			clear2D(CRGBA rgba);
 
 	virtual bool			clearZBuffer(float zval=1);
-	virtual bool			clearStencilBuffer(float stencilval=0);
+	virtual bool			clearStencilBuffer(sint stencilval=0);
 	virtual void			setColorMask (bool bRed, bool bGreen, bool bBlue, bool bAlpha);
 	virtual void			setDepthRange(float znear, float zfar);
 	virtual	void			getDepthRange(float &znear, float &zfar) const;
@@ -608,9 +608,12 @@ public:
 	virtual	void			enableFog(bool enable);
 	/// setup fog parameters. fog must enabled to see result. start and end are in [0,1] range.
 	virtual	void			setupFog(float start, float end, CRGBA color);
+	virtual	void			setupFogMode(TFogMode mode = FogLinear, float density = 1.f);
 	virtual	float			getFogStart() const;
 	virtual	float			getFogEnd() const;
 	virtual	CRGBA			getFogColor() const;
+	virtual	TFogMode		getFogMode() const;
+	virtual	float			getFogDensity() const;
 	// @}
 
 	/// \name texture addressing modes
@@ -641,6 +644,7 @@ public:
 	virtual	bool			supportBlendConstantColor() const;
 	virtual	void			setBlendConstantColor(NLMISC::CRGBA col);
 	virtual	NLMISC::CRGBA	getBlendConstantColor() const;
+	virtual bool			supportMonitorColorProperties () const;
 	virtual bool			setMonitorColorProperties (const CMonitorColorProperties &properties);
 	virtual	void			finish();
 	virtual	void			flush();
@@ -901,6 +905,8 @@ private:
 	// Fog.
 	bool					_FogEnabled;
 	float					_FogEnd, _FogStart;
+	TFogMode				_FogMode;
+	float					_FogDensity;
 	GLfloat					_CurrentFogColor[4];
 
 

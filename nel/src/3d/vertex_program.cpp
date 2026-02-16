@@ -49,7 +49,7 @@ CVertexProgram::CVertexProgram(const char *nelvp)
 
 // ***************************************************************************
 
-CVertexProgram::~CVertexProgram ()
+CVertexProgram::~CVertexProgram()
 {
 	
 }

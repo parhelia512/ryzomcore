@@ -55,7 +55,7 @@
 #include "nel/3d/u_camera.h"
 #include "nel/3d/u_driver.h"
 #include "nel/3d/material.h"
-#include "nel/3d/texture_bloom.h"
+#include "nel/3d/texture_offscreen.h"
 #include "nel/3d/texture_user.h"
 #include "nel/3d/driver_user.h"
 #include "nel/3d/u_texture.h"
@@ -339,7 +339,7 @@ void CStereoOVR::setDriver(NL3D::UDriver *driver)
 	{
 		m_Driver = driver;
 
-		/*m_BarrelTex = new CTextureBloom(); // lol bloom
+		/*m_BarrelTex = new CTextureOffscreen();
 		m_BarrelTex->setRenderTarget(true);
 		m_BarrelTex->setReleasable(false);
 		m_BarrelTex->resize(m_DevicePtr->HMDInfo.HResolution, m_DevicePtr->HMDInfo.VResolution);
@@ -657,7 +657,7 @@ bool CStereoOVR::beginRenderTarget()
 		nlassert(!m_GUITexture);
 		uint32 width, height;
 		m_Driver->getWindowSize(width, height);
-		m_GUITexture = m_Driver->getRenderTargetManager().getRenderTarget(width, height, true, UTexture::RGBA8888);
+		m_GUITexture = m_Driver->getRenderTargetManager().getRenderTarget(width, height, false, UTexture::RGBA8888);
 		static_cast<CDriverUser *>(m_Driver)->setRenderTarget(*m_GUITexture);
 		m_Driver->clearBuffers(NLMISC::CRGBA(0, 0, 0, 0));
 		return true;

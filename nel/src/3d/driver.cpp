@@ -39,13 +39,13 @@ namespace NL3D
 {
 
 // ***************************************************************************
-const uint32 IDriver::InterfaceVersion = 0x71; // user clip planes
+const uint32 IDriver::InterfaceVersion = 0x72; // fog mode (linear/exp/exp2)
 
 // ***************************************************************************
 IDriver::IDriver() : _SyncTexDrvInfos( "IDriver::_SyncTexDrvInfos" )
 {
 	_PolygonMode= Filled;
-	_StaticMemoryToVRAM=false;
+	_StaticMemoryToVRAM=true;
 	_ResetCounter=0;
 }
 

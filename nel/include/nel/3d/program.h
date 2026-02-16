@@ -35,6 +35,8 @@
 
 namespace NL3D {
 
+static const uint32 IDRV_PROGRAM_MAXSAMPLERS = 32;
+
 // List typedef.
 class	IDriver;
 class	IProgramDrvInfos;
@@ -72,27 +74,31 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
 	{
 		// Matrices
-		Matrices								= 0x00000001, 
+		Matrices								= 0x00000001,
 
 		// Fog
-		Fog										= 0x00000002, 
+		Fog										= 0x00000002,
 	};
 	uint32 DriverFlags;
 
 	enum TMaterialFlags
 	{
 		/// Use the CMaterial texture stages as the textures for a Pixel Program
-		TextureStages							= 0x00000001, 
-		TextureMatrices							= 0x00000002, 
+		TextureStages							= 0x00000001,
+		TextureMatrices							= 0x00000002,
 	};
 	// Material builtin parameters
 	uint32 MaterialFlags;
+
+	/// VP output varyings as CVertexBuffer vertex format flags.
+	/// When a user VP is active, the builtin PP uses this to declare matching inputs.
+	uint16 VPVertexFormat;
 };
 
 // Stucture used to cache the indices of builtin parameters which are used by the drivers
@@ -114,9 +120,217 @@ struct CProgramIndex
 		ModelViewProjection, 
 		ModelViewProjectionInverse, 
 		ModelViewProjectionTranspose, 
-		ModelViewProjectionInverseTranspose, 
+		ModelViewProjectionInverseTranspose,
 
-		Fog, 
+		NormalMatrix,
+		ViewMatrix,
+
+		Fog,
+		FogParams,
+		FogColor,
+		FogDensity,
+
+		Color,
+		//DiffuseColor,
+
+		AlphaRef,
+
+		Constant0,
+		Constant1,
+		Constant2,
+		Constant3,
+		Constant4,
+		Constant5,
+		Constant6,
+		Constant7,
+		Constant8,
+		Constant9,
+		Constant10,
+		Constant11,
+		Constant12,
+		Constant13,
+		Constant14,
+		Constant15,
+		Constant16,
+		Constant17,
+		Constant18,
+		Constant19,
+		Constant20,
+		Constant21,
+		Constant22,
+		Constant23,
+		Constant24,
+		Constant25,
+		Constant26,
+		Constant27,
+		Constant28,
+		Constant29,
+		Constant30,
+		Constant31,
+
+		Sampler0,
+		Sampler1,
+		Sampler2,
+		Sampler3,
+		Sampler4,
+		Sampler5,
+		Sampler6,
+		Sampler7,
+		Sampler8,
+		Sampler9,
+		Sampler10,
+		Sampler11,
+		Sampler12,
+		Sampler13,
+		Sampler14,
+		Sampler15,
+		Sampler16,
+		Sampler17,
+		Sampler18,
+		Sampler19,
+		Sampler20,
+		Sampler21,
+		Sampler22,
+		Sampler23,
+		Sampler24,
+		Sampler25,
+		Sampler26,
+		Sampler27,
+		Sampler28,
+		Sampler29,
+		Sampler30,
+		Sampler31,
+
+		TexMatrix0,
+		TexMatrix1,
+		TexMatrix2,
+		TexMatrix3,
+
+		TexGen0ObjectPlaneS,
+		TexGen0ObjectPlaneT,
+		TexGen0ObjectPlaneP,
+		TexGen0ObjectPlaneQ,
+
+		TexGen1ObjectPlaneS,
+		TexGen1ObjectPlaneT,
+		TexGen1ObjectPlaneP,
+		TexGen1ObjectPlaneQ,
+
+		TexGen2ObjectPlaneS,
+		TexGen2ObjectPlaneT,
+		TexGen2ObjectPlaneP,
+		TexGen2ObjectPlaneQ,
+
+		TexGen3ObjectPlaneS,
+		TexGen3ObjectPlaneT,
+		TexGen3ObjectPlaneP,
+		TexGen3ObjectPlaneQ,
+
+		TexGen0EyePlaneS,
+		TexGen0EyePlaneT,
+		TexGen0EyePlaneP,
+		TexGen0EyePlaneQ,
+
+		TexGen1EyePlaneS,
+		TexGen1EyePlaneT,
+		TexGen1EyePlaneP,
+		TexGen1EyePlaneQ,
+
+		TexGen2EyePlaneS,
+		TexGen2EyePlaneT,
+		TexGen2EyePlaneP,
+		TexGen2EyePlaneQ,
+
+		TexGen3EyePlaneS,
+		TexGen3EyePlaneT,
+		TexGen3EyePlaneP,
+		TexGen3EyePlaneQ,
+
+		SelfIllumination,
+
+		Light0DirOrPos,
+		Light1DirOrPos,
+		Light2DirOrPos,
+		Light3DirOrPos,
+		Light4DirOrPos,
+		Light5DirOrPos,
+		Light6DirOrPos,
+		Light7DirOrPos,
+
+		Light0ColAmb,
+		Light1ColAmb,
+		Light2ColAmb,
+		Light3ColAmb,
+		Light4ColAmb,
+		Light5ColAmb,
+		Light6ColAmb,
+		Light7ColAmb,
+
+		Light0ColDiff,
+		Light1ColDiff,
+		Light2ColDiff,
+		Light3ColDiff,
+		Light4ColDiff,
+		Light5ColDiff,
+		Light6ColDiff,
+		Light7ColDiff,
+
+		Light0ColSpec,
+		Light1ColSpec,
+		Light2ColSpec,
+		Light3ColSpec,
+		Light4ColSpec,
+		Light5ColSpec,
+		Light6ColSpec,
+		Light7ColSpec,
+
+		Light0Shininess,
+		Light1Shininess,
+		Light2Shininess,
+		Light3Shininess,
+		Light4Shininess,
+		Light5Shininess,
+		Light6Shininess,
+		Light7Shininess,
+
+		Light0ConstAttn,
+		Light1ConstAttn,
+		Light2ConstAttn,
+		Light3ConstAttn,
+		Light4ConstAttn,
+		Light5ConstAttn,
+		Light6ConstAttn,
+		Light7ConstAttn,
+
+		Light0LinAttn,
+		Light1LinAttn,
+		Light2LinAttn,
+		Light3LinAttn,
+		Light4LinAttn,
+		Light5LinAttn,
+		Light6LinAttn,
+		Light7LinAttn,
+
+		Light0QuadAttn,
+		Light1QuadAttn,
+		Light2QuadAttn,
+		Light3QuadAttn,
+		Light4QuadAttn,
+		Light5QuadAttn,
+		Light6QuadAttn,
+		Light7QuadAttn,
+
+		ClipPlane0,
+		ClipPlane1,
+		ClipPlane2,
+		ClipPlane3,
+		ClipPlane4,
+		ClipPlane5,
+
+		EmbmMatrix0,
+		EmbmMatrix1,
+		EmbmMatrix2,
+		EmbmMatrix3,
 
 		NUM_UNIFORMS
 	};
@@ -242,15 +456,15 @@ public:
 
 protected:
 	/// The progam source
-	std::vector<NLMISC::CSmartPtr<CSource> >				m_Sources;
+	std::vector<NLMISC::CSmartPtr<CSource> > m_Sources;
 
 	/// The source used for compilation
-	NLMISC::CSmartPtr<CSource>								m_Source;
-	CProgramIndex										m_Index;
+	NLMISC::CSmartPtr<CSource> m_Source;
+	CProgramIndex m_Index;
 
 public:
 	/// The driver information. For the driver implementation only.
-	NLMISC::CRefPtr<IProgramDrvInfos>					m_DrvInfo;
+	NLMISC::CRefPtr<IProgramDrvInfos> m_DrvInfo;
 
 }; /* class IProgram */
 

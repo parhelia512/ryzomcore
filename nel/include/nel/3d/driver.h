@@ -253,6 +253,9 @@ public:
 	// Must be a HWND for Windows (WIN32).
 	virtual nlWindow		getDisplay() = 0;
 
+	/// Return true if the driver supports monitor color properties (gamma, contrast, luminosity)
+	virtual bool			supportMonitorColorProperties() const = 0;
+
 	/// Setup monitor color properties. Return false if setup failed
 	virtual bool			setMonitorColorProperties(const CMonitorColorProperties &properties) = 0;
 
@@ -299,7 +302,7 @@ public:
 	virtual bool			clearZBuffer(float zval=1) = 0;
 
 	/// Clear the current target surface stencil buffer. The function ignores the viewport settings but uses the scissor.
-	virtual bool			clearStencilBuffer(float stencilval=0) = 0;
+	virtual bool			clearStencilBuffer(sint stencilval=0) = 0;
 
 	/// Set the color mask filter through where the operation done will pass
 	virtual void			setColorMask(bool bRed, bool bGreen, bool bBlue, bool bAlpha) = 0;
@@ -581,7 +584,7 @@ public:
 	bool					getStaticMemoryToVRAM() const { return _StaticMemoryToVRAM; }
 
 	/* Set to true if static vertex and index buffers must by allocated in VRAM, false in AGP.
-	 * Default is false.
+	 * Default is true.
 	 */
 	void					setStaticMemoryToVRAM(bool staticMemoryToVRAM);
 
@@ -817,14 +820,20 @@ public:
 
 	/// \name Fog support.
 	// @{
+	enum TFogMode { FogLinear = 0, FogExp, FogExp2 };
+
 	virtual	bool			fogEnabled() = 0;
 	virtual	void			enableFog(bool enable = true) = 0;
 	/// setup fog parameters. fog must enabled to see result. start and end are distance values.
 	virtual	void			setupFog(float start, float end, NLMISC::CRGBA color) = 0;
+	/// setup fog mode and density. mode/density are orthogonal to start/end/color.
+	virtual	void			setupFogMode(TFogMode mode = FogLinear, float density = 1.f) = 0;
 	/// Get.
 	virtual	float			getFogStart() const = 0;
 	virtual	float			getFogEnd() const = 0;
 	virtual	NLMISC::CRGBA	getFogColor() const = 0;
+	virtual	TFogMode		getFogMode() const = 0;
+	virtual	float			getFogDensity() const = 0;
 	// @}
 
 
