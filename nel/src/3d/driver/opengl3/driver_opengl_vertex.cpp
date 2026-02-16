@@ -208,6 +208,9 @@ bool		CDriverGL3::activeVertexBuffer(CVertexBuffer& VB)
 	}
 	if (!info->_VBHard ||  (info->_VBHard && !info->_VBHard->isInvalid()))
 	{
+		// Upload shadow buffer to GL if dirty (RAMPreferred optimization)
+		if (info->_VBHard)
+			info->_VBHard->flush();
 		setupGlArrays(_LastVB);
 	}
 	return true;

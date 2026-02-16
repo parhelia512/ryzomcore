@@ -67,6 +67,7 @@ static inline GLsizei vbgl3BufferForType(CVertexBuffer::TPreferredMemory mem)
 CVertexBufferGL3::CVertexBufferGL3(CDriverGL3 *drv, uint size, uint numVertices, CVertexBuffer::TPreferredMemory preferred, CVertexBuffer *vb)
 	: IVertexBufferGL3(drv, vb, IVertexBufferGL3::GL3),
 	m_VertexPtr(NULL),
+	m_ShadowDirty(false),
 	m_CurrentIndex(0),
 	m_CurrentInFlight(false),
 #if NL3D_GL3_VERTEX_BUFFER_INFLIGHT_DEBUG
@@ -76,6 +77,10 @@ CVertexBufferGL3::CVertexBufferGL3(CDriverGL3 *drv, uint size, uint numVertices,
 	m_MemType(preferred)
 {
 	H_AUTO_OGL(CVertexBufferGLARB_CVertexBufferGLARB);
+
+	// Allocate shadow buffer for RAMPreferred (CPU reads/writes go here)
+	if (preferred == CVertexBuffer::RAMPreferred)
+		m_ShadowData.resize(size, 0);
 
 	for (GLsizei i = 0; i < NL3D_GL3_BUFFER_QUEUE_MAX; ++i)
 	{
@@ -148,6 +153,12 @@ void *CVertexBufferGL3::lock()
 	{
 		if (VB->getLocation() != CVertexBuffer::NotResident)
 		{
+			// Not yet resident — shadow is always valid if available
+			if (!m_ShadowData.empty())
+			{
+				m_VertexPtr = m_ShadowData.data();
+				return m_VertexPtr;
+			}
 			nlassert(!m_DummyVB.empty());
 			return &m_DummyVB[0];
 		}
@@ -160,6 +171,11 @@ void *CVertexBufferGL3::lock()
 		if (glGetError() != GL_NO_ERROR)
 		{
 			m_Driver->incrementResetCounter();
+			if (!m_ShadowData.empty())
+			{
+				m_VertexPtr = m_ShadowData.data();
+				return m_VertexPtr;
+			}
 			return &m_DummyVB[0];
 		}
 
@@ -172,6 +188,11 @@ void *CVertexBufferGL3::lock()
 			{
 				m_Driver->incrementResetCounter();
 				nglDeleteBuffers(1, &m_VertexObjectId[i]);
+				if (!m_ShadowData.empty())
+				{
+					m_VertexPtr = m_ShadowData.data();
+					return m_VertexPtr;
+				}
 				return &m_DummyVB[0];
 			}
 		}
@@ -180,24 +201,26 @@ void *CVertexBufferGL3::lock()
 
 		m_Invalid = false;
 		m_Driver->_LostVBList.erase(m_IteratorInLostVBList);
+		// Shadow needs re-upload to the new GL buffer
+		if (!m_ShadowData.empty())
+			m_ShadowDirty = true;
 		// continue to standard mapping code below ..
 	}
+
+	// Shadow buffer fast path: no GL interaction needed
+	if (!m_ShadowData.empty())
+	{
+		m_VertexPtr = m_ShadowData.data();
+		return m_VertexPtr;
+	}
+
 	TTicks	beforeLock = 0;
 	if (m_Driver->_VBHardProfiling)
 	{
 		beforeLock= CTime::getPerformanceTime();
 	}
 
-	// m_VertexPtr = nglMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-	
-	// PERFORMANCE: AMD: This brings framerate from 24fps to 38fps, glitches with volatile buffers such as animated models and gui, likely glitches with others
-	// m_VertexPtr = nglMapBufferRange(GL_ARRAY_BUFFER, 0, size, GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
-
-	// PERFORMANCE: AMD: This brings framerate from 24fps to 38fps, glitches with landscape rendering
-	// m_VertexPtr = nglMapBufferRange(GL_ARRAY_BUFFER, 0, size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
-
 	// Invalidate when updating volatile buffers, framerate from 24fps to 38fps in reference test on AMD platform
-	// TODO: Find where we can optimize with GL_MAP_UNSYNCHRONIZED_BIT
 	switch (m_MemType)
 	{
 	case CVertexBuffer::AGPVolatile:
@@ -217,7 +240,7 @@ void *CVertexBufferGL3::lock()
 			++m_InvalidateCount;
 			nldebug("GL: Vertex buffer already in flight (reused: %u, invalidated: %u)", m_ReuseCount, m_InvalidateCount);
 #endif
-			// NOTE: GL_MAP_INVALIDATE_BUFFER_BIT removes the cost of waiting for synchronization (major performance impact), 
+			// NOTE: GL_MAP_INVALIDATE_BUFFER_BIT removes the cost of waiting for synchronization (major performance impact),
 			// but adds the cost of allocating a new buffer (which hast a much lower performance impact)
 			m_VertexPtr = nglMapBufferRange(GL_ARRAY_BUFFER, 0, size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
 		}
@@ -231,15 +254,8 @@ void *CVertexBufferGL3::lock()
 		}
 		break;
 	}
-	case CVertexBuffer::RAMPreferred:
-		m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId[m_CurrentIndex]);
-		// m_VertexPtr = nglMapBufferRange(GL_ARRAY_BUFFER, 0, size, GL_MAP_WRITE_BIT | GL_MAP_READ_BIT | GL_MAP_PERSISTENT | GL_MAP_COHERENT);
-		// NOTE: Persistent / Coherent is only available in OpenGL 4.4 (2013/2014 hardware with recent drivers)
-		m_VertexPtr = nglMapBuffer(GL_ARRAY_BUFFER, GL_READ_WRITE);
-		break;
 	default:
 		m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId[m_CurrentIndex]);
-		// m_VertexPtr = nglMapBufferRange(GL_ARRAY_BUFFER, 0, size, GL_MAP_WRITE_BIT);
 		m_VertexPtr = nglMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
 		break;
 	}
@@ -274,6 +290,14 @@ void CVertexBufferGL3::unlock()
 
 	m_VertexPtr = NULL;
 	if (m_Invalid) return;
+
+	// Shadow buffer: just mark dirty, no GL interaction
+	if (!m_ShadowData.empty())
+	{
+		m_ShadowDirty = true;
+		return;
+	}
+
 	if (!m_VertexObjectId[m_CurrentIndex]) return;
 	TTicks	beforeLock = 0;
 	if (m_Driver->_VBHardProfiling)
@@ -281,7 +305,6 @@ void CVertexBufferGL3::unlock()
 		beforeLock= CTime::getPerformanceTime();
 	}
 	m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId[m_CurrentIndex]);
-	// double start = CTime::ticksToSecond(CTime::getPerformanceTime());
 	GLboolean unmapOk = GL_FALSE;
 
 	unmapOk = nglUnmapBuffer(GL_ARRAY_BUFFER);
@@ -297,8 +320,6 @@ void CVertexBufferGL3::unlock()
 	{
 		invalidate();
 	}
-	/* double end = CTime::ticksToSecond(CTime::getPerformanceTime());
-	nlinfo("3D: Unlock = %f ms", (float) ((end - start) * 1000)); */
 }
 
 // ***************************************************************************
@@ -357,6 +378,25 @@ void CVertexBufferGL3::setFrameInFlight(uint64 swapBufferCounter)
 	// Set buffer frame in flight
 	m_FrameInFlight[m_CurrentIndex] = swapBufferCounter;
 	m_CurrentInFlight = true;
+}
+
+// ***************************************************************************
+
+void CVertexBufferGL3::flush()
+{
+	H_AUTO_OGL(CVertexBufferGL3_flush);
+
+	if (!m_ShadowDirty) return;
+	if (m_Invalid) return;
+
+	// Orphan the old GL buffer and upload shadow data in one call.
+	// glBufferData with a data pointer implicitly orphans — the GPU
+	// keeps reading from the old allocation while we upload new data.
+	const uint size = VB->getNumVertices() * VB->getVertexSize();
+	m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId[m_CurrentIndex]);
+	nglBufferData(GL_ARRAY_BUFFER, size, m_ShadowData.data(), GL_DYNAMIC_DRAW);
+	m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
+	m_ShadowDirty = false;
 }
 
 // ***************************************************************************

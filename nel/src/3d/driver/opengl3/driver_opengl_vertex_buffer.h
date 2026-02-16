@@ -49,6 +49,7 @@ public:
 	virtual	void disable() = 0;
 	virtual GLuint getGLuint() = 0;
 	virtual void setFrameInFlight(uint64 swapBufferCounter) = 0;
+	virtual void flush() {} // Upload shadow data to GL buffer if dirty
 
 	// test if buffer content is invalid. If so, no rendering should occurs (rendering should silently fail)
 	inline bool isInvalid() { return m_Invalid; }
@@ -79,6 +80,7 @@ public:
 	virtual	void disable();
 	virtual GLuint getGLuint();
 	virtual void setFrameInFlight(uint64 swapBufferCounter);
+	virtual void flush();
 	// @}
 
 	/// Invalidate the buffer (when it is lost, or when a lock fails)
@@ -89,6 +91,10 @@ private:
 
 	CVertexBuffer::TPreferredMemory m_MemType;
 	void *m_VertexPtr; // pointer on current datas. Null if not locked
+
+	// Shadow buffer for RAMPreferred: CPU reads/writes go here, uploaded to GL at draw time
+	std::vector<uint8> m_ShadowData;
+	bool m_ShadowDirty;
 
 	// if buffer has been invalidated, returns a dummy memory block and silently fails rendering
 	std::vector<uint8> m_DummyVB;
