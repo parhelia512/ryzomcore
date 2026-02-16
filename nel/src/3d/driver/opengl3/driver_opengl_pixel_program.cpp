@@ -679,7 +679,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 
 	if (desc.Flags & IDRV_MAT_ALPHA_TEST)
 	{
-		ss << "if (fragColor.a < alphaRef) discard;" << std::endl; // TODO: VERIFY < or <= ?
+		ss << "if (fragColor.a <= alphaRef) discard;" << std::endl; // GL_GREATER: pass if alpha > ref
 	}
 
 	if (desc.Fog)
