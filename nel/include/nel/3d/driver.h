@@ -820,14 +820,20 @@ public:
 
 	/// \name Fog support.
 	// @{
+	enum TFogMode { FogLinear = 0, FogExp, FogExp2 };
+
 	virtual	bool			fogEnabled() = 0;
 	virtual	void			enableFog(bool enable = true) = 0;
 	/// setup fog parameters. fog must enabled to see result. start and end are distance values.
 	virtual	void			setupFog(float start, float end, NLMISC::CRGBA color) = 0;
+	/// setup fog mode and density. mode/density are orthogonal to start/end/color.
+	virtual	void			setupFogMode(TFogMode mode = FogLinear, float density = 1.f) = 0;
 	/// Get.
 	virtual	float			getFogStart() const = 0;
 	virtual	float			getFogEnd() const = 0;
 	virtual	NLMISC::CRGBA	getFogColor() const = 0;
+	virtual	TFogMode		getFogMode() const = 0;
+	virtual	float			getFogDensity() const = 0;
 	// @}
 
 

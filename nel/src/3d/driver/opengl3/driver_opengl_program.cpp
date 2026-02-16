@@ -807,6 +807,10 @@ void CDriverGL3::setupUniforms(TProgram program)
 	if (fogColorIdx != ~0)
 		nglProgramUniform4fv(progId, fogColorIdx, 1, _CurrentFogColor);
 
+	uint fogDensityIdx = p->getUniformIndex(CProgramIndex::FogDensity);
+	if (fogDensityIdx != ~0)
+		nglProgramUniform1f(progId, fogDensityIdx, _FogDensity);
+
 	uint colorIndex = p->getUniformIndex(CProgramIndex::Color);
 	if (colorIndex != ~0)
 	{

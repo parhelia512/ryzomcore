@@ -1403,6 +1403,13 @@ void			CDriverUser::setupFog(float start, float end, CRGBA color)
 
 	_Driver->setupFog(start, end, color);
 }
+// ***************************************************************************
+void			CDriverUser::setupFogMode(uint mode, float density)
+{
+	NL3D_HAUTO_UI_DRIVER;
+
+	_Driver->setupFogMode((IDriver::TFogMode)mode, density);
+}
 
 
 // ***************************************************************************

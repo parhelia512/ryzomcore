@@ -56,10 +56,11 @@ static const uint64 SamplerCube = 1;
 /// Builtin pixel program description
 struct CPPBuiltin
 {
-	CPPBuiltin() : Touched(true) { }
+	CPPBuiltin() : Touched(true), FogMode(0) { }
 
 	uint16 VertexFormat;
 	bool Fog;
+	uint8 FogMode;
 
 	CMaterial::TShader Shader;
 	uint32 Flags;

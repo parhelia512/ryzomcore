@@ -90,6 +90,8 @@ bool operator<(const CPPBuiltin &left, const CPPBuiltin &right)
 		return left.VertexFormat < right.VertexFormat;
 	if (left.Fog != right.Fog)
 		return right.Fog;
+	if (left.FogMode != right.FogMode)
+		return left.FogMode < right.FogMode;
 
 	return false;
 }
@@ -116,6 +118,8 @@ bool operator==(const CPPBuiltin &left, const CPPBuiltin &right)
 		return false;
 	if (left.Fog != right.Fog)
 		return false;
+	if (left.FogMode != right.FogMode)
+		return false;
 
 	return true;
 }
@@ -141,7 +145,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h32 = NLMISC::wangHash(h32 ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0)));
+	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17)));
 
 	h64 = h64 ^ h32; // NLMISC::wangHash64(h64 ^ h32);
 	nlctassert(sizeof(size_t) >= sizeof(uint64));
@@ -161,7 +165,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h = NLMISC::wangHash(h ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0)));
+	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17)));
 
 	nlctassert(sizeof(size_t) >= sizeof(uint32));
 	return (size_t)h;
@@ -535,35 +539,34 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 	}
 
 	// Fog
-	if (desc.Fog) // FIXME: FogMode!
+	if (desc.Fog)
 	{
 		ss << "uniform vec2 fogParams;" << std::endl; // s = start, t = end
 		ss << "uniform vec4 fogColor;" << std::endl;
-
-		/*if (desc->getFogMode() == CShaderDesc::Linear)
-		{*/
-			//ss << "uniform float fogDensity;" << std::endl;
-		/*}*/
+		if (desc.FogMode != 0) // Exp or Exp2
+			ss << "uniform float fogDensity;" << std::endl;
 
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
-		
-		/*switch(desc->getFogMode())
-		{*/
-		//case CShaderDesc::Linear:
-			ss << "vec4 applyFog(vec4 col)" << std::endl;
-			ss << "{" << std::endl;
-			ss << "float z = ecPos.y / ecPos.w;" << std::endl;
-			ss << "z = abs(z);" << std::endl;
-			ss << "float fogFactor = (fogParams.t - z) / (fogParams.t - fogParams.s);" << std::endl;
-			ss << "fogFactor = clamp(fogFactor, 0.0, 1.0);" << std::endl;
-			ss << "vec4 fColor = mix(fogColor, col, fogFactor);" << std::endl;
-			ss << "fColor.a = col.a;" << std::endl;
-			ss << "return fColor;" << std::endl;
-			ss << "}" << std::endl;
-			ss << std::endl;
-		//	break;
-		/*}*/
 
+		ss << "vec4 applyFog(vec4 col)" << std::endl;
+		ss << "{" << std::endl;
+		ss << "  float z = abs(ecPos.y / ecPos.w);" << std::endl;
+		switch (desc.FogMode)
+		{
+		default: // Linear
+			ss << "  float fogFactor = clamp((fogParams.t - z) / (fogParams.t - fogParams.s), 0.0, 1.0);" << std::endl;
+			break;
+		case 1: // Exp
+			ss << "  float fogFactor = clamp(exp(-fogDensity * z), 0.0, 1.0);" << std::endl;
+			break;
+		case 2: // Exp2
+			ss << "  float fogFactor = clamp(exp(-fogDensity * fogDensity * z * z), 0.0, 1.0);" << std::endl;
+			break;
+		}
+		ss << "  vec4 fColor = mix(fogColor, col, fogFactor);" << std::endl;
+		ss << "  fColor.a = col.a;" << std::endl;
+		ss << "  return fColor;" << std::endl;
+		ss << "}" << std::endl;
 		ss << std::endl;
 	}
 
@@ -706,6 +709,12 @@ void CPPBuiltin::checkDriverStateTouched(CDriverGL3 *driver) // MUST NOT depend 
 	if (Fog != driver->m_VPBuiltinCurrent.Fog)
 	{
 		Fog = driver->m_VPBuiltinCurrent.Fog;
+		Touched = true;
+	}
+	uint8 fogMode = (uint8)driver->_FogMode;
+	if (FogMode != fogMode)
+	{
+		FogMode = fogMode;
 		Touched = true;
 	}
 }

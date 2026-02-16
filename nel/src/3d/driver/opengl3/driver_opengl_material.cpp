@@ -34,6 +34,7 @@ static const char *WaterFPGLSL_Header =
 	"#version 330\n"
 	"#extension GL_ARB_separate_shader_objects : enable\n";
 
+// Water shader uses linear fog only; exp/exp2 fog modes are not supported here
 static const char *WaterFPGLSL_Body =
 	"layout(location = 8) smooth in vec4 texCoord0;\n"
 	"layout(location = 9) smooth in vec4 texCoord1;\n"

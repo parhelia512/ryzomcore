@@ -330,6 +330,8 @@ CDriverD3D::CDriverD3D()
 	_FrustumPerspective= false;
 	_FogStart = 0;
 	_FogEnd = 1;
+	_FogMode = FogLinear;
+	_FogDensity = 1.f;
 
 	_SumTextureMemoryUsed = false;
 
@@ -614,8 +616,12 @@ void CDriverD3D::initRenderVariables()
 	// Fog default values
 	_FogStart = 0;
 	_FogEnd = 1;
+	_FogMode = FogLinear;
+	_FogDensity = 1.f;
 	setRenderState (D3DRS_FOGSTART, *((DWORD*) (&_FogStart)));
 	setRenderState (D3DRS_FOGEND, *((DWORD*) (&_FogEnd)));
+	setRenderState (D3DRS_FOGVERTEXMODE, D3DFOG_LINEAR);
+	setRenderState (D3DRS_FOGDENSITY, *((DWORD*) (&_FogDensity)));
 	setRenderState (D3DRS_FOGVERTEXMODE, D3DFOG_LINEAR);
 
 	// Alpha render states
@@ -2234,6 +2240,38 @@ float CDriverD3D::getFogEnd() const
 CRGBA CDriverD3D::getFogColor() const
 {
 	return D3DCOLOR_NL_RGBA(_RenderStateCache[D3DRS_FOGCOLOR].Value);
+}
+
+// ***************************************************************************
+
+void CDriverD3D::setupFogMode(TFogMode mode, float density)
+{
+	H_AUTO_D3D(CDriverD3D_setupFogMode);
+	_FogMode = mode;
+	_FogDensity = density;
+	DWORD d3dMode;
+	switch (mode)
+	{
+	case FogExp:  d3dMode = D3DFOG_EXP; break;
+	case FogExp2: d3dMode = D3DFOG_EXP2; break;
+	default:      d3dMode = D3DFOG_LINEAR; break;
+	}
+	setRenderState(D3DRS_FOGVERTEXMODE, d3dMode);
+	setRenderState(D3DRS_FOGDENSITY, *((DWORD *)(&density)));
+}
+
+// ***************************************************************************
+
+IDriver::TFogMode CDriverD3D::getFogMode() const
+{
+	return _FogMode;
+}
+
+// ***************************************************************************
+
+float CDriverD3D::getFogDensity() const
+{
+	return _FogDensity;
 }
 
 // ***************************************************************************

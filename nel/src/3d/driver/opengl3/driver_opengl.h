@@ -616,9 +616,12 @@ public:
 	virtual	void			enableFog(bool enable);
 	/// setup fog parameters. fog must enabled to see result. start and end are in [0,1] range.
 	virtual	void			setupFog(float start, float end, CRGBA color);
+	virtual	void			setupFogMode(TFogMode mode = FogLinear, float density = 1.f);
 	virtual	float			getFogStart() const;
 	virtual	float			getFogEnd() const;
 	virtual	CRGBA			getFogColor() const;
+	virtual	TFogMode		getFogMode() const;
+	virtual	float			getFogDensity() const;
 	// @}
 
 	/// \name texture addressing modes
@@ -891,6 +894,8 @@ private:
 	// Fog.
 	bool					_FogEnabled;
 	float					_FogEnd, _FogStart;
+	TFogMode				_FogMode;
+	float					_FogDensity;
 	GLfloat					_CurrentFogColor[4];
 
 

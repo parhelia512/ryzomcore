@@ -250,6 +250,8 @@ CDriverGL3::CDriverGL3()
 
 	_FogEnabled= false;
 	_FogEnd = _FogStart = 0.f;
+	_FogMode = FogLinear;
+	_FogDensity = 1.f;
 	_CurrentFogColor[0]= 0;
 	_CurrentFogColor[1]= 0;
 	_CurrentFogColor[2]= 0;
@@ -1153,6 +1155,26 @@ CRGBA CDriverGL3::getFogColor() const
 	return ret;
 }
 
+// ***************************************************************************
+void CDriverGL3::setupFogMode(TFogMode mode, float density)
+{
+	H_AUTO_OGL(CDriverGL3_setupFogMode)
+	_FogMode = mode;
+	_FogDensity = density;
+}
+
+// ***************************************************************************
+IDriver::TFogMode CDriverGL3::getFogMode() const
+{
+	return _FogMode;
+}
+
+// ***************************************************************************
+float CDriverGL3::getFogDensity() const
+{
+	return _FogDensity;
+}
+
 
 // ***************************************************************************
 void			CDriverGL3::profileRenderedPrimitives(CPrimitiveProfile &pIn, CPrimitiveProfile &pOut)
@@ -1750,7 +1772,7 @@ void COcclusionQueryGL3::begin()
 	nlassert(Driver);
 	nlassert(Driver->_CurrentOcclusionQuery == NULL); // only one query at a time
 	nlassert(ID);
-	nglBeginQuery(GL_SAMPLES_PASSED, ID); // FIXME or GL_ANY_SAMPLES_PASSED
+	nglBeginQuery(GL_SAMPLES_PASSED, ID);
 	Driver->_CurrentOcclusionQuery = this;
 	OcclusionType = NotAvailable;
 	VisibleCount = 0;

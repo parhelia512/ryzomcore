@@ -128,6 +128,7 @@ struct CProgramIndex
 		Fog,
 		FogParams,
 		FogColor,
+		FogDensity,
 
 		Color,
 		//DiffuseColor,

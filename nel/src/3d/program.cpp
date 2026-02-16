@@ -98,6 +98,7 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"fog",
 	"fogParams",
 	"fogColor",
+	"fogDensity",
 
 	"materialColor",
 	//"diffuseColor",

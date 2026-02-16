@@ -257,6 +257,8 @@ CDriverGL::CDriverGL()
 
 	_FogEnabled= false;
 	_FogEnd = _FogStart = 0.f;
+	_FogMode = FogLinear;
+	_FogDensity = 1.f;
 	_CurrentFogColor[0]= 0;
 	_CurrentFogColor[1]= 0;
 	_CurrentFogColor[2]= 0;
@@ -1484,7 +1486,15 @@ void CDriverGL::enableFog(bool enable)
 void CDriverGL::setupFog(float start, float end, CRGBA color)
 {
 	H_AUTO_OGL(CDriverGL_setupFog)
-	glFogi(GL_FOG_MODE, GL_LINEAR);
+	GLenum glMode;
+	switch (_FogMode)
+	{
+	case FogExp:  glMode = GL_EXP; break;
+	case FogExp2: glMode = GL_EXP2; break;
+	default:      glMode = GL_LINEAR; break;
+	}
+	glFogi(GL_FOG_MODE, glMode);
+	glFogf(GL_FOG_DENSITY, _FogDensity);
 	glFogf(GL_FOG_START, start);
 	glFogf(GL_FOG_END, end);
 
@@ -1545,6 +1555,36 @@ CRGBA CDriverGL::getFogColor() const
 	ret.B= (uint8)(_CurrentFogColor[2]*255);
 	ret.A= (uint8)(_CurrentFogColor[3]*255);
 	return ret;
+}
+
+// ***************************************************************************
+void CDriverGL::setupFogMode(TFogMode mode, float density)
+{
+	H_AUTO_OGL(CDriverGL_setupFogMode)
+	_FogMode = mode;
+	_FogDensity = density;
+	// Re-apply fog settings with the new mode
+	GLenum glMode;
+	switch (_FogMode)
+	{
+	case FogExp:  glMode = GL_EXP; break;
+	case FogExp2: glMode = GL_EXP2; break;
+	default:      glMode = GL_LINEAR; break;
+	}
+	glFogi(GL_FOG_MODE, glMode);
+	glFogf(GL_FOG_DENSITY, _FogDensity);
+}
+
+// ***************************************************************************
+IDriver::TFogMode CDriverGL::getFogMode() const
+{
+	return _FogMode;
+}
+
+// ***************************************************************************
+float CDriverGL::getFogDensity() const
+{
+	return _FogDensity;
 }
 
 

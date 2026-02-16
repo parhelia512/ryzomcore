@@ -1063,9 +1063,12 @@ public:
 	virtual	bool			fogEnabled();
 	virtual	void			enableFog(bool enable);
 	virtual	void			setupFog(float start, float end, CRGBA color);
+	virtual	void			setupFogMode(TFogMode mode = FogLinear, float density = 1.f);
 	virtual	float			getFogStart() const;
 	virtual	float			getFogEnd() const;
 	virtual	CRGBA			getFogColor() const;
+	virtual	TFogMode		getFogMode() const;
+	virtual	float			getFogDensity() const;
 
 	// Texture addressing modes
 	// todo hulud d3d adressing mode
@@ -2440,6 +2443,8 @@ private:
 	float					_FrustumZFar;
 	float					_FogStart;
 	float					_FogEnd;
+	TFogMode				_FogMode;
+	float					_FogDensity;
 
 	// Vertex memory available
 	uint32					_AGPMemoryAllocated;
