@@ -332,6 +332,9 @@ struct CProgramIndex
 		EmbmMatrix2,
 		EmbmMatrix3,
 
+		Bump0ScaleBias,
+		Bump1ScaleBias,
+
 		NUM_UNIFORMS
 	};
 	static const char *Names[NUM_UNIFORMS];

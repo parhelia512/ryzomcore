@@ -300,7 +300,10 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"embmMatrix0",
 	"embmMatrix1",
 	"embmMatrix2",
-	"embmMatrix3"
+	"embmMatrix3",
+
+	"bump0ScaleBias",
+	"bump1ScaleBias"
 };
 
 void IProgram::buildInfo(CSource *source)

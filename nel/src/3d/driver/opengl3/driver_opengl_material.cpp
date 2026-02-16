@@ -1346,10 +1346,10 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 	if (mat.getTexture(1) && mat.getTexture(1)->isBumpMap())
 		factor1 = NLMISC::safe_cast<CTextureBump *>(mat.getTexture(1))->getNormalizationFactor();
 
-	uint b0idx = _WaterFP[fpIdx]->getUniformIndex("bump0ScaleBias");
+	uint b0idx = _WaterFP[fpIdx]->getUniformIndex(CProgramIndex::Bump0ScaleBias);
 	if (b0idx != ~0u)
 		setUniform4f(IDriver::PixelProgram, b0idx, 2.f * factor0, -factor0, 0.f, 0.f);
-	uint b1idx = _WaterFP[fpIdx]->getUniformIndex("bump1ScaleBias");
+	uint b1idx = _WaterFP[fpIdx]->getUniformIndex(CProgramIndex::Bump1ScaleBias);
 	if (b1idx != ~0u)
 		setUniform4f(IDriver::PixelProgram, b1idx, 2.f * factor1, -factor1, 0.f, 0.f);
 
