@@ -580,7 +580,7 @@ public:
 
 	virtual bool			setRenderTarget (ITexture *tex, uint32 x, uint32 y, uint32 width, uint32 height,
 												uint32 mipmapLevel, uint32 cubeFace);
-	virtual ITexture*		getRenderTarget() const{ return _TextureTarget; }
+	virtual ITexture*		getRenderTarget() const { return _RenderTargetFBO ? _RenderTargetFBO : _TextureTarget; }
 
 	virtual bool			copyTargetToTexture (ITexture *tex, uint32 offsetx, uint32 offsety, uint32 x, uint32 y,
 													uint32 width, uint32 height, uint32 mipmapLevel);

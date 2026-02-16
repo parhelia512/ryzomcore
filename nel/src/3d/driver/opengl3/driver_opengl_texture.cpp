@@ -1590,6 +1590,7 @@ bool CDriverGL3::setRenderTarget (ITexture *tex, uint32 x, uint32 y, uint32 widt
 		_OldViewport = _CurrViewport;
 
 		_RenderTargetFBO = NULL;
+		return false;
 	}
 
 	// Backup the texture
