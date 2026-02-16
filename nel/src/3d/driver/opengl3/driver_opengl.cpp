@@ -1026,15 +1026,8 @@ void CDriverGL3::getBuffer (CBitmap &bitmap)
 bool CDriverGL3::fillBuffer (CBitmap &bitmap)
 {
 	H_AUTO_OGL(CDriverGL3_fillBuffer)
-	CRect	rect(0,0);
-	getWindowSize(rect.Width, rect.Height);
-	if (rect.Width!=bitmap.getWidth() || rect.Height!=bitmap.getHeight() || bitmap.getPixelFormat()!=CBitmap::RGBA)
-		return false;
-
-	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
-	glDrawPixels (rect.Width, rect.Height, GL_RGBA, GL_UNSIGNED_BYTE, &(bitmap.getPixels()[0]));
-
-	return true;
+	// fillBuffer is deprecated (movie shooter). glDrawPixels does not exist in GL 3.3 Core.
+	return false;
 }
 
 // ***************************************************************************
