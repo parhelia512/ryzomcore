@@ -109,7 +109,7 @@ NL3D::CTextureUser *CRenderTargetManager::getRenderTarget(uint width, uint heigh
 	nlassert(!drvInternal->isTextureRectangle(desc->TextureInterface)); // Not allowed, we only support NPOT for render targets now.
 	desc->Width = width;
 	desc->Height = height;
-	desc->Mode2D = mode2D;
+	desc->NeedsDepthStencil = needsDepthStencil;
 	desc->Format = format;
 	desc->Used = true;
 	desc->InUse = true;
