@@ -67,6 +67,9 @@ const char *IDRV_VERSION_PROC_NAME = "NL3D_interfaceVersion";
 
 #ifdef NL_OPENGL_AVAILABLE
 extern IDriver* createGlDriverInstance ();
+#endif
+
+#ifdef NL_OPENGL3_AVAILABLE
 extern IDriver* createGl3DriverInstance ();
 #endif
 
@@ -139,11 +142,11 @@ IDriver		*CDRU::createGl3Driver()
 {
 #ifdef NL_STATIC
 
-#ifdef NL_OPENGL_AVAILABLE
+#ifdef NL_OPENGL3_AVAILABLE
 	return createGl3DriverInstance ();
 #else
 	return NULL;
-#endif // NL_OPENGL_AVAILABLE
+#endif // NL_OPENGL3_AVAILABLE
 
 #else
 
