@@ -692,7 +692,7 @@ bool CDriverGL::supportNonPowerOfTwoTextures() const
 // ***************************************************************************
 bool CDriverGL::isTextureRectangle(ITexture * tex) const
 {
-	return (!supportNonPowerOfTwoTextures() && supportTextureRectangle() && tex->isBloomTexture() && tex->mipMapOff()
+	return (!supportNonPowerOfTwoTextures() && supportTextureRectangle() && tex->isOffscreenTexture() && tex->mipMapOff()
 			&& (!isPowerOf2(tex->getWidth()) || !isPowerOf2(tex->getHeight())));
 }
 

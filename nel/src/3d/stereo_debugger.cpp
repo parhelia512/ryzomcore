@@ -35,7 +35,7 @@
 #include "nel/3d/u_camera.h"
 #include "nel/3d/u_driver.h"
 #include "nel/3d/material.h"
-#include "nel/3d/texture_bloom.h"
+#include "nel/3d/texture_offscreen.h"
 #include "nel/3d/texture_user.h"
 #include "nel/3d/driver_user.h"
 #include "nel/3d/u_texture.h"
@@ -358,7 +358,7 @@ void CStereoDebugger::initTextures()
 	m_Driver->getWindowSize(width, height);
 	NL3D::IDriver *drvInternal = (static_cast<CDriverUser *>(m_Driver))->getDriver();	
 
-	m_LeftTex = new CTextureBloom();
+	m_LeftTex = new CTextureOffscreen();
 	m_LeftTex->setRenderTarget(true);
 	m_LeftTex->setReleasable(false);
 	m_LeftTex->resize(width, height);
@@ -369,7 +369,7 @@ void CStereoDebugger::initTextures()
 	m_LeftTexU = new CTextureUser(m_LeftTex);
 	nlassert(!drvInternal->isTextureRectangle(m_LeftTex)); // not allowed
 
-	m_RightTex = new CTextureBloom();
+	m_RightTex = new CTextureOffscreen();
 	m_RightTex->setRenderTarget(true);
 	m_RightTex->setReleasable(false);
 	m_RightTex->resize(width, height);

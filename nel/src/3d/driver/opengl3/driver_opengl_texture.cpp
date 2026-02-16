@@ -22,7 +22,7 @@
 
 #include "driver_opengl.h"
 #include "nel/3d/texture_cube.h"
-#include "nel/3d/texture_bloom.h"
+#include "nel/3d/texture_offscreen.h"
 #include "nel/misc/rect.h"
 #include "nel/misc/file.h" // temp
 
@@ -127,11 +127,9 @@ bool CTextureDrvInfosGL3::initFrameBufferObject(ITexture * tex)
 {
 	if (!InitFBO)
 	{
-		// Depth/stencil defaults to true (set in constructor).
-		// 2D-only render targets (bloom blur passes) skip it.
-		if (tex->isBloomTexture() && ((CTextureBloom*)tex)->isMode2D())
+		if (tex->isOffscreenTexture())
 		{
-			AttachDepthStencil = false;
+			AttachDepthStencil = static_cast<CTextureOffscreen *>(tex)->needsDepthStencil();
 		}
 
 		// generate IDs

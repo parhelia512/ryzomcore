@@ -26,7 +26,7 @@
 
 //3D
 #include "nel/3d/driver_user.h"
-#include "nel/3d/texture_bloom.h"
+#include "nel/3d/texture_offscreen.h"
 #include "nel/3d/texture_user.h"
 
 #include "nel/3d/bloom_effect.h"
@@ -288,11 +288,10 @@ void CBloomEffect::applyBloom()
 
 	NL3D::ITexture *renderTarget = drv->getRenderTarget();
 	nlassert(renderTarget);
-	nlassert(renderTarget->isBloomTexture());
+	nlassert(renderTarget->isOffscreenTexture());
 
 	uint width = renderTarget->getWidth();
 	uint height = renderTarget->getHeight();
-	bool mode2D = static_cast<CTextureBloom *>(renderTarget)->isMode2D();
 	nlassert(renderTarget->getUploadFormat() == ITexture::Auto);
 
 	if (width >= 256) _BlurWidth = 256;
@@ -301,9 +300,9 @@ void CBloomEffect::applyBloom()
 	else _BlurHeight = raiseToNextPowerOf2(height) / 2;
 
 	nlassert(!_BlurFinalTex);
-	_BlurFinalTex = _Driver->getRenderTargetManager().getRenderTarget(_BlurWidth, _BlurHeight, true);
+	_BlurFinalTex = _Driver->getRenderTargetManager().getRenderTarget(_BlurWidth, _BlurHeight, false);
 	nlassert(!_BlurHorizontalTex);
-	_BlurHorizontalTex = _Driver->getRenderTargetManager().getRenderTarget(_BlurWidth, _BlurHeight, true);
+	_BlurHorizontalTex = _Driver->getRenderTargetManager().getRenderTarget(_BlurWidth, _BlurHeight, false);
 
 	_DisplayBlurMat.getObjectPtr()->setTexture(0, _BlurFinalTex->getITexture());
 	_DisplaySquareBlurMat.getObjectPtr()->setTexture(0, _BlurFinalTex->getITexture());

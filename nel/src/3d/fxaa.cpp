@@ -35,7 +35,7 @@
 #include "nel/3d/u_driver.h"
 #include "nel/3d/vertex_program.h"
 #include "nel/3d/material.h"
-#include "nel/3d/texture_bloom.h"
+#include "nel/3d/texture_offscreen.h"
 #include "nel/3d/texture_user.h"
 #include "nel/3d/driver_user.h"
 #include "nel/3d/u_texture.h"
@@ -225,11 +225,11 @@ void CFXAA::applyEffect()
 
 	NL3D::ITexture *renderTarget = drv->getRenderTarget();
 	nlassert(renderTarget);
-	nlassert(renderTarget->isBloomTexture());
+	nlassert(renderTarget->isOffscreenTexture());
 
 	uint width = renderTarget->getWidth();
 	uint height = renderTarget->getHeight();
-	bool mode2D = static_cast<CTextureBloom *>(renderTarget)->isMode2D();
+	bool needsDepthStencil = static_cast<CTextureOffscreen *>(renderTarget)->needsDepthStencil();
 	nlassert(renderTarget->getUploadFormat() == ITexture::Auto);
 
 	float fwidth = (float)width;
@@ -262,7 +262,7 @@ void CFXAA::applyEffect()
 	}*/
 
 	// create render target
-	CTextureUser *otherRenderTarget = m_Driver->getRenderTargetManager().getRenderTarget(width, height, mode2D);
+	CTextureUser *otherRenderTarget = m_Driver->getRenderTargetManager().getRenderTarget(width, height, needsDepthStencil);
 	nlassert(otherRenderTarget);
 
 	// swap render target

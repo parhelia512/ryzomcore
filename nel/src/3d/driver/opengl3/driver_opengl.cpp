@@ -520,7 +520,7 @@ bool CDriverGL3::supportNonPowerOfTwoTextures() const
 // ***************************************************************************
 bool CDriverGL3::isTextureRectangle(ITexture * tex) const
 {
-	return (supportTextureRectangle() && tex->isBloomTexture() && tex->mipMapOff()
+	return (supportTextureRectangle() && tex->isOffscreenTexture() && tex->mipMapOff()
 			&& (!isPowerOf2(tex->getWidth()) || !isPowerOf2(tex->getHeight())));
 }
 
