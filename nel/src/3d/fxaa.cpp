@@ -33,6 +33,7 @@
 // Project includes
 #include "nel/3d/u_camera.h"
 #include "nel/3d/u_driver.h"
+#include "nel/3d/vertex_program.h"
 #include "nel/3d/material.h"
 #include "nel/3d/texture_bloom.h"
 #include "nel/3d/texture_user.h"
@@ -67,6 +68,14 @@ CFXAA::CFXAA(NL3D::UDriver *driver) : m_Driver(driver), m_VP(NULL), m_PP(NULL), 
 	if (drv->supportBloomEffect() && drv->supportNonPowerOfTwoTextures())
 	{
 		m_PP = new CPixelProgram();
+		// glsl330f
+		{
+			IProgram::CSource *source = new IProgram::CSource();
+			source->Features.MaterialFlags = CProgramFeatures::TextureStages;
+			source->Profile = IProgram::glsl330f;
+			source->setSourcePtr(a_glsl330f);
+			m_PP->addSource(source);
+		}
 		// arbfp1
 		{
 			IProgram::CSource *source = new IProgram::CSource();
@@ -104,6 +113,14 @@ CFXAA::CFXAA(NL3D::UDriver *driver) : m_Driver(driver), m_VP(NULL), m_PP(NULL), 
 	// create vp
 	{
 		m_VP = new CVertexProgram();
+		// glsl330v
+		{
+			IProgram::CSource *source = new IProgram::CSource();
+			source->Features.MaterialFlags = CProgramFeatures::TextureStages;
+			source->Profile = IProgram::glsl330v;
+			source->setSourcePtr(a_glsl330v);
+			m_VP->addSource(source);
+		}
 		// nelvp
 		{
 			IProgram::CSource *source = new IProgram::CSource();
