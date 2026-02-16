@@ -63,12 +63,10 @@ static const char *TextureOffset =
 	END \n";
 
 // GLSL 330 version of the same vertex program for the GL3 driver.
-// Uniforms at locations 8-13 match the indices used by setUniform*f calls.
 // Varying locations follow TAttribOffset: vertexColor=3, texCoord0-3=8-11.
 static const char *TextureOffsetGLSL =
 	"#version 330\n"
 	"#extension GL_ARB_separate_shader_objects : enable\n"
-	"#extension GL_ARB_explicit_uniform_location : enable\n"
 	"\n"
 	"out gl_PerVertex { vec4 gl_Position; };\n"
 	"\n"
@@ -81,25 +79,65 @@ static const char *TextureOffsetGLSL =
 	"layout(location = 10) smooth out vec4 texCoord2;\n"
 	"layout(location = 11) smooth out vec4 texCoord3;\n"
 	"\n"
-	"layout(location = 8) uniform vec4 c8;\n"
-	"layout(location = 9) uniform vec4 c9;\n"
-	"layout(location = 10) uniform vec2 offset0;\n"
-	"layout(location = 11) uniform vec2 offset1;\n"
-	"layout(location = 12) uniform vec2 offset2;\n"
-	"layout(location = 13) uniform vec2 offset3;\n"
+	"uniform vec4 color;\n"
+	"uniform vec4 posW;\n"
+	"uniform vec2 offset0;\n"
+	"uniform vec2 offset1;\n"
+	"uniform vec2 offset2;\n"
+	"uniform vec2 offset3;\n"
 	"\n"
 	"void main()\n"
 	"{\n"
-	"  gl_Position = vec4(vposition.xyz, c9.w);\n"
-	"  vertexColor = clamp(c8, 0.0, 1.0);\n"
+	"  gl_Position = vec4(vposition.xyz, posW.w);\n"
+	"  vertexColor = clamp(color, 0.0, 1.0);\n"
 	"  texCoord0 = vec4(vtexCoord0.xy + offset0, 0.0, 0.0);\n"
 	"  texCoord1 = vec4(vtexCoord0.xy + offset1, 0.0, 0.0);\n"
 	"  texCoord2 = vec4(vtexCoord0.xy + offset2, 0.0, 0.0);\n"
 	"  texCoord3 = vec4(vtexCoord0.xy + offset3, 0.0, 0.0);\n"
 	"}\n";
 
+class CVertexProgramTextureOffset : public CVertexProgram
+{
+public:
+	struct CIdx
+	{
+		uint Color;
+		uint PosW;
+		uint Offset[4];
+	};
 
-static NLMISC::CSmartPtr<CVertexProgram> TextureOffsetVertexProgram;
+	CVertexProgramTextureOffset(const char *nelvp) : CVertexProgram(nelvp) { }
+
+	virtual void buildInfo()
+	{
+		CVertexProgram::buildInfo();
+		if (profile() == nelvp || profile() == arbvp1 || profile() == vs_2_0)
+		{
+			m_Idx.Color = 8;
+			m_Idx.PosW = 9;
+			m_Idx.Offset[0] = 10;
+			m_Idx.Offset[1] = 11;
+			m_Idx.Offset[2] = 12;
+			m_Idx.Offset[3] = 13;
+		}
+		else
+		{
+			m_Idx.Color = getUniformIndex("color");
+			m_Idx.PosW = getUniformIndex("posW");
+			m_Idx.Offset[0] = getUniformIndex("offset0");
+			m_Idx.Offset[1] = getUniformIndex("offset1");
+			m_Idx.Offset[2] = getUniformIndex("offset2");
+			m_Idx.Offset[3] = getUniformIndex("offset3");
+		}
+	}
+
+	const CIdx &idx() const { return m_Idx; }
+
+private:
+	CIdx m_Idx;
+};
+
+static NLMISC::CSmartPtr<CVertexProgramTextureOffset> TextureOffsetVertexProgram;
 
 
 //-----------------------------------------------------------------------------------------------------------
@@ -108,7 +146,7 @@ CBloomEffect::CBloomEffect()
 {
 	if (!TextureOffsetVertexProgram)
 	{
-		TextureOffsetVertexProgram = new CVertexProgram(TextureOffset);
+		TextureOffsetVertexProgram = new CVertexProgramTextureOffset(TextureOffset);
 
 		// Add GLSL 330 source for GL3 driver
 		IProgram::CSource *glslSrc = new IProgram::CSource();
@@ -361,8 +399,8 @@ void CBloomEffect::applyBlur()
 
 	// initialize vertex program
 	drvInternal->activeVertexProgram(TextureOffsetVertexProgram);
-	drvInternal->setUniform4f(IDriver::VertexProgram, 8, 255.f, 255.f, 255.f, 255.f);
-	drvInternal->setUniform4f(IDriver::VertexProgram, 9, 0.0f, 0.f, 0.f, 1.f);
+	drvInternal->setUniform4f(IDriver::VertexProgram, TextureOffsetVertexProgram->idx().Color, 255.f, 255.f, 255.f, 255.f);
+	drvInternal->setUniform4f(IDriver::VertexProgram, TextureOffsetVertexProgram->idx().PosW, 0.0f, 0.f, 0.f, 1.f);
 
 	// initialize blur material
 	UMaterial displayBlurMat;
@@ -421,8 +459,8 @@ void CBloomEffect::doBlur(bool horizontalBlur)
 
 	// initialize vertex program
 	drvInternal->activeVertexProgram(TextureOffsetVertexProgram);
-	drvInternal->setUniform4f(IDriver::VertexProgram, 8, 255.f, 255.f, 255.f, 255.f);
-	drvInternal->setUniform4f(IDriver::VertexProgram, 9, 0.0f, 0.f, 0.f, 1.f);
+	drvInternal->setUniform4f(IDriver::VertexProgram, TextureOffsetVertexProgram->idx().Color, 255.f, 255.f, 255.f, 255.f);
+	drvInternal->setUniform4f(IDriver::VertexProgram, TextureOffsetVertexProgram->idx().PosW, 0.0f, 0.f, 0.f, 1.f);
 
 	// set several decal constants in order to obtain in the render target texture a mix of color
 	// of a texel and its neighbored texels on the axe of the pass.
@@ -451,10 +489,11 @@ void CBloomEffect::doBlur(bool horizontalBlur)
 		decalR = 0.5f;
 		decal2R = 1.5f;
 	}
-	drvInternal->setUniform2f(IDriver::VertexProgram, 10, (decalR/(float)_BlurWidth)*blurVec.x,		(decalR/(float)_BlurHeight)*blurVec.y);
-	drvInternal->setUniform2f(IDriver::VertexProgram, 11, (decal2R/(float)_BlurWidth)*blurVec.x,		(decal2R/(float)_BlurHeight)*blurVec.y);
-	drvInternal->setUniform2f(IDriver::VertexProgram, 12, (decalL/(float)_BlurWidth)*blurVec.x,		(decalL/(float)_BlurHeight)*blurVec.y);
-	drvInternal->setUniform2f(IDriver::VertexProgram, 13, (decal2L/(float)_BlurWidth)*blurVec.x,		(decal2L/(float)_BlurHeight)*blurVec.y);
+	const CVertexProgramTextureOffset::CIdx &vpIdx = TextureOffsetVertexProgram->idx();
+	drvInternal->setUniform2f(IDriver::VertexProgram, vpIdx.Offset[0], (decalR/(float)_BlurWidth)*blurVec.x,		(decalR/(float)_BlurHeight)*blurVec.y);
+	drvInternal->setUniform2f(IDriver::VertexProgram, vpIdx.Offset[1], (decal2R/(float)_BlurWidth)*blurVec.x,		(decal2R/(float)_BlurHeight)*blurVec.y);
+	drvInternal->setUniform2f(IDriver::VertexProgram, vpIdx.Offset[2], (decalL/(float)_BlurWidth)*blurVec.x,		(decalL/(float)_BlurHeight)*blurVec.y);
+	drvInternal->setUniform2f(IDriver::VertexProgram, vpIdx.Offset[3], (decal2L/(float)_BlurWidth)*blurVec.x,		(decal2L/(float)_BlurHeight)*blurVec.y);
 
 	// initialize material textures
 	CMaterial * matObject = _BlurMat.getObjectPtr();
