@@ -691,6 +691,10 @@ void CPPBuiltin::checkDriverStateTouched(CDriverGL3 *driver) // MUST NOT depend 
 	for (sint stage = 0; stage < IDRV_MAT_MAXTEXTURES; ++stage)
 		if (driver->m_VPBuiltinCurrent.TexGenMode[stage] >= 0)
 			vertexFormat |= g_VertexFlags[TexCoord0 + stage];
+	// When a user VP is active, it may output varyings not in the VB.
+	// Use VPVertexFormat from the program to declare matching PP inputs.
+	if (driver->m_UserVertexProgram)
+		vertexFormat |= driver->m_UserVertexProgram->features().VPVertexFormat;
 	vertexFormat &= ~g_VertexFlags[PrimaryColor];
 	vertexFormat &= ~g_VertexFlags[SecondaryColor];
 

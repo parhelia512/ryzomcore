@@ -74,27 +74,31 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
 	{
 		// Matrices
-		Matrices								= 0x00000001, 
+		Matrices								= 0x00000001,
 
 		// Fog
-		Fog										= 0x00000002, 
+		Fog										= 0x00000002,
 	};
 	uint32 DriverFlags;
 
 	enum TMaterialFlags
 	{
 		/// Use the CMaterial texture stages as the textures for a Pixel Program
-		TextureStages							= 0x00000001, 
-		TextureMatrices							= 0x00000002, 
+		TextureStages							= 0x00000001,
+		TextureMatrices							= 0x00000002,
 	};
 	// Material builtin parameters
 	uint32 MaterialFlags;
+
+	/// VP output varyings as CVertexBuffer vertex format flags.
+	/// When a user VP is active, the builtin PP uses this to declare matching inputs.
+	uint16 VPVertexFormat;
 };
 
 // Stucture used to cache the indices of builtin parameters which are used by the drivers

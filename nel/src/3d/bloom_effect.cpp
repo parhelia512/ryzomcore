@@ -90,7 +90,7 @@ static const char *TextureOffsetGLSL =
 	"void main()\n"
 	"{\n"
 	"  gl_Position = vec4(vposition.xyz, c9.w);\n"
-	"  vertexColor = c8;\n"
+	"  vertexColor = clamp(c8, 0.0, 1.0);\n"
 	"  texCoord0 = vec4(vtexCoord0.xy + offset0, 0.0, 0.0);\n"
 	"  texCoord1 = vec4(vtexCoord0.xy + offset1, 0.0, 0.0);\n"
 	"  texCoord2 = vec4(vtexCoord0.xy + offset2, 0.0, 0.0);\n"
@@ -114,6 +114,9 @@ CBloomEffect::CBloomEffect()
 		glslSrc->Profile = CVertexProgram::glsl330v;
 		glslSrc->DisplayName = "TextureOffset/glsl330v";
 		glslSrc->setSourcePtr(TextureOffsetGLSL);
+		glslSrc->Features.VPVertexFormat = CVertexBuffer::TexCoord0Flag
+			| CVertexBuffer::TexCoord1Flag | CVertexBuffer::TexCoord2Flag
+			| CVertexBuffer::TexCoord3Flag;
 		TextureOffsetVertexProgram->addSource(glslSrc);
 	}
 
