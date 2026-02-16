@@ -22,9 +22,12 @@ layout (location = 8) in vec4 vtexCoord0;
 
 // Outputs
 out gl_PerVertex { vec4 gl_Position; };
-smooth out vec4 vertexColor;
-smooth out vec4 texCoord0;
-smooth out vec4 ecPos;
+layout(location = 3) smooth out vec4 vertexColor;
+#ifdef USE_SPECULAR
+layout(location = 4) smooth out vec4 specularColor;
+#endif
+layout(location = 8) smooth out vec4 texCoord0;
+layout(location = 0) smooth out vec4 ecPos;
 
 // Transform
 uniform mat4 modelViewProjection;
@@ -153,8 +156,9 @@ void main()
   }
   #endif
 
-  // Combine: diffuse with material alpha, plus specular (no hardware color sum in GL3)
-  vertexColor = litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw + vec4(specAccum, 0.0);
+  // Combine: diffuse with material alpha; specular output separately (added post-texture by PP)
+  vertexColor = clamp(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw, 0.0, 1.0);
+  specularColor = clamp(vec4(specAccum, 0.0), 0.0, 1.0);
 
 #else // Non-specular
 
@@ -171,7 +175,7 @@ void main()
   litColor += max(dot(N, normalize(dirOrPos3.xyz - pos.xyz)), 0.0) * diffuse3;
   #endif
 
-  vertexColor = litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw;
+  vertexColor = clamp(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw, 0.0, 1.0);
 
 #endif // USE_SPECULAR
 

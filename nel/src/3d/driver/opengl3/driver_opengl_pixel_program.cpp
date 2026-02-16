@@ -92,6 +92,8 @@ bool operator<(const CPPBuiltin &left, const CPPBuiltin &right)
 		return right.Fog;
 	if (left.FogMode != right.FogMode)
 		return left.FogMode < right.FogMode;
+	if (left.SpecularSeparate != right.SpecularSeparate)
+		return right.SpecularSeparate;
 
 	return false;
 }
@@ -120,6 +122,8 @@ bool operator==(const CPPBuiltin &left, const CPPBuiltin &right)
 		return false;
 	if (left.FogMode != right.FogMode)
 		return false;
+	if (left.SpecularSeparate != right.SpecularSeparate)
+		return false;
 
 	return true;
 }
@@ -145,7 +149,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h32 = NLMISC::wangHash(h32 ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17)));
+	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0)));
 
 	h64 = h64 ^ h32; // NLMISC::wangHash64(h64 ^ h32);
 	nlctassert(sizeof(size_t) >= sizeof(uint64));
@@ -165,7 +169,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h = NLMISC::wangHash(h ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17)));
+	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0)));
 
 	nlctassert(sizeof(size_t) >= sizeof(uint32));
 	return (size_t)h;
@@ -615,6 +619,8 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 	}
 
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
+	if (desc.SpecularSeparate)
+		ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth in vec4 specularColor;" << std::endl;
 	ss << std::endl;
 	
 	ss << "void main(void)" << std::endl;
@@ -676,6 +682,10 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		// ss << "fragColor = vec(1.0, 0.0, 0.5, 1.0);" << std::endl;
 		break;
 	}
+
+	// Add specular post-texture (matches legacy GL_COLOR_SUM / GL_SEPARATE_SPECULAR_COLOR)
+	if (desc.SpecularSeparate)
+		ss << "fragColor.rgb += specularColor.rgb;" << std::endl;
 
 	if (desc.Flags & IDRV_MAT_ALPHA_TEST)
 	{
@@ -759,6 +769,11 @@ void CPPBuiltin::checkDriverStateTouched(CDriverGL3 *driver) // MUST NOT depend 
 	if (FogMode != fogMode)
 	{
 		FogMode = fogMode;
+		Touched = true;
+	}
+	if (SpecularSeparate != driver->m_VPSpecularOutput)
+	{
+		SpecularSeparate = driver->m_VPSpecularOutput;
 		Touched = true;
 	}
 }

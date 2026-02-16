@@ -695,7 +695,11 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 
 	if (m_UseMegaShaders) return setupMegaVertexProgram();
 
-	if (m_UserVertexProgram) return true;
+	if (m_UserVertexProgram)
+	{
+		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
+		return true;
+	}
 
 	if (m_VPBuiltinTouched)
 	{
@@ -703,6 +707,9 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 		nlassert(m_VPBuiltinCurrent.VertexProgram);
 		m_VPBuiltinTouched = false;
 	}
+
+	m_VPSpecularOutput = m_VPBuiltinCurrent.Lighting
+		|| (m_VPBuiltinCurrent.VertexFormat & g_VertexFlags[SecondaryColor]);
 
 	if (!activeVertexProgram(m_VPBuiltinCurrent.VertexProgram, true))
 		return false;

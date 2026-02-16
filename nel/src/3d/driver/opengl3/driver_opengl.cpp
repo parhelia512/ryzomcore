@@ -343,6 +343,7 @@ CDriverGL3::CDriverGL3()
 	m_VPBuiltinTouched = true;
 
 	m_UseMegaShaders = true;
+	m_VPSpecularOutput = true;
 }
 
 // ***************************************************************************
@@ -480,8 +481,8 @@ bool CDriverGL3::setupDisplay()
 		else if (!initMegaPixelPrograms())
 			nlwarning("GL3: Failed to init mega pixel programs, falling back to per-material shaders");
 		else
-			nlinfo("GL3: Mega shaders initialized (4 VP + 4 PP variants)");
-		if (!m_MegaVP[0][0] || !m_MegaPP[0][0])
+			nlinfo("GL3: Mega shaders initialized (4 VP + 8 PP variants)");
+		if (!m_MegaVP[0][0] || !m_MegaPP[0][0][0])
 			m_UseMegaShaders = false; // Fallback
 	}
 

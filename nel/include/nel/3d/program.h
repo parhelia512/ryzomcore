@@ -74,7 +74,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -99,6 +99,9 @@ struct CProgramFeatures
 	/// VP output varyings as CVertexBuffer vertex format flags.
 	/// When a user VP is active, the builtin PP uses this to declare matching inputs.
 	uint16 VPVertexFormat;
+
+	/// Whether this VP outputs a separate specular color varying (for post-texture addition).
+	bool OutputsSpecularColor;
 };
 
 // Stucture used to cache the indices of builtin parameters which are used by the drivers

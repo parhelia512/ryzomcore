@@ -1352,10 +1352,13 @@ private:
 	CVPBuiltin m_VPBuiltinCurrent;
 	bool m_VPBuiltinTouched;
 
-	// Megashader support: m_MegaVP[fog][clip], m_MegaPP[fog][cube]
+	// Megashader support: m_MegaVP[fog][clip], m_MegaPP[fog][cube][specular]
 	bool m_UseMegaShaders;
 	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2];
-	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2];
+	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2];
+
+	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
+	bool m_VPSpecularOutput;
 
 	// EMBM support
 	void	initEMBM();

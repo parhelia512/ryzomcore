@@ -57,11 +57,12 @@ static const uint64 SamplerCube = 1;
 /// Builtin pixel program description
 struct CPPBuiltin
 {
-	CPPBuiltin() : Touched(true), FogMode(0) { }
+	CPPBuiltin() : Touched(true), FogMode(0), SpecularSeparate(false) { }
 
 	uint16 VertexFormat;
 	bool Fog;
 	uint8 FogMode;
+	bool SpecularSeparate; // Whether VP outputs specularColor varying
 
 	CMaterial::TShader Shader;
 	uint32 Flags;
@@ -107,6 +108,7 @@ enum TAttribOffset
 // ecPos and vertexColor reuse slots that are never occupied by VB varyings.
 static const int VaryingLocationEcPos = Position; // = 0, Position is never output as a varying
 static const int VaryingLocationVertexColor = PrimaryColor; // = 3, PrimaryColor is always skipped
+static const int VaryingLocationSpecularColor = SecondaryColor; // = 4, SecondaryColor is always skipped
 
 extern const uint16 g_VertexFlags[CVertexBuffer::NumValue];
 extern const char *g_AttribNames[CVertexBuffer::NumValue];

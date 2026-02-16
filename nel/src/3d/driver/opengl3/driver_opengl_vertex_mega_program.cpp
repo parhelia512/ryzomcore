@@ -151,6 +151,7 @@ void megaVPGenerate(std::string &result, bool fog, bool clip)
 	if (fog)
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
+	ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
 	ss << std::endl;
 
 	// Light computation function (handles all modes via switch)
@@ -271,12 +272,12 @@ void megaVPGenerate(std::string &result, bool fog, bool clip)
 	ss << "  }" << std::endl;
 	ss << std::endl;
 
-	// Combine diffuse and specular
+	// Combine diffuse (clamp before texture), specular passed separately (added post-texture in PP)
 	ss << "  vertexColor = diffuseVertex;" << std::endl;
-	ss << "  vertexColor.rgb = vertexColor.rgb + (specularVertex.rgb * specularVertex.a);" << std::endl;
 	ss << "  if (doLighting)" << std::endl;
 	ss << "    vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl;
 	ss << "  vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
+	ss << "  specularColor = clamp(vec4(specularVertex.rgb * specularVertex.a, 0.0), 0.0, 1.0);" << std::endl;
 	ss << std::endl;
 
 	// Compute reflection vector for texgen (shared by reflection/sphere stages)
@@ -361,7 +362,13 @@ bool CDriverGL3::setupMegaVertexProgram()
 {
 	// Note: touchVertexFormatVP() already called by setupBuiltinVertexProgram()
 
-	if (m_UserVertexProgram) return true;
+	if (m_UserVertexProgram)
+	{
+		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
+		return true;
+	}
+
+	m_VPSpecularOutput = true; // Mega VP always outputs specularColor
 
 	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;

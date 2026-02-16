@@ -26,7 +26,10 @@
  *     group. In the cube variant, sampler1 is declared as samplerCube.
  *     Free split.
  *
- *   Result: 4 PP variants — m_MegaPP[fog][cube]
+ *   - Specular separate (on/off): Whether VP outputs specularColor varying.
+ *     Mega VP always outputs it; user VPs may not. Free split.
+ *
+ *   Result: 8 PP variants — m_MegaPP[fog][cube][specular]
  *
  *   FOLDS (uniform-controlled branching — zero GPU cost):
  *   - Shader type (Normal/UserColor/Specular/LightMap): 4 short paths in
@@ -58,11 +61,11 @@ namespace /* anonymous */ {
 
 #define MEGA_PP_MAX_SAMPLERS 8
 
-void megaPPGenerate(std::string &result, bool fog, bool cube)
+void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular)
 {
 	std::stringstream ss;
 	ss << "// Megashader Pixel Program";
-	ss << " (fog=" << (int)fog << ", cube=" << (int)cube << ")" << std::endl;
+	ss << " (fog=" << (int)fog << ", cube=" << (int)cube << ", specular=" << (int)specular << ")" << std::endl;
 	ss << std::endl;
 	ss << "#version 330" << std::endl;
 	ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
@@ -83,6 +86,8 @@ void megaPPGenerate(std::string &result, bool fog, bool cube)
 	if (fog)
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
+	if (specular)
+		ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth in vec4 specularColor;" << std::endl;
 	ss << std::endl;
 
 	// Samplers
@@ -389,6 +394,11 @@ void megaPPGenerate(std::string &result, bool fog, bool cube)
 	ss << "  }" << std::endl;
 	ss << std::endl;
 
+	// Add specular post-texture (matches legacy GL_COLOR_SUM / GL_SEPARATE_SPECULAR_COLOR)
+	if (specular)
+		ss << "  fragColor.rgb += specularColor.rgb;" << std::endl;
+	ss << std::endl;
+
 	// Alpha test
 	ss << "  if (nlAlphaTest != 0 && fragColor.a <= alphaRef) discard;" << std::endl;
 	ss << std::endl;
@@ -410,26 +420,29 @@ bool CDriverGL3::initMegaPixelPrograms()
 	{
 		for (int cube = 0; cube < 2; ++cube)
 		{
-			std::string result;
-			megaPPGenerate(result, fog != 0, cube != 0);
-
-			CPixelProgram *pp = new CPixelProgram();
-			IProgram::CSource *src = new IProgram::CSource();
-			src->Profile = IProgram::glsl330f;
-			src->DisplayName = NLMISC::toString("Mega PP (fog=%d, cube=%d)", fog, cube);
-			src->setSource(result);
-			pp->addSource(src);
-
-			nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
-
-			if (!compilePixelProgram(pp))
+			for (int specular = 0; specular < 2; ++specular)
 			{
-				nlwarning("GL3: Mega PP compilation failed (fog=%d, cube=%d)", fog, cube);
-				delete pp;
-				return false;
-			}
+				std::string result;
+				megaPPGenerate(result, fog != 0, cube != 0, specular != 0);
 
-			m_MegaPP[fog][cube] = pp;
+				CPixelProgram *pp = new CPixelProgram();
+				IProgram::CSource *src = new IProgram::CSource();
+				src->Profile = IProgram::glsl330f;
+				src->DisplayName = NLMISC::toString("Mega PP (fog=%d, cube=%d, specular=%d)", fog, cube, specular);
+				src->setSource(result);
+				pp->addSource(src);
+
+				nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+				if (!compilePixelProgram(pp))
+				{
+					nlwarning("GL3: Mega PP compilation failed (fog=%d, cube=%d, specular=%d)", fog, cube, specular);
+					delete pp;
+					return false;
+				}
+
+				m_MegaPP[fog][cube][specular] = pp;
+			}
 		}
 	}
 	return true;
@@ -452,8 +465,9 @@ bool CDriverGL3::setupMegaPixelProgram()
 	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	// Cube variant: any cubemap in the material's sampler modes
 	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
+	int specular = m_VPSpecularOutput ? 1 : 0;
 
-	CPixelProgram *pp = m_MegaPP[fog][cube];
+	CPixelProgram *pp = m_MegaPP[fog][cube][specular];
 	nlassert(pp);
 
 	if (!activePixelProgram(pp, true))
