@@ -68,6 +68,7 @@ static const char *TextureOffset =
 static const char *TextureOffsetGLSL =
 	"#version 330\n"
 	"#extension GL_ARB_separate_shader_objects : enable\n"
+	"#extension GL_ARB_explicit_uniform_location : enable\n"
 	"\n"
 	"out gl_PerVertex { vec4 gl_Position; };\n"
 	"\n"

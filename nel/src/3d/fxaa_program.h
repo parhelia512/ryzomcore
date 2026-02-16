@@ -996,6 +996,7 @@ const char *a_ps_2_0_earlyexit =
 const char *a_glsl330v =
 	"#version 330\n"
 	"#extension GL_ARB_separate_shader_objects : enable\n"
+	"#extension GL_ARB_explicit_uniform_location : enable\n"
 	"\n"
 	"out gl_PerVertex { vec4 gl_Position; };\n"
 	"\n"
@@ -1017,6 +1018,7 @@ const char *a_glsl330v =
 const char *a_glsl330f =
 	"#version 330\n"
 	"#extension GL_ARB_separate_shader_objects : enable\n"
+	"#extension GL_ARB_explicit_uniform_location : enable\n"
 	"\n"
 	"out vec4 fragColor;\n"
 	"\n"
