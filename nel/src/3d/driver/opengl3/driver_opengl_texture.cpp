@@ -414,6 +414,9 @@ uint				CDriverGL3::computeMipMapMemoryUsage(uint w, uint h, GLint glfmt) const
 #ifdef GL_RG8
 	case GL_RG8:	return w*h* 2;
 #endif
+#ifdef GL_RG8_SNORM
+	case GL_RG8_SNORM:	return w*h* 2; // DsDt (EMBM) bump map format
+#endif
 #ifdef GL_RG
 	case GL_RG:	return w*h* 2;
 #endif

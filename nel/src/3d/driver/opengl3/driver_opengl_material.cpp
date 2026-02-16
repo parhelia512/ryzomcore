@@ -499,14 +499,6 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 		_DriverGLStates.depthFunc(pShader->ZComp);
 		_DriverGLStates.setZBias(mat.getZBias() * _OODeltaZ);
 
-		// Bind Stencil Buffer Part. // FIXME GL3: STENCIL TEST
-		//===================
-		/*
-		_DriverGLStates.enableStencilTest();
-		_DriverGLStates.stencilFunc();
-		_DriverGLStates.stencilOp();
-		*/
-
 		// Color-Lighting Part.
 		//=====================
 		// Light Part.
@@ -995,17 +987,27 @@ void CDriverGL3::setupLightMapPass(uint pass)
 			setUniform4f(IDriver::VertexProgram, siIdx,
 				selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
 
-		// Dynamic light diffuse: full for pass 0 (x2 mode not applied here since we
-		// doubled selfIllumination and constants instead), zero for pass 1+
-		if (pass > 0)
+		// Dynamic light diffuse: override for all passes.
+		// setupUniforms() pre-multiplied Light0ColDiff by mat.getDiffuse(), but for
+		// lightmap materials the legacy GL driver uses material diffuse white (or grey
+		// for x2 mode). We override here: pass 0 gets the actual light diffuse (not
+		// multiplied by material diffuse), pass 1+ gets zero (light added only once).
+		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
-			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			if (!_LightEnable[i]) continue;
+			uint ldc = m_DriverVertexProgram->getUniformIndex(
+				CProgramIndex::TName(CProgramIndex::Light0ColDiff + i));
+			if (ldc != ~0u)
 			{
-				if (!_LightEnable[i]) continue;
-				uint ldc = m_DriverVertexProgram->getUniformIndex(
-					CProgramIndex::TName(CProgramIndex::Light0ColDiff + i));
-				if (ldc != ~0u)
+				if (pass == 0)
+				{
+					NLMISC::CRGBAF diffuse = NLMISC::CRGBAF(_UserLight[i].getDiffuse());
+					setUniform4f(IDriver::VertexProgram, ldc, diffuse.R, diffuse.G, diffuse.B, 0.0f);
+				}
+				else
+				{
 					setUniform4f(IDriver::VertexProgram, ldc, 0.0f, 0.0f, 0.0f, 0.0f);
+				}
 			}
 		}
 

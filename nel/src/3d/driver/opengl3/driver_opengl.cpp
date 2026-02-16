@@ -500,6 +500,11 @@ bool CDriverGL3::setupDisplay()
 }
 
 // ***************************************************************************
+// Hardware-accelerated texture blit with scaling (used by bloom to downscale
+// the scene into the blur texture). Returning false is fine: CDriverUser
+// falls back to rendering a quad into the destination render target, which
+// achieves the same result. The old GL driver also returns false here;
+// only D3D has a native implementation via IDirect3DDevice9::StretchRect.
 bool CDriverGL3::stretchRect(ITexture * /* srcText */, NLMISC::CRect &/* srcRect */, ITexture * /* destText */, NLMISC::CRect &/* destRect */)
 {
 	H_AUTO_OGL(CDriverGL3_stretchRect)
@@ -1598,11 +1603,33 @@ void	CDriverGL3::profileVBHardAllocation(std::vector<std::string> &result)
 }
 
 // ***************************************************************************
+// GL_NVX_gpu_memory_info constants (not in all glext.h versions)
+#ifndef GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX
+#define GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX 0x9047
+#endif
+
 sint CDriverGL3::getTotalVideoMemory() const
 {
 	H_AUTO_OGL(CDriverGL3_getTotalVideoMemory);
 
-	// TODO: Query GL_NVX_gpu_memory_info or GL_ATI_meminfo if available
+	if (_Extensions.NVXGPUMemoryInfo)
+	{
+		GLint memoryInKiB = 0;
+		glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &memoryInKiB);
+
+		nlinfo("3D: GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX returned %d KiB", memoryInKiB);
+		return memoryInKiB;
+	}
+
+	if (_Extensions.ATIMeminfo)
+	{
+		GLint params[4];
+		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, params);
+
+		nlinfo("3D: GL_TEXTURE_FREE_MEMORY_ATI returned %d KiB", params[0]);
+		return params[0];
+	}
+
 	return -1;
 }
 

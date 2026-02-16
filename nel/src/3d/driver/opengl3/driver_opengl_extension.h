@@ -47,6 +47,10 @@ struct	CGlExtensions
 	float	EXTTextureFilterAnisotropicMaximum;
 	bool	AMDPinnedMemory;
 
+	// Extensions to get memory info
+	bool	NVXGPUMemoryInfo;
+	bool	ATIMeminfo;
+
 	// Required Extensions. (old)
 	bool	ARBMultiTexture;
 
@@ -73,6 +77,9 @@ public:
 		EXTTextureFilterAnisotropic = false;
 		EXTTextureFilterAnisotropicMaximum = 0.f;
 		AMDPinnedMemory = false;
+
+		NVXGPUMemoryInfo = false;
+		ATIMeminfo = false;
 
 		ARBMultiTexture= false;
 
@@ -107,6 +114,10 @@ public:
 
 		result += "\n  Buffers: ";
 		result += AMDPinnedMemory ? "AMDPinnedMemory " : "";
+
+		result += "\n  Memory info: ";
+		result += NVXGPUMemoryInfo ? "NVXGPUMemoryInfo " : "";
+		result += ATIMeminfo ? "ATIMeminfo " : "";
 
 #ifdef NL_OS_WINDOWS
 		result += "\n  WindowsGL: ";

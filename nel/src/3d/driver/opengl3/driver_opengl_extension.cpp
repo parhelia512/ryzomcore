@@ -563,6 +563,22 @@ static bool setupAMDPinnedMemory(std::vector<const char *> &glext)
 	return true;
 }
 
+// *********************************
+static bool	setupNVXGPUMemoryInfo(std::vector<const char *> &glext)
+{
+	H_AUTO_OGL(setupNVXGPUMemoryInfo);
+	CHECK_EXT_2("GL_NVX_gpu_memory_info");
+	return true;
+}
+
+// *********************************
+static bool	setupATIMeminfo(std::vector<const char *> &glext)
+{
+	H_AUTO_OGL(setupATIMeminfo);
+	CHECK_EXT_2("GL_ATI_meminfo");
+	return true;
+}
+
 // ***************************************************************************
 // Extension Check.
 bool	registerGlExtensions(CGlExtensions &ext)
@@ -637,6 +653,10 @@ bool	registerGlExtensions(CGlExtensions &ext)
 
 	// Check GL_AMD_pinned_memory
 	ext.AMDPinnedMemory = false; // setupAMDPinnedMemory(glext); // TODO: Proper frame sync check
+
+	// Memory info extensions
+	ext.NVXGPUMemoryInfo = setupNVXGPUMemoryInfo(glext);
+	ext.ATIMeminfo = setupATIMeminfo(glext);
 
 	// Get the maximum fragment texture unites
 	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &ext.MaxFragmentTextureImageUnits);
