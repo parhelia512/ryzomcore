@@ -179,7 +179,7 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 		}
 		return false;
 	}
-	else // debug
+	/*else
 	{
 		std::vector<std::string> lines;
 		NLMISC::explode(std::string(src->SourcePtr), std::string("\n"), lines);
@@ -187,7 +187,7 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 		{
 			nldebug("GL3: %i: %s", i, lines[i].c_str());
 		}
-	}
+	}*/
 
 	ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(),(NL3D::IProgramDrvInfos*)NULL);
 	CProgramDrvInfosGL3 *drvInfo = new CProgramDrvInfosGL3(this, it);
@@ -289,7 +289,7 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 		}
 		return false;
 	}
-	else // debug
+	/*else
 	{
 		std::vector<std::string> lines;
 		NLMISC::explode(std::string(src->SourcePtr), std::string("\n"), lines);
@@ -297,7 +297,7 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 		{
 			nldebug("GL3: %i: %s", i, lines[i].c_str());
 		}
-	}
+	}*/
 
 	ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(), (NL3D::IProgramDrvInfos*)NULL);
 	CProgramDrvInfosGL3 *drvInfo = new CProgramDrvInfosGL3(this, it);
