@@ -324,6 +324,15 @@ CDriverGL3::CDriverGL3()
 	_LightMapDynamicLightEnabled = false;
 	_LightMapDynamicLightDirty= false;
 	_LightTableMode= false;
+	_LightTableUBOId = 0;
+	_LightTableDirty = false;
+	_LightTableUBOCapacity = 0;
+	_LightTableObjCount = 0;
+	for (uint i = 0; i < MaxLight; ++i)
+	{
+		_LightTableObjIndices[i] = -1;
+		_LightTableObjFactors[i] = 0.0f;
+	}
 
 	_CurrentMaterialSupportedShader= CMaterial::Normal;
 
@@ -344,6 +353,7 @@ CDriverGL3::CDriverGL3()
 
 	m_UseMegaShaders = true;
 	m_VPSpecularOutput = true;
+	m_VPUsesLightTableUBO = false;
 }
 
 // ***************************************************************************
@@ -474,6 +484,9 @@ bool CDriverGL3::setupDisplay()
 	if (!initProgramPipeline())
 		nlerror("Failed to create Pipeline Object");
 
+	// Create the light table UBO
+	nglGenBuffers(1, &_LightTableUBOId);
+
 	if (m_UseMegaShaders)
 	{
 		if (!initMegaVertexPrograms())
@@ -481,8 +494,8 @@ bool CDriverGL3::setupDisplay()
 		else if (!initMegaPixelPrograms())
 			nlwarning("GL3: Failed to init mega pixel programs, falling back to per-material shaders");
 		else
-			nlinfo("GL3: Mega shaders initialized (4 VP + 8 PP variants)");
-		if (!m_MegaVP[0][0] || !m_MegaPP[0][0][0])
+			nlinfo("GL3: Mega shaders initialized (8 VP + 8 PP variants)");
+		if (!m_MegaVP[0][0][0] || !m_MegaPP[0][0][0])
 			m_UseMegaShaders = false; // Fallback
 	}
 
@@ -797,6 +810,13 @@ bool CDriverGL3::release()
 	for (std::unordered_set<CPPBuiltin>::iterator it(m_PPBuiltinCache.begin()), end(m_PPBuiltinCache.end()); it != end; ++it)
 		delete it->PixelProgram;
 	m_PPBuiltinCache.clear();
+
+	// Delete the light table UBO
+	if (_LightTableUBOId)
+	{
+		nglDeleteBuffers(1, &_LightTableUBOId);
+		_LightTableUBOId = 0;
+	}
 
 	// Call IDriver::release() before, to destroy textures, shaders and VBs...
 	IDriver::release();

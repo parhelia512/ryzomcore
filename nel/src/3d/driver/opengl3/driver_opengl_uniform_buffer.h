@@ -40,6 +40,7 @@ namespace NLDRIVERGL3 {
 #define NL_USER_GEOMETRY_PROGRAM_BINDING 5 // User-specified uniform buffer bound by geometry program
 #define NL_USER_PIXEL_PROGRAM_BINDING 6 // User-specified uniform buffer bound by pixel program
 #define NL_USER_MATERIAL_BINDING 7 // User-specified uniform buffer bound by material
+#define NL_BUILTIN_LIGHT_TABLE_BINDING 8 // Builtin uniform buffer for light table (shared across objects)
 
 extern const char *GLSLHeaderUniformBuffer;
 

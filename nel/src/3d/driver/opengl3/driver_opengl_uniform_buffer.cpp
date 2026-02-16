@@ -33,7 +33,8 @@ const char *GLSLHeaderUniformBuffer =
 	"#define NL_USER_VERTEX_PROGRAM_BINDING " NL_MACRO_TO_STR(NL_USER_VERTEX_PROGRAM_BIND) "\n"
 	"#define NL_USER_GEOMETRY_PROGRAM_BINDING " NL_MACRO_TO_STR(NL_USER_GEOMETRY_PROGRAM_BIND) "\n"
 	"#define NL_USER_PIXEL_PROGRAM_BINDING " NL_MACRO_TO_STR(NL_USER_PIXEL_PROGRAM_BIND) "\n"
-	"#define NL_USER_MATERIAL_BINDING " NL_MACRO_TO_STR(NL_USER_MATERIAL_BIND) "\n";
+	"#define NL_USER_MATERIAL_BINDING " NL_MACRO_TO_STR(NL_USER_MATERIAL_BIND) "\n"
+	"#define NL_BUILTIN_LIGHT_TABLE_BINDING " NL_MACRO_TO_STR(NL_BUILTIN_LIGHT_TABLE_BIND) "\n";
 
 static const char *s_UniformBufferBindDefine[] = {
 	"NL_BUILTIN_CAMERA_BINDING",
@@ -44,6 +45,7 @@ static const char *s_UniformBufferBindDefine[] = {
 	"NL_USER_GEOMETRY_PROGRAM_BINDING",
 	"NL_USER_PIXEL_PROGRAM_BINDING",
 	"NL_USER_MATERIAL_BINDING",
+	"NL_BUILTIN_LIGHT_TABLE_BINDING",
 };
 
 static const char *s_UniformBufferName[] = {
@@ -55,6 +57,7 @@ static const char *s_UniformBufferName[] = {
 	"UserLocal",
 	"UserLocal",
 	"UserMaterial",
+	"NlLightTable",
 };
 
 static const char *s_TypeKeyword[] = {

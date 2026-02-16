@@ -26,14 +26,18 @@
  *   - Clip plane (none vs active): Requires static gl_ClipDistance[6] array,
  *     forces rasterizer to interpolate 6 extra floats per fragment. Only used
  *     during water reflection and R2 editor — always a separate pass. Free split.
+ *   - Light table (on/off): When on, lights are read from a UBO with per-object
+ *     indices and factors. When off, lights use individual pre-multiplied uniforms.
+ *     Different uniform sets, so a separate variant avoids dead declarations.
  *
- *   Result: 4 VP variants — m_MegaVP[fog][clip]
+ *   Result: 8 VP variants — m_MegaVP[fog][clip][table]
  *
  *   FOLDS (uniform-controlled branching — zero GPU cost):
  *   - VertexFormat: All 16 in attributes declared; unbound ones read GL default
  *     (0,0,0,1). nlVertexFormat bitmask uniform guards attribute usage.
  *   - Lighting on/off: Uniform bool, skip entire light block.
  *   - LightMode[8]: Uniform int per light slot; directional/point/spot/disabled.
+ *     (non-table variant only)
  *   - TexGenMode[4]: Uniform int per stage; reflection/sphere/object/eye-linear.
  *   - Specular: Folded into lighting block.
  *   - VertexColorLighted: Uniform bool controlling vertex color * lighting.
@@ -51,17 +55,20 @@
 #include "driver_opengl.h"
 #include "driver_opengl_program.h"
 #include "driver_opengl_vertex_buffer.h"
+#include "driver_opengl_uniform_buffer.h"
 
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
 namespace /* anonymous */ {
 
-void megaVPGenerate(std::string &result, bool fog, bool clip)
+#define NL_MAX_LIGHT_TABLE_SIZE 128
+
+void megaVPGenerate(std::string &result, bool fog, bool clip, bool table)
 {
 	std::stringstream ss;
 	ss << "// Megashader Vertex Program";
-	ss << " (fog=" << (int)fog << ", clip=" << (int)clip << ")" << std::endl;
+	ss << " (fog=" << (int)fog << ", clip=" << (int)clip << ", table=" << (int)table << ")" << std::endl;
 	ss << std::endl;
 	ss << "#version 330" << std::endl;
 	ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
@@ -83,21 +90,57 @@ void megaVPGenerate(std::string &result, bool fog, bool clip)
 	ss << "uniform mat3 normalMatrix;" << std::endl;
 	ss << std::endl;
 
-	// Per-light uniforms (all 8 lights, superset of all modes)
-	for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+	if (table)
 	{
-		ss << "uniform vec3 light" << i << "DirOrPos;" << std::endl;
-		ss << "uniform vec4 light" << i << "ColDiff;" << std::endl;
-		ss << "uniform vec4 light" << i << "ColSpec;" << std::endl;
-		ss << "uniform float light" << i << "Shininess;" << std::endl;
-		ss << "uniform float light" << i << "ConstAttn;" << std::endl;
-		ss << "uniform float light" << i << "LinAttn;" << std::endl;
-		ss << "uniform float light" << i << "QuadAttn;" << std::endl;
-		ss << "uniform vec3 light" << i << "SpotDir;" << std::endl;
-		ss << "uniform float light" << i << "SpotCutoff;" << std::endl;
-		ss << "uniform float light" << i << "SpotExp;" << std::endl;
+		// Light table UBO
+		ss << "struct NlLightInfo {" << std::endl;
+		ss << "  vec3  dirOrPos;" << std::endl;
+		ss << "  int   mode;" << std::endl;
+		ss << "  vec4  diffuse;" << std::endl;
+		ss << "  vec4  specular;" << std::endl;
+		ss << "  float constAttn;" << std::endl;
+		ss << "  float linAttn;" << std::endl;
+		ss << "  float quadAttn;" << std::endl;
+		ss << "  float spotExp;" << std::endl;
+		ss << "  vec3  spotDir;" << std::endl;
+		ss << "  float spotCutoff;" << std::endl;
+		ss << "};" << std::endl;
+		ss << std::endl;
+		ss << "layout(std140, binding = " << NL_BUILTIN_LIGHT_TABLE_BINDING << ") uniform NlLightTable {" << std::endl;
+		ss << "  NlLightInfo nlLights[" << NL_MAX_LIGHT_TABLE_SIZE << "];" << std::endl;
+		ss << "};" << std::endl;
+		ss << std::endl;
+
+		// Per-object light table uniforms
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			ss << "uniform int nlLightIndex" << i << ";" << std::endl;
+			ss << "uniform float nlLightFactor" << i << ";" << std::endl;
+		}
+		ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
+		ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
+		ss << "uniform float nlMaterialShininess;" << std::endl;
+		ss << "uniform vec3 pzbCameraPos;" << std::endl;
+		ss << std::endl;
 	}
-	ss << std::endl;
+	else
+	{
+		// Per-light uniforms (all 8 lights, superset of all modes)
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			ss << "uniform vec3 light" << i << "DirOrPos;" << std::endl;
+			ss << "uniform vec4 light" << i << "ColDiff;" << std::endl;
+			ss << "uniform vec4 light" << i << "ColSpec;" << std::endl;
+			ss << "uniform float light" << i << "Shininess;" << std::endl;
+			ss << "uniform float light" << i << "ConstAttn;" << std::endl;
+			ss << "uniform float light" << i << "LinAttn;" << std::endl;
+			ss << "uniform float light" << i << "QuadAttn;" << std::endl;
+			ss << "uniform vec3 light" << i << "SpotDir;" << std::endl;
+			ss << "uniform float light" << i << "SpotCutoff;" << std::endl;
+			ss << "uniform float light" << i << "SpotExp;" << std::endl;
+		}
+		ss << std::endl;
+	}
 
 	ss << "uniform vec4 selfIllumination;" << std::endl;
 	ss << "uniform vec4 materialColor;" << std::endl;
@@ -118,8 +161,11 @@ void megaVPGenerate(std::string &result, bool fog, bool clip)
 
 	// Megashader control uniforms
 	ss << "uniform int nlLighting;" << std::endl;
-	for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-		ss << "uniform int nlLightMode" << i << ";" << std::endl;
+	if (!table)
+	{
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			ss << "uniform int nlLightMode" << i << ";" << std::endl;
+	}
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		ss << "uniform int nlTexGenMode" << i << ";" << std::endl;
 	ss << "uniform int nlVertexColorLighted;" << std::endl;
@@ -231,21 +277,50 @@ void megaVPGenerate(std::string &result, bool fog, bool clip)
 	ss << "    diffuseVertex = vec4(0.0);" << std::endl;
 	ss << "    specularVertex = vec4(0.0);" << std::endl;
 
-	// Unrolled 8-light calls
-	for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+	if (table)
 	{
-		ss << "    computeLight(nlLightMode" << i
-			<< ", light" << i << "DirOrPos"
-			<< ", light" << i << "ColDiff"
-			<< ", light" << i << "ColSpec"
-			<< ", light" << i << "Shininess"
-			<< ", light" << i << "ConstAttn"
-			<< ", light" << i << "LinAttn"
-			<< ", light" << i << "QuadAttn"
-			<< ", light" << i << "SpotDir"
-			<< ", light" << i << "SpotCutoff"
-			<< ", light" << i << "SpotExp"
-			<< ", normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);" << std::endl;
+		// Unrolled light table lookups
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			ss << "    {" << std::endl;
+			ss << "      int idx = nlLightIndex" << i << ";" << std::endl;
+			ss << "      if (idx >= 0) {" << std::endl;
+			ss << "        NlLightInfo li = nlLights[idx];" << std::endl;
+			ss << "        float factor = nlLightFactor" << i << ";" << std::endl;
+			ss << "        vec3 adjDirOrPos;" << std::endl;
+			ss << "        if (li.mode == " << (int)CLight::DirectionalLight << ")" << std::endl;
+			ss << "          adjDirOrPos = -li.dirOrPos;" << std::endl;
+			ss << "        else" << std::endl;
+			ss << "          adjDirOrPos = li.dirOrPos - pzbCameraPos;" << std::endl;
+			ss << "        computeLight(li.mode, adjDirOrPos," << std::endl;
+			ss << "          li.diffuse * factor * nlMaterialDiffuse," << std::endl;
+			ss << "          li.specular * factor * nlMaterialSpecular," << std::endl;
+			ss << "          nlMaterialShininess," << std::endl;
+			ss << "          li.constAttn, li.linAttn, li.quadAttn," << std::endl;
+			ss << "          li.spotDir, li.spotCutoff, li.spotExp," << std::endl;
+			ss << "          normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);" << std::endl;
+			ss << "      }" << std::endl;
+			ss << "    }" << std::endl;
+		}
+	}
+	else
+	{
+		// Unrolled 8-light calls with individual uniforms
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			ss << "    computeLight(nlLightMode" << i
+				<< ", light" << i << "DirOrPos"
+				<< ", light" << i << "ColDiff"
+				<< ", light" << i << "ColSpec"
+				<< ", light" << i << "Shininess"
+				<< ", light" << i << "ConstAttn"
+				<< ", light" << i << "LinAttn"
+				<< ", light" << i << "QuadAttn"
+				<< ", light" << i << "SpotDir"
+				<< ", light" << i << "SpotCutoff"
+				<< ", light" << i << "SpotExp"
+				<< ", normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);" << std::endl;
+		}
 	}
 
 	ss << "    diffuseVertex.a = 1.0;" << std::endl;
@@ -333,26 +408,29 @@ bool CDriverGL3::initMegaVertexPrograms()
 	{
 		for (int clip = 0; clip < 2; ++clip)
 		{
-			std::string result;
-			megaVPGenerate(result, fog != 0, clip != 0);
-
-			CVertexProgram *vp = new CVertexProgram();
-			IProgram::CSource *src = new IProgram::CSource();
-			src->Profile = IProgram::glsl330v;
-			src->DisplayName = NLMISC::toString("Mega VP (fog=%d, clip=%d)", fog, clip);
-			src->setSource(result);
-			vp->addSource(src);
-
-			nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
-
-			if (!compileVertexProgram(vp))
+			for (int table = 0; table < 2; ++table)
 			{
-				nlwarning("GL3: Mega VP compilation failed (fog=%d, clip=%d)", fog, clip);
-				delete vp;
-				return false;
-			}
+				std::string result;
+				megaVPGenerate(result, fog != 0, clip != 0, table != 0);
 
-			m_MegaVP[fog][clip] = vp;
+				CVertexProgram *vp = new CVertexProgram();
+				IProgram::CSource *src = new IProgram::CSource();
+				src->Profile = IProgram::glsl330v;
+				src->DisplayName = NLMISC::toString("Mega VP (fog=%d, clip=%d, table=%d)", fog, clip, table);
+				src->setSource(result);
+				vp->addSource(src);
+
+				nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+				if (!compileVertexProgram(vp))
+				{
+					nlwarning("GL3: Mega VP compilation failed (fog=%d, clip=%d, table=%d)", fog, clip, table);
+					delete vp;
+					return false;
+				}
+
+				m_MegaVP[fog][clip][table] = vp;
+			}
 		}
 	}
 	return true;
@@ -365,15 +443,18 @@ bool CDriverGL3::setupMegaVertexProgram()
 	if (m_UserVertexProgram)
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
+		m_VPUsesLightTableUBO = _LightTableMode && m_UserVertexProgram->features().UsesLightTableUBO;
 		return true;
 	}
 
 	m_VPSpecularOutput = true; // Mega VP always outputs specularColor
+	m_VPUsesLightTableUBO = _LightTableMode; // Mega VP uses UBO when in table mode
 
 	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
+	int table = _LightTableMode ? 1 : 0;
 
-	CVertexProgram *vp = m_MegaVP[fog][clip];
+	CVertexProgram *vp = m_MegaVP[fog][clip][table];
 	nlassert(vp);
 
 	if (!activeVertexProgram(vp, true))
@@ -400,14 +481,17 @@ void CDriverGL3::setupMegaVPUniforms()
 	if (idx != ~0u)
 		nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.Lighting ? 1 : 0);
 
-	// Per-light modes
-	for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+	// Per-light modes (non-table variant only — table variant reads from UBO)
+	if (!m_VPUsesLightTableUBO)
 	{
-		idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightMode0 + i));
-		if (idx != ~0u)
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
-			sint mode = _LightEnable[i] ? _LightMode[i] : -1;
-			nglProgramUniform1i(progId, idx, mode);
+			idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightMode0 + i));
+			if (idx != ~0u)
+			{
+				sint mode = _LightEnable[i] ? _LightMode[i] : -1;
+				nglProgramUniform1i(progId, idx, mode);
+			}
 		}
 	}
 

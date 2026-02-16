@@ -949,6 +949,17 @@ private:
 	bool						_LightTableMode;
 	std::vector<CLight>			_LightTable;
 
+	// Light table UBO
+	GLuint						_LightTableUBOId;
+	bool						_LightTableDirty;
+	sint						_LightTableUBOCapacity; // Current GPU buffer capacity (entries)
+	void						uploadLightTableUBO();
+
+	// Per-object light table selection (set by setLights, used by setupUniforms)
+	sint16						_LightTableObjIndices[MaxLight];
+	float						_LightTableObjFactors[MaxLight];
+	uint						_LightTableObjCount;
+
 	// Clip planes (in eye space, pre-transformed for shader)
 	enum { MaxClipPlanes = 6 };
 	bool						_ClipPlaneEnabled[MaxClipPlanes];
@@ -1352,13 +1363,16 @@ private:
 	CVPBuiltin m_VPBuiltinCurrent;
 	bool m_VPBuiltinTouched;
 
-	// Megashader support: m_MegaVP[fog][clip], m_MegaPP[fog][cube][specular]
+	// Megashader support: m_MegaVP[fog][clip][table], m_MegaPP[fog][cube][specular]
 	bool m_UseMegaShaders;
-	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2];
+	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2];
 	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2];
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;
+
+	// Whether the current VP uses UBO-based light table
+	bool m_VPUsesLightTableUBO;
 
 	// EMBM support
 	void	initEMBM();

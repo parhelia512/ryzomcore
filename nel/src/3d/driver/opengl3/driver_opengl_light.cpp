@@ -21,7 +21,10 @@
 #include "stdopengl.h"
 
 #include "driver_opengl.h"
+#include "driver_opengl_uniform_buffer.h"
 #include "nel/3d/light.h"
+
+#include <cmath>
 
 namespace NL3D {
 namespace NLDRIVERGL3 {
@@ -158,6 +161,7 @@ void	CDriverGL3::setLightTableSize(uint count)
 {
 	H_AUTO_OGL(CDriverGL3_setLightTableSize)
 	_LightTable.resize(count);
+	_LightTableDirty = true;
 }
 
 // ***************************************************************************
@@ -165,7 +169,10 @@ void	CDriverGL3::setLightTableEntry(uint index, const CLight &light)
 {
 	H_AUTO_OGL(CDriverGL3_setLightTableEntry)
 	if (index < _LightTable.size())
+	{
 		_LightTable[index] = light;
+		_LightTableDirty = true;
+	}
 }
 
 // ***************************************************************************
@@ -181,20 +188,27 @@ void	CDriverGL3::setLights(
 	for (uint i = 0; i < MaxLight; ++i)
 	{
 		_LightEnable[i] = false;
+		_LightTableObjIndices[i] = -1;
+		_LightTableObjFactors[i] = 0.0f;
 	}
 
 	// Process each light (up to MaxLight)
 	uint count = std::min(numLights, (uint)MaxLight);
+	_LightTableObjCount = count;
 	for (uint i = 0; i < count; ++i)
 	{
 		sint16 tableIndex = tableIndices[i];
 		if (tableIndex < 0 || tableIndex >= (sint16)_LightTable.size())
 			continue;
 
+		// Store raw index and factor for UBO path
+		_LightTableObjIndices[i] = tableIndex;
+		_LightTableObjFactors[i] = (float)(factors[i] + (factors[i] >> 7)) / 256.0f;
+
 		// Get raw light from table
 		const CLight &rawLight = _LightTable[tableIndex];
 
-		// Apply factor modulation
+		// Apply factor modulation (for legacy uniform path)
 		uint ufactor = factors[i];
 		ufactor += ufactor >> 7; // expand 0..255 to 0..256
 
@@ -317,6 +331,116 @@ void			CDriverGL3::setupLightMapDynamicLighting(bool enable)
 		for (uint i = 0; i < MaxLight; ++i)
 			enableLightInternal(i, _UserLightEnable[i]);
 	}
+}
+
+// ***************************************************************************
+// CPU-side struct matching the std140 NlLightInfo layout (80 bytes)
+struct CLightTableEntry
+{
+	float dirOrPos[3];     // 0
+	sint32 mode;           // 12
+	float diffuse[4];      // 16
+	float specular[4];     // 32
+	float constAttn;       // 48
+	float linAttn;         // 52
+	float quadAttn;        // 56
+	float spotExp;         // 60
+	float spotDir[3];      // 64
+	float spotCutoff;      // 76
+};                         // 80 bytes
+static_assert(sizeof(CLightTableEntry) == 80, "CLightTableEntry must match std140 NlLightInfo layout");
+
+void CDriverGL3::uploadLightTableUBO()
+{
+	H_AUTO_OGL(CDriverGL3_uploadLightTableUBO)
+
+	if (!_LightTableDirty || !_LightTableUBOId)
+		return;
+
+	sint count = (sint)_LightTable.size();
+	if (count == 0)
+	{
+		_LightTableDirty = false;
+		return;
+	}
+
+	// Cap at max UBO size (128 lights × 80 bytes = 10240, fits in GL 3.3 min 16KB)
+	const sint maxLights = 128;
+	if (count > maxLights)
+		count = maxLights;
+
+	// Pack CLight data into UBO struct array
+	std::vector<CLightTableEntry> entries(count);
+	for (sint i = 0; i < count; ++i)
+	{
+		const CLight &light = _LightTable[i];
+		CLightTableEntry &e = entries[i];
+
+		CLight::TLightMode lmode = light.getMode();
+		e.mode = (sint32)lmode;
+
+		if (lmode == CLight::DirectionalLight)
+		{
+			CVector dir = light.getDirection();
+			e.dirOrPos[0] = dir.x;
+			e.dirOrPos[1] = dir.y;
+			e.dirOrPos[2] = dir.z;
+		}
+		else
+		{
+			CVector pos = light.getPosition();
+			e.dirOrPos[0] = pos.x;
+			e.dirOrPos[1] = pos.y;
+			e.dirOrPos[2] = pos.z;
+		}
+
+		NLMISC::CRGBAF diff(light.getDiffuse());
+		e.diffuse[0] = diff.R;
+		e.diffuse[1] = diff.G;
+		e.diffuse[2] = diff.B;
+		e.diffuse[3] = diff.A;
+
+		NLMISC::CRGBAF spec(light.getSpecular());
+		e.specular[0] = spec.R;
+		e.specular[1] = spec.G;
+		e.specular[2] = spec.B;
+		e.specular[3] = spec.A;
+
+		e.constAttn = light.getConstantAttenuation();
+		e.linAttn = light.getLinearAttenuation();
+		e.quadAttn = light.getQuadraticAttenuation();
+		e.spotExp = light.getExponent();
+
+		CVector spotDir = light.getDirection();
+		e.spotDir[0] = spotDir.x;
+		e.spotDir[1] = spotDir.y;
+		e.spotDir[2] = spotDir.z;
+		e.spotCutoff = cosf(light.getCutoff());
+	}
+
+	// Upload to GPU
+	GLsizeiptr dataSize = count * sizeof(CLightTableEntry);
+	nglBindBuffer(GL_UNIFORM_BUFFER, _LightTableUBOId);
+
+	if (count > _LightTableUBOCapacity)
+	{
+		// Grow buffer
+		nglBufferData(GL_UNIFORM_BUFFER, dataSize, &entries[0], GL_STREAM_DRAW);
+		_LightTableUBOCapacity = count;
+	}
+	else
+	{
+		// Orphan + rewrite (avoids GPU sync)
+		nglBufferData(GL_UNIFORM_BUFFER, _LightTableUBOCapacity * sizeof(CLightTableEntry), NULL, GL_STREAM_DRAW);
+		nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, &entries[0]);
+	}
+
+	nglBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+	// Bind to the light table binding point
+	nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_LIGHT_TABLE_BINDING, _LightTableUBOId);
+
+	_LightTableDirty = false;
 }
 
 // ***************************************************************************

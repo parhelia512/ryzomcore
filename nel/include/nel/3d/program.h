@@ -74,7 +74,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), UsesLightTableUBO(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -102,6 +102,9 @@ struct CProgramFeatures
 
 	/// Whether this VP outputs a separate specular color varying (for post-texture addition).
 	bool OutputsSpecularColor;
+
+	/// Whether this VP reads lights from a UBO light table + per-object indices/factors.
+	bool UsesLightTableUBO;
 };
 
 // Stucture used to cache the indices of builtin parameters which are used by the drivers
@@ -394,6 +397,28 @@ struct CProgramIndex
 		SamplerCube1,
 		SamplerCube2,
 		SamplerCube3,
+
+		// Light table per-object uniforms
+		NlLightIndex0,
+		NlLightIndex1,
+		NlLightIndex2,
+		NlLightIndex3,
+		NlLightIndex4,
+		NlLightIndex5,
+		NlLightIndex6,
+		NlLightIndex7,
+		NlLightFactor0,
+		NlLightFactor1,
+		NlLightFactor2,
+		NlLightFactor3,
+		NlLightFactor4,
+		NlLightFactor5,
+		NlLightFactor6,
+		NlLightFactor7,
+		NlMaterialDiffuse,
+		NlMaterialSpecular,
+		NlMaterialShininess,
+		PzbCameraPos,
 
 		NUM_UNIFORMS
 	};
