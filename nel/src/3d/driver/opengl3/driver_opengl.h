@@ -859,6 +859,9 @@ private:
 	// @}
 
 
+	// Default VAO (required for core profile)
+	GLuint					_DefaultVAO;
+
 	// The forceNormalize() state.
 	bool					_ForceNormalize;
 

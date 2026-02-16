@@ -1023,6 +1023,10 @@ bool CDriverGL3::setDisplay(nlWindow wnd, const GfxMode &mode, bool show, bool r
 
 	_visual_info = visual_info;
 
+	// TODO: Use glXCreateContextAttribsARB with GLX_CONTEXT_CORE_PROFILE_BIT_ARB
+	// to request a GL 3.3 core profile context. This requires switching from
+	// glXChooseVisual to glXChooseFBConfig, and dynamically loading
+	// glXCreateContextAttribsARB via glXGetProcAddress.
 	_ctx = glXCreateContext (_dpy, visual_info, None, GL_TRUE);
 	if (_ctx == NULL)
 	{
@@ -2407,9 +2411,9 @@ bool CDriverGL3::createContext()
 		}
 		nldebug("Create OpenGL context for Core 3.30 profile");
 		int attribList[] = {
-			WGL_CONTEXT_MAJOR_VERSION_ARB, 3, 
-			WGL_CONTEXT_MINOR_VERSION_ARB, 3, 
-			WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB, // WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 
+			WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+			WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+			WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
 			0, 0
 		};
 		_hRC = nwglCreateContextAttribsARB(_hDC, 0, attribList);

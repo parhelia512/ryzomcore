@@ -239,6 +239,7 @@ CDriverGL3::CDriverGL3()
 	_CurrentMode.Windowed = true;
 	_CurrentMode.AntiAlias = -1;
 
+	_DefaultVAO = 0;
 	_Interval = 1;
 	_Resizable = false;
 
@@ -413,12 +414,12 @@ bool CDriverGL3::setupDisplay()
 	// Init OpenGL/Driver defaults.
 	//=============================
 	glViewport(0,0,_CurrentMode.Width,_CurrentMode.Height);
-	//glDisable(GL_AUTO_NORMAL); // FIXME GL3
-	//glDisable(GL_COLOR_MATERIAL); // FIXME GL3
 	glEnable(GL_DITHER);
-	//glDisable(GL_FOG);
-	glDisable(GL_LINE_SMOOTH);
 	glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
+
+	// Create and bind a default VAO (required for core profile)
+	nglGenVertexArrays(1, &_DefaultVAO);
+	nglBindVertexArray(_DefaultVAO);
 	glEnable(GL_DEPTH_TEST);
 	//glDisable(GL_NORMALIZE);
 	//glDisable(GL_COLOR_SUM_EXT); // FIXME GL3
@@ -808,6 +809,13 @@ bool CDriverGL3::release()
 
 	// Make sure vertex buffers are really all gone
 	// FIXME VERTEXBUFFER
+
+	// Delete default VAO
+	if (_DefaultVAO)
+	{
+		nglDeleteVertexArrays(1, &_DefaultVAO);
+		_DefaultVAO = 0;
+	}
 
 	// destroy window and associated ressources
 	destroyWindow();
@@ -1443,15 +1451,13 @@ uint	CDriverGL3::getSwapVBLInterval()
 }
 
 // ***************************************************************************
+// GL_POLYGON_SMOOTH is not available in GL 3.3 core profile.
+// Only caller is CShadowMapManager, which uses it to smooth shadow polygon edges.
+// Alternative: render shadow maps to an MSAA FBO and resolve, or apply a
+// post-process blur/edge-detection filter on the shadow map.
 void	CDriverGL3::enablePolygonSmoothing(bool smooth)
 {
 	H_AUTO_OGL(CDriverGL3_enablePolygonSmoothing);
-
-	if (smooth)
-		glEnable(GL_POLYGON_SMOOTH);
-	else
-		glDisable(GL_POLYGON_SMOOTH);
-
 	_PolygonSmooth= smooth;
 }
 

@@ -259,6 +259,8 @@ CMaterial::TShader	CDriverGL3::getSupportedShader(CMaterial::TShader shader)
 	H_AUTO_OGL(CDriverGL3_CDriverGL)
 	switch (shader)
 	{
+	case CMaterial::Bump:
+		return CMaterial::Normal; // Bump shader was never implemented in any driver.
 	case CMaterial::PerPixelLighting:
 		return CMaterial::Normal; // FIXME GL3
 	case CMaterial::PerPixelLightingNoSpec:

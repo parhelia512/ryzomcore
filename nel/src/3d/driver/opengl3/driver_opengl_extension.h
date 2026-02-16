@@ -214,6 +214,10 @@ extern PFNGLUNIFORMMATRIX3FVPROC						nglUniformMatrix3fv;
 extern PFNGLUNIFORMMATRIX4FVPROC						nglUniformMatrix4fv;*/
 extern PFNGLVERTEXATTRIBPOINTERPROC						nglVertexAttribPointer;
 
+extern PFNGLGENVERTEXARRAYSPROC							nglGenVertexArrays;
+extern PFNGLDELETEVERTEXARRAYSPROC						nglDeleteVertexArrays;
+extern PFNGLBINDVERTEXARRAYPROC							nglBindVertexArray;
+
 extern PFNGLBINDBUFFERPROC								nglBindBuffer;
 extern PFNGLDELETEBUFFERSPROC							nglDeleteBuffers;
 extern PFNGLGENBUFFERSPROC								nglGenBuffers;
