@@ -508,7 +508,7 @@ bool CDriverGL3::stretchRect(ITexture * /* srcText */, NLMISC::CRect &/* srcRect
 // ***************************************************************************
 bool CDriverGL3::supportBloomEffect() const
 {
-	return false; // FIXME GL3 // _Extensions.GLCore;
+	return _Extensions.GLCore;
 }
 
 // ***************************************************************************
@@ -527,9 +527,7 @@ bool CDriverGL3::isTextureRectangle(ITexture * tex) const
 // ***************************************************************************
 bool CDriverGL3::activeFrameBufferObject(ITexture * tex)
 {
-	return false; // TODO GL3 FBO
-#if 0
-	if (supportFrameBufferObject()/* && supportPackedDepthStencil()*/)
+	if (supportFrameBufferObject())
 	{
 		if (tex)
 		{
@@ -544,7 +542,6 @@ bool CDriverGL3::activeFrameBufferObject(ITexture * tex)
 	}
 
 	return false;
-#endif
 }
 
 // --------------------------------------------------
@@ -1699,7 +1696,7 @@ bool CDriverGL3::supportFrameBufferObject() const
 {
 	H_AUTO_OGL(CDriverGL3_supportFrameBufferObject);
 
-	return false; // TODO GL _Extensions.GLCore;
+	return _Extensions.GLCore;
 }
 
 // ***************************************************************************

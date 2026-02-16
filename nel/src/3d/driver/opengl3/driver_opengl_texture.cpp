@@ -83,16 +83,10 @@ CTextureDrvInfosGL3::~CTextureDrvInfosGL3()
 	// release in TextureUsed.
 	_Driver->_TextureUsed.erase (this);
 
-	/*if (InitFBO)
+	if (InitFBO)
 	{
 		nglDeleteFramebuffers(1, &FBOId);
-		if (AttachDepthStencil)
-		{
-			nglDeleteRenderbuffers(1, &DepthFBOId);
-			if (!UsePackedDepthStencil)
-				nglDeleteRenderbuffers(1, &StencilFBOId);
-		}
-	}*/
+	}
 }
 
 CDepthStencilFBO::CDepthStencilFBO(CDriverGL3 *driver, uint width, uint height)
@@ -103,35 +97,15 @@ CDepthStencilFBO::CDepthStencilFBO(CDriverGL3 *driver, uint width, uint height)
 	Width = width;
 	Height = height;
 
-	bool packedDepthStencil = driver->supportPackedDepthStencil();
-	/*nglGenRenderbuffersEXT(1, &DepthFBOId);
-	if (packedDepthStencil)
-		StencilFBOId = DepthFBOId;
-	else
-		nglGenRenderbuffersEXT(1, &StencilFBOId);
+	// GL 3.3 core: always use packed depth-stencil
+	nglGenRenderbuffers(1, &DepthFBOId);
+	StencilFBOId = DepthFBOId;
+	nglBindRenderbuffer(GL_RENDERBUFFER, DepthFBOId);
+	nglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
 
-	if (packedDepthStencil)
-	{
-		//nldebug("3D: using packed depth stencil");
-		nglBindRenderbufferEXT(GL_RENDERBUFFER_EXT, StencilFBOId);
-		nglRenderbufferStorageEXT(GL_RENDERBUFFER_EXT, GL_DEPTH24_STENCIL8_EXT, width, height);
-
-	}
-	else
-	{
-		nglBindRenderbufferEXT(GL_RENDERBUFFER_EXT, DepthFBOId);
-		nglRenderbufferStorageEXT(GL_RENDERBUFFER_EXT, GL_DEPTH_COMPONENT24, width, height);
-		*//*
-		nglBindRenderbufferEXT(GL_RENDERBUFFER_EXT, StencilFBOId);
-		nglRenderbufferStorageEXT(GL_RENDERBUFFER_EXT, GL_STENCIL_INDEX8_EXT, width, height);
-		*/
-	/*}*/
-
-	/*nlassert(DepthFBOId);
-	nlassert(StencilFBOId);*/
+	nlassert(DepthFBOId);
 
 	driver->_DepthStencilFBOs.push_back(this);
-
 }
 
 CDepthStencilFBO::~CDepthStencilFBO()
@@ -139,27 +113,18 @@ CDepthStencilFBO::~CDepthStencilFBO()
 	// driver remove
 	m_Driver->_DepthStencilFBOs.erase(std::find(m_Driver->_DepthStencilFBOs.begin(), m_Driver->_DepthStencilFBOs.end(), this));
 
-	/*if (DepthFBOId)
+	if (DepthFBOId)
 	{
 		nldebug("3D: Release shared FBO");
-		nglDeleteRenderbuffersEXT(1, &DepthFBOId);
-		if (StencilFBOId == DepthFBOId)
-			StencilFBOId = 0;
+		nglDeleteRenderbuffers(1, &DepthFBOId);
 		DepthFBOId = 0;
-	}
-	if (StencilFBOId)
-	{
-		nglDeleteRenderbuffersEXT(1, &StencilFBOId);
 		StencilFBOId = 0;
-	}*/
+	}
 }
 
 // ***************************************************************************
 bool CTextureDrvInfosGL3::initFrameBufferObject(ITexture * tex)
 {
-	return false; // FIXME GL3 FBO
-
-#if 0
 	if (!InitFBO)
 	{
 		if (tex->isBloomTexture())
@@ -170,19 +135,11 @@ bool CTextureDrvInfosGL3::initFrameBufferObject(ITexture * tex)
 		// generate IDs
 		nglGenFramebuffers(1, &FBOId);
 
-		//nldebug("3D: using depth %d and stencil %d", DepthFBOId, StencilFBOId);
-
 		// initialize FBO
 		nglBindFramebuffer(GL_FRAMEBUFFER, FBOId);
 		nglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, TextureMode, ID, 0);
 
 		// attach depth/stencil render to FBO
-		// note: for some still unkown reason it's impossible to add
-		// a stencil buffer as shown in the respective docs (see
-		// opengl.org extension registry). Until a safe approach to add
-		// them is found, there will be no attached stencil for the time
-		// being, aside of using packed depth+stencil buffers.
-		// FIXME GL3
 		if (AttachDepthStencil)
 		{
 			for (std::vector<CDepthStencilFBO *>::iterator it(_Driver->_DepthStencilFBOs.begin()), end(_Driver->_DepthStencilFBOs.end()); it != end; ++it)
@@ -198,12 +155,10 @@ bool CTextureDrvInfosGL3::initFrameBufferObject(ITexture * tex)
 			{
 				DepthStencilFBO = new CDepthStencilFBO(_Driver, tex->getWidth(), tex->getHeight());
 			}
-			nglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+
+			// GL 3.3 core: use GL_DEPTH_STENCIL_ATTACHMENT for packed depth-stencil
+			nglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
 				GL_RENDERBUFFER, DepthStencilFBO->DepthFBOId);
-			nldebug("3D: glFramebufferRenderbufferExt(depth:24) = %X", nglCheckFramebufferStatus(GL_FRAMEBUFFER));
-			nglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT,
-				GL_RENDERBUFFER, DepthStencilFBO->StencilFBOId);
-			nldebug("3D: glFramebufferRenderbufferExt(stencil:8) = %X", nglCheckFramebufferStatus(GL_FRAMEBUFFER));
 		}
 
 		// check status
@@ -263,7 +218,6 @@ bool CTextureDrvInfosGL3::initFrameBufferObject(ITexture * tex)
 #endif
 			default:
 				nlwarning("Framebuffer incomplete status %d", (sint)status);
-				//nlassert(0);
 		}
 
 		// clean up resources if allocation failed
@@ -280,14 +234,11 @@ bool CTextureDrvInfosGL3::initFrameBufferObject(ITexture * tex)
 	}
 
 	return InitFBO;
-#endif
 }
 
 // ***************************************************************************
 bool CTextureDrvInfosGL3::activeFrameBufferObject(ITexture * tex)
 {
-	return false; // FIXME GL3 FBO
-#if 0
 	if (tex)
 	{
 		if (initFrameBufferObject(tex))
@@ -304,7 +255,6 @@ bool CTextureDrvInfosGL3::activeFrameBufferObject(ITexture * tex)
 	}
 
 	return true;
-#endif
 }
 
 // ***************************************************************************
@@ -1609,19 +1559,17 @@ bool CDriverGL3::setRenderTarget (ITexture *tex, uint32 x, uint32 y, uint32 widt
 
 		if (tex->isBloomTexture() && supportBloomEffect())
 		{
-			uint32 w, h;
-			getWindowSize(w, h);
-
 			getViewport(_OldViewport);
 
 			if (!width) width = tex->getWidth();
 			if (!height) height = tex->getHeight();
 
-			CViewport newVP;
-			newVP.init(0, 0, ((float)width/(float)w), ((float)height/(float)h));
-			setupViewport(newVP);
-
 			_RenderTargetFBO = tex;
+
+			CViewport newVP;
+			newVP.init(0, 0, (float)width / (float)tex->getWidth(),
+			                  (float)height / (float)tex->getHeight());
+			setupViewport(newVP);
 
 			return activeFrameBufferObject(tex);
 		}
@@ -1641,8 +1589,7 @@ bool CDriverGL3::setRenderTarget (ITexture *tex, uint32 x, uint32 y, uint32 widt
 		setupViewport(_OldViewport);
 		_OldViewport = _CurrViewport;
 
-		_RenderTargetFBO = false;
-		return false;
+		_RenderTargetFBO = NULL;
 	}
 
 	// Backup the texture
@@ -1654,7 +1601,7 @@ bool CDriverGL3::setRenderTarget (ITexture *tex, uint32 x, uint32 y, uint32 widt
 	// Update the scissor
 	setupScissor (_CurrScissor);
 
-	_RenderTargetFBO = false;
+	_RenderTargetFBO = NULL;
 	_OldViewport = _CurrViewport;
 
 	return true;

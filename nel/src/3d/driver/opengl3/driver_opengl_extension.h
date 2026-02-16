@@ -227,7 +227,7 @@ extern PFNGLGETQUERYIVPROC								nglGetQueryiv;
 extern PFNGLGETQUERYOBJECTIVPROC						nglGetQueryObjectiv;
 extern PFNGLGETQUERYOBJECTUIVPROC						nglGetQueryObjectuiv;
 
-/*extern PFNGLISRENDERBUFFERPROC							nglIsRenderbuffer;
+extern PFNGLISRENDERBUFFERPROC							nglIsRenderbuffer;
 extern PFNGLBINDRENDERBUFFERPROC						nglBindRenderbuffer;
 extern PFNGLDELETERENDERBUFFERSPROC						nglDeleteRenderbuffers;
 extern PFNGLGENRENDERBUFFERSPROC						nglGenRenderbuffers;
@@ -246,7 +246,7 @@ extern PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC		nglGetFramebufferAttachment
 extern PFNGLGENERATEMIPMAPPROC							nglGenerateMipmap;
 extern PFNGLBLITFRAMEBUFFERPROC							nglBlitFramebuffer;
 extern PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC			nglRenderbufferStorageMultisample;
-extern PFNGLFRAMEBUFFERTEXTURELAYERPROC					nglFramebufferTextureLayer;*/
+extern PFNGLFRAMEBUFFERTEXTURELAYERPROC					nglFramebufferTextureLayer;
 
 extern PFNGLACTIVETEXTUREPROC							nglActiveTexture;
 
