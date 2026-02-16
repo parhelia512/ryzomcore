@@ -1555,20 +1555,33 @@ bool CDriverGL3::setRenderTarget (ITexture *tex, uint32 x, uint32 y, uint32 widt
 		// Check the texture is a render target
 		nlassertex (tex->getRenderTarget(), ("The texture must be a render target. Call ITexture::setRenderTarget(true)."));
 
-		// GL 3.3: always use FBO path for render targets (matching D3D9 behavior)
-		getViewport(_OldViewport);
+		// Use FBO path for CTextureOffscreen (bloom, FXAA, water env maps).
+		// CTextureMem (shadows, clouds) uses legacy copy-from-framebuffer path.
+		if (tex->isOffscreenTexture())
+		{
+			getViewport(_OldViewport);
 
-		if (!width) width = tex->getWidth();
-		if (!height) height = tex->getHeight();
+			if (!width) width = tex->getWidth();
+			if (!height) height = tex->getHeight();
 
-		_RenderTargetFBO = tex;
+			_RenderTargetFBO = tex;
 
-		CViewport newVP;
-		newVP.init(0, 0, (float)width / (float)tex->getWidth(),
-		                  (float)height / (float)tex->getHeight());
-		setupViewport(newVP);
+			CViewport newVP;
+			newVP.init(0, 0, (float)width / (float)tex->getWidth(),
+			                  (float)height / (float)tex->getHeight());
+			setupViewport(newVP);
 
-		return activeFrameBufferObject(tex);
+			return activeFrameBufferObject(tex);
+		}
+
+		// Legacy path: backup parameters for copy-from-framebuffer
+		_TextureTargetLevel = mipmapLevel;
+		_TextureTargetX = x;
+		_TextureTargetY = y;
+		_TextureTargetWidth = width;
+		_TextureTargetHeight = height;
+		_TextureTargetUpload = true;
+		_TextureTargetCubeFace = cubeFace;
 	}
 	else if (_RenderTargetFBO)
 	{
