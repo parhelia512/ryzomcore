@@ -1089,6 +1089,52 @@ public:
 	// @}
 
 
+	/** \name Light Table
+	  *
+	  * The light table is a resizable array of CLight entries in the driver,
+	  * populated once per frame. Each unique scene light (sun, point lights)
+	  * is uploaded once via setLightTableEntry(). Per-object rendering then
+	  * references lights by table index + influence factor through setLights(),
+	  * rather than uploading fully modulated CLight data per draw call.
+	  *
+	  * Two modes:
+	  * - **Table mode** (scene rendering): enableLightTableMode(true). Lights
+	  *   are set up via setLightTableEntry() and selected per object via
+	  *   setLights(). The legacy setLight()/enableLight() calls are not used.
+	  * - **Legacy mode** (samples, UI, debug): enableLightTableMode(false).
+	  *   setLight()/enableLight() work as before.
+	  *
+	  * setLights() applies per-object factor modulation internally: each
+	  * factor (0-255) scales the table entry's diffuse and specular colors.
+	  * The ambient parameter replaces the ambient of slot 0 (sun); point
+	  * light slots receive black ambient.
+	  */
+	// @{
+
+	/// Enable or disable light table mode. When disabled, legacy setLight()/enableLight() resumes.
+	virtual void enableLightTableMode(bool enable) = 0;
+
+	/// Resize the light table. Existing entries beyond the new size are discarded.
+	virtual void setLightTableSize(uint count) = 0;
+
+	/// Set a light table entry. The light is stored as-is (no factor modulation).
+	virtual void setLightTableEntry(uint index, const CLight &light) = 0;
+
+	/** Set the active lights for the current object from the light table.
+	  * \param tableIndices  Array of indices into the light table. Slot 0 is the sun.
+	  * \param factors       Parallel array of influence factors (0-255) per light.
+	  * \param numLights     Number of entries in tableIndices/factors.
+	  * \param ambient       Per-object ambient color, written to slot 0's ambient.
+	  */
+	virtual void setLights(
+		const sint16 *tableIndices,
+		const uint8 *factors,
+		uint numLights,
+		NLMISC::CRGBA ambient) = 0;
+
+	// @}
+
+
 
 	/// \name Vertex Program
 	// @{

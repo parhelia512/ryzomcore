@@ -90,6 +90,16 @@ CRenderTrav::CRenderTrav()
 	_MeshSkinManager= NULL;
 	_ShadowMeshSkinManager= NULL;
 
+	// Light table mode: each unique CPointLight is uploaded to the driver once
+	// per frame via setLightTableEntry(). Per-object rendering then calls
+	// setLights() with indices into the table + per-object influence factors,
+	// instead of calling setLight()/enableLight() with fully modulated CLight
+	// data for every draw. This reduces redundant light uploads when many
+	// objects share the same point lights, and prepares for future UBO/SSBO
+	// based lighting where all lights must be accessible from the shader.
+	_LightTableMode= true;
+	_LightTableSize= 0;
+
 	_LayersRenderingOrder= true;
 	_FirstWaterModel = NULL;
 }
@@ -588,6 +598,38 @@ void		CRenderTrav::resetLightSetup()
 	{
 		uint i;
 
+		// If in light table mode, handle init/teardown
+		if(_LightTableMode)
+		{
+			// Check if table was already enabled (this is the end-of-frame call)
+			if(_LightTableSize > 0)
+			{
+				// Teardown: reset _TableIndex on all tracked point lights
+				for(i=0; i<_LightTablePointLights.size(); ++i)
+				{
+					_LightTablePointLights[i]->setTableIndex(-1);
+				}
+				_LightTablePointLights.clear();
+				_LightTableSize= 0;
+
+				// Disable table mode in driver so legacy setLight/enableLight resumes
+				Driver->enableLightTableMode(false);
+			}
+			else
+			{
+				// Init: entering table mode for this frame
+				_LightTablePointLights.clear();
+				_LightTableSize= 1;
+
+				// Upload sun as entry 0
+				CLight sunLight;
+				sunLight.setupDirectional(SunAmbient, SunDiffuse, SunSpecular, _SunDirection);
+				Driver->enableLightTableMode(true);
+				Driver->setLightTableSize(1);
+				Driver->setLightTableEntry(0, sunLight);
+			}
+		}
+
 		// Disable all lights.
 		for(i=0; i<Driver->getMaxLight(); ++i)
 		{
@@ -627,6 +669,13 @@ void		CRenderTrav::changeLightSetup(CLightContribution	*lightContribution, bool 
 	// If lighting System disabled, skip
 	if(!LightingSystemEnabled)
 		return;
+
+	// If in light table mode, dispatch to table path
+	if(_LightTableMode && _LightTableSize > 0)
+	{
+		changeLightSetupTable(lightContribution, useLocalAttenuation);
+		return;
+	}
 
 	uint		i;
 
@@ -761,6 +810,109 @@ void		CRenderTrav::changeLightSetup(CLightContribution	*lightContribution, bool 
 
 	}
 }
+
+// ***************************************************************************
+void		CRenderTrav::changeLightSetupTable(CLightContribution *lightContribution, bool useLocalAttenuation)
+{
+	// Cache check: same CLightContribution* + attenuation mode => skip
+	if (_CacheLightContribution == lightContribution && (lightContribution == NULL || _LastLocalAttenuation == useLocalAttenuation))
+		return;
+
+	_StrongestLightTouched = true;
+
+	if(lightContribution)
+	{
+		// Build parallel arrays of table indices and factors
+		sint16 tableIndices[NL3D_MAX_LIGHT_CONTRIBUTION + 1];
+		uint8 lightFactors[NL3D_MAX_LIGHT_CONTRIBUTION + 1];
+		uint numLights = 0;
+
+		// Slot 0: Sun
+		tableIndices[0] = 0;
+		lightFactors[0] = lightContribution->SunContribution;
+		numLights = 1;
+
+		// Also build _DriverLight[] for VP light setup compatibility
+		{
+			uint ufactor = lightContribution->SunContribution;
+			ufactor += ufactor >> 7;
+			CRGBA finalAmbient = lightContribution->computeCurrentAmbient(SunAmbient);
+			if(lightContribution->UseMergedPointLight)
+				finalAmbient.addRGBOnly(finalAmbient, lightContribution->MergedPointLight);
+			finalAmbient.A = 255;
+			CRGBA sunDiffuse, sunSpecular;
+			sunDiffuse.modulateFromuiRGBOnly(SunDiffuse, ufactor);
+			sunSpecular.modulateFromuiRGBOnly(SunSpecular, ufactor);
+			_DriverLight[0].setupDirectional(finalAmbient, sunDiffuse, sunSpecular, _SunDirection);
+		}
+
+		// Point lights
+		uint plId = 0;
+		while(lightContribution->PointLight[plId] != NULL)
+		{
+			CPointLight *pl = lightContribution->PointLight[plId];
+			uint8 inf;
+			if(useLocalAttenuation)
+				inf = lightContribution->Factor[plId];
+			else
+				inf = lightContribution->AttFactor[plId];
+
+			// Lazy-assign table index if not yet in table
+			if(pl->getTableIndex() < 0)
+			{
+				sint16 newIdx = (sint16)_LightTableSize;
+				pl->setTableIndex(newIdx);
+				_LightTablePointLights.push_back(pl);
+
+				// Upload raw light to driver table
+				CLight rawLight;
+				pl->setupDriverLightRaw(rawLight);
+				_LightTableSize = (uint)(newIdx + 1);
+				Driver->setLightTableSize(_LightTableSize);
+				Driver->setLightTableEntry((uint)newIdx, rawLight);
+			}
+
+			tableIndices[numLights] = pl->getTableIndex();
+			lightFactors[numLights] = inf;
+			numLights++;
+
+			// Also build _DriverLight[] for VP light setup compatibility
+			if(useLocalAttenuation)
+				pl->setupDriverLight(_DriverLight[plId + 1], inf);
+			else
+				pl->setupDriverLightUserAttenuation(_DriverLight[plId + 1], inf);
+
+			plId++;
+			if(plId >= NL3D_MAX_LIGHT_CONTRIBUTION)
+				break;
+		}
+
+		// Compute per-object ambient
+		CRGBA perObjectAmbient = lightContribution->computeCurrentAmbient(SunAmbient);
+		if(lightContribution->UseMergedPointLight)
+			perObjectAmbient.addRGBOnly(perObjectAmbient, lightContribution->MergedPointLight);
+		perObjectAmbient.A = 255;
+
+		// Send to driver
+		Driver->setLights(tableIndices, lightFactors, numLights, perObjectAmbient);
+
+		// Update _NumLightEnabled for VP light setup
+		_NumLightEnabled = plId + 1;
+
+		// Cache
+		_CacheLightContribution = lightContribution;
+		_LastLocalAttenuation = useLocalAttenuation;
+	}
+	else
+	{
+		// NULL lightContribution: disable all
+		Driver->setLights(NULL, NULL, 0, CRGBA::Black);
+
+		_CacheLightContribution = NULL;
+		_NumLightEnabled = 0;
+	}
+}
+
 
 // ***************************************************************************
 // ***************************************************************************

@@ -39,7 +39,7 @@ namespace NL3D
 {
 
 // ***************************************************************************
-const uint32 IDriver::InterfaceVersion = 0x72; // fog mode (linear/exp/exp2)
+const uint32 IDriver::InterfaceVersion = 0x73; // light table
 
 // ***************************************************************************
 IDriver::IDriver() : _SyncTexDrvInfos( "IDriver::_SyncTexDrvInfos" )

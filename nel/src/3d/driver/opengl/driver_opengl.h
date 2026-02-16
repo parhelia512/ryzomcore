@@ -600,6 +600,15 @@ public:
 
 	virtual void			setLightMapDynamicLight (bool enable, const CLight& light);
 
+	virtual void			enableLightTableMode(bool enable);
+	virtual void			setLightTableSize(uint count);
+	virtual void			setLightTableEntry(uint index, const CLight &light);
+	virtual void			setLights(
+		const sint16 *tableIndices,
+		const uint8 *factors,
+		uint numLights,
+		NLMISC::CRGBA ambient);
+
 	virtual void			setAmbientColor (CRGBA color);
 
 	/// \name Fog support.
@@ -938,6 +947,10 @@ private:
 	// this is the backup of standard lighting (cause GL states may be modified by Lightmap Dynamic Lighting)
 	CLight						_UserLight0;
 	bool						_UserLightEnable[MaxLight];
+
+	// Light table
+	bool						_LightTableMode;
+	std::vector<CLight>			_LightTable;
 
 	//\name description of the per pixel light
 	// @{

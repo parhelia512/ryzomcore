@@ -1057,6 +1057,16 @@ public:
 	virtual void			setLightMapDynamicLight (bool enable, const CLight& light);
 	// todo hulud d3d light
 	virtual void			setPerPixelLightingLight(CRGBA /* diffuse */, CRGBA /* specular */, float /* shininess */) {}
+
+	virtual void			enableLightTableMode(bool enable);
+	virtual void			setLightTableSize(uint count);
+	virtual void			setLightTableEntry(uint index, const CLight &light);
+	virtual void			setLights(
+		const sint16 *tableIndices,
+		const uint8 *factors,
+		uint numLights,
+		NLMISC::CRGBA ambient);
+
 	virtual void			setAmbientColor (CRGBA color);
 
 	// Fog
@@ -2710,6 +2720,9 @@ public:
 	// this is the backup of standard lighting (cause GL states may be modified by Lightmap Dynamic Lighting)
 	CLight						_UserLight0;
 	bool						_UserLightEnable[MaxLight];
+	// Light table
+	bool						_LightTableMode;
+	std::vector<CLight>			_LightTable;
 	// methods to enable / disable DX light, without affecting _LightMapDynamicLight*, or _UserLight0*
 	void			setLightInternal(uint8 num, const CLight& light);
 	void			enableLightInternal(uint8 num, bool enable);

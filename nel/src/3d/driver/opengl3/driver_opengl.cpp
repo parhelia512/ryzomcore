@@ -323,6 +323,7 @@ CDriverGL3::CDriverGL3()
 
 	_LightMapDynamicLightEnabled = false;
 	_LightMapDynamicLightDirty= false;
+	_LightTableMode= false;
 
 	_CurrentMaterialSupportedShader= CMaterial::Normal;
 

@@ -263,6 +263,7 @@ CDriverD3D::CDriverD3D()
 	// default for lightmap
 	_LightMapDynamicLightDirty= false;
 	_LightMapDynamicLightEnabled= false;
+	_LightTableMode= false;
 	_CurrentMaterialSupportedShader= CMaterial::Normal;
 	// to avoid any problem if light0 never setuped, and ligthmap rendered
 	_UserLight0.setupDirectional(CRGBA::Black, CRGBA::White, CRGBA::White, CVector::K);

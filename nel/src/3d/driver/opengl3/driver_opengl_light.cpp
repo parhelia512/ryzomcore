@@ -147,6 +147,111 @@ void	CDriverGL3::enableLightInternal(uint8 num, bool enable)
 
 
 // ***************************************************************************
+void	CDriverGL3::enableLightTableMode(bool enable)
+{
+	H_AUTO_OGL(CDriverGL3_enableLightTableMode)
+	_LightTableMode = enable;
+}
+
+// ***************************************************************************
+void	CDriverGL3::setLightTableSize(uint count)
+{
+	H_AUTO_OGL(CDriverGL3_setLightTableSize)
+	_LightTable.resize(count);
+}
+
+// ***************************************************************************
+void	CDriverGL3::setLightTableEntry(uint index, const CLight &light)
+{
+	H_AUTO_OGL(CDriverGL3_setLightTableEntry)
+	if (index < _LightTable.size())
+		_LightTable[index] = light;
+}
+
+// ***************************************************************************
+void	CDriverGL3::setLights(
+	const sint16 *tableIndices,
+	const uint8 *factors,
+	uint numLights,
+	NLMISC::CRGBA ambient)
+{
+	H_AUTO_OGL(CDriverGL3_setLights)
+
+	// Clear all lights
+	for (uint i = 0; i < MaxLight; ++i)
+	{
+		_LightEnable[i] = false;
+	}
+
+	// Process each light (up to MaxLight)
+	uint count = std::min(numLights, (uint)MaxLight);
+	for (uint i = 0; i < count; ++i)
+	{
+		sint16 tableIndex = tableIndices[i];
+		if (tableIndex < 0 || tableIndex >= (sint16)_LightTable.size())
+			continue;
+
+		// Get raw light from table
+		const CLight &rawLight = _LightTable[tableIndex];
+
+		// Apply factor modulation
+		uint ufactor = factors[i];
+		ufactor += ufactor >> 7; // expand 0..255 to 0..256
+
+		CRGBA slotAmbient;
+		CRGBA diffuse, specular;
+
+		if (i == 0)
+			slotAmbient = ambient;
+		else
+			slotAmbient = CRGBA::Black;
+
+		diffuse.modulateFromuiRGBOnly(rawLight.getDiffuse(), ufactor);
+		specular.modulateFromuiRGBOnly(rawLight.getSpecular(), ufactor);
+
+		// Build modulated CLight
+		CLight::TLightMode mode = rawLight.getMode();
+		_LightMode[i] = mode;
+
+		if (mode == CLight::DirectionalLight)
+		{
+			_UserLight[i].setupDirectional(slotAmbient, diffuse, specular, rawLight.getDirection());
+			_WorldLightDirection[i] = rawLight.getDirection();
+		}
+		else if (mode == CLight::SpotLight)
+		{
+			_UserLight[i].setupSpotLight(slotAmbient, diffuse, specular,
+				rawLight.getPosition(), rawLight.getDirection(),
+				rawLight.getExponent(), rawLight.getCutoff(),
+				rawLight.getConstantAttenuation(),
+				rawLight.getLinearAttenuation(),
+				rawLight.getQuadraticAttenuation());
+			_WorldLightPos[i] = rawLight.getPosition();
+			_WorldLightDirection[i] = rawLight.getDirection();
+		}
+		else
+		{
+			_UserLight[i].setupPointLight(slotAmbient, diffuse, specular,
+				rawLight.getPosition(), CVector::Null,
+				rawLight.getConstantAttenuation(),
+				rawLight.getLinearAttenuation(),
+				rawLight.getQuadraticAttenuation());
+			_WorldLightPos[i] = rawLight.getPosition();
+		}
+
+		_LightEnable[i] = true;
+		touchLightVP(i);
+	}
+
+	// Touch remaining slots that were enabled before
+	for (uint i = count; i < MaxLight; ++i)
+	{
+		touchLightVP(i);
+	}
+}
+
+
+// ***************************************************************************
 
 void	CDriverGL3::setAmbientColor (CRGBA color)
 {

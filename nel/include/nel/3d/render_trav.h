@@ -264,6 +264,13 @@ public:
 	/// \name Render Lighting Setup. FOR MODEL TRAVERSING ONLY.
 	// @{
 
+	// Light table mode
+	bool					_LightTableMode;
+	std::vector<CPointLight*>	_LightTablePointLights; // For resetting _TableIndex at frame end
+	uint					_LightTableSize;          // Current table size in driver
+
+	void		changeLightSetupTable(CLightContribution *lightContribution, bool useLocalAttenuation);
+
 	// Max VP Light setup Infos.
 	enum	{MaxVPLight = CVertexProgramLighted::MaxLight};
 
