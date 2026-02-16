@@ -340,6 +340,8 @@ CDriverGL3::CDriverGL3()
 	m_DriverPixelProgram = NULL;
 
 	m_VPBuiltinTouched = true;
+
+	m_UseMegaShaders = false;
 }
 
 // ***************************************************************************
@@ -469,6 +471,18 @@ bool CDriverGL3::setupDisplay()
 
 	if (!initProgramPipeline())
 		nlerror("Failed to create Pipeline Object");
+
+	if (m_UseMegaShaders)
+	{
+		if (!initMegaVertexPrograms())
+			nlwarning("GL3: Failed to init mega vertex programs, falling back to per-material shaders");
+		else if (!initMegaPixelPrograms())
+			nlwarning("GL3: Failed to init mega pixel programs, falling back to per-material shaders");
+		else
+			nlinfo("GL3: Mega shaders initialized (4 VP + 4 PP variants)");
+		if (!m_MegaVP[0][0] || !m_MegaPP[0][0])
+			m_UseMegaShaders = false; // Fallback
+	}
 
 	_PPLExponent = 1.f;
 	_PPLightDiffuseColor = NLMISC::CRGBA::White;

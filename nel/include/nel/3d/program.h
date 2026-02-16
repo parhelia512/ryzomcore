@@ -362,6 +362,36 @@ struct CProgramIndex
 		Bump0ScaleBias,
 		Bump1ScaleBias,
 
+		// Megashader control uniforms
+		NlLighting,
+		NlLightMode0,
+		NlLightMode1,
+		NlLightMode2,
+		NlLightMode3,
+		NlLightMode4,
+		NlLightMode5,
+		NlLightMode6,
+		NlLightMode7,
+		NlTexGenMode0,
+		NlTexGenMode1,
+		NlTexGenMode2,
+		NlTexGenMode3,
+		NlVertexColorLighted,
+		NlVertexFormat,
+		NlClipPlaneMask,
+		NlShader,
+		NlTextureActive,
+		NlTexEnvMode0,
+		NlTexEnvMode1,
+		NlTexEnvMode2,
+		NlTexEnvMode3,
+		NlAlphaTest,
+		NlFogMode,
+		SamplerCube0,
+		SamplerCube1,
+		SamplerCube2,
+		SamplerCube3,
+
 		NUM_UNIFORMS
 	};
 	static const char *Names[NUM_UNIFORMS];

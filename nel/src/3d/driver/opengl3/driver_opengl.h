@@ -404,6 +404,14 @@ public:
 
 	void					generateBuiltinPixelProgram(CMaterial &mat);
 
+	// Megashader support
+	bool					initMegaVertexPrograms();
+	bool					initMegaPixelPrograms();
+	bool					setupMegaVertexProgram();
+	bool					setupMegaPixelProgram();
+	void					setupMegaVPUniforms();
+	void					setupMegaPPUniforms();
+
 	virtual void			startSpecularBatch();
 	virtual void			endSpecularBatch();
 
@@ -1330,6 +1338,11 @@ private:
 	std::unordered_set<CVPBuiltin> m_VPBuiltinCache;
 	CVPBuiltin m_VPBuiltinCurrent;
 	bool m_VPBuiltinTouched;
+
+	// Megashader support: m_MegaVP[fog][clip], m_MegaPP[fog][cube]
+	bool m_UseMegaShaders;
+	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2];
+	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2];
 
 	// EMBM support
 	void	initEMBM();

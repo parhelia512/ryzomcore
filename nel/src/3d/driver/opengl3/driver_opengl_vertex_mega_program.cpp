@@ -1,0 +1,434 @@
+// NeL - MMORPG Framework <https://wiki.ryzom.dev/>
+// Copyright (C) 2025  Jan BOON (Kaetemi) <jan.boon@kaetemi.be>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * Megashader Vertex Program
+ *
+ * Split vs Fold Design:
+ *
+ *   SPLITS (separate shader variants — correspond to separate rendering passes):
+ *   - Fog (on/off): Controls ecPos varying output needed by PP fog calculation.
+ *     Sky/UI render with fog off, world renders with fog on — always separate
+ *     passes. Free split.
+ *   - Clip plane (none vs active): Requires static gl_ClipDistance[6] array,
+ *     forces rasterizer to interpolate 6 extra floats per fragment. Only used
+ *     during water reflection and R2 editor — always a separate pass. Free split.
+ *
+ *   Result: 4 VP variants — m_MegaVP[fog][clip]
+ *
+ *   FOLDS (uniform-controlled branching — zero GPU cost):
+ *   - VertexFormat: All 16 in attributes declared; unbound ones read GL default
+ *     (0,0,0,1). nlVertexFormat bitmask uniform guards attribute usage.
+ *   - Lighting on/off: Uniform bool, skip entire light block.
+ *   - LightMode[8]: Uniform int per light slot; directional/point/spot/disabled.
+ *   - TexGenMode[4]: Uniform int per stage; reflection/sphere/object/eye-linear.
+ *   - Specular: Folded into lighting block.
+ *   - VertexColorLighted: Uniform bool controlling vertex color * lighting.
+ *   - Normalize: Always normalize — normalize() on unit vector is essentially
+ *     free (rsqrt+mul).
+ */
+
+#include "stdopengl.h"
+
+#include <sstream>
+
+#include "nel/3d/vertex_program.h"
+#include "nel/3d/light.h"
+
+#include "driver_opengl.h"
+#include "driver_opengl_program.h"
+#include "driver_opengl_vertex_buffer.h"
+
+namespace NL3D {
+namespace NLDRIVERGL3 {
+
+namespace /* anonymous */ {
+
+void megaVPGenerate(std::string &result, bool fog, bool clip)
+{
+	std::stringstream ss;
+	ss << "// Megashader Vertex Program";
+	ss << " (fog=" << (int)fog << ", clip=" << (int)clip << ")" << std::endl;
+	ss << std::endl;
+	ss << "#version 330" << std::endl;
+	ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
+	ss << std::endl;
+
+	// gl_PerVertex output block
+	ss << "out gl_PerVertex" << std::endl;
+	ss << "{" << std::endl;
+	ss << "  vec4 gl_Position;" << std::endl;
+	if (clip)
+		ss << "  float gl_ClipDistance[6];" << std::endl;
+	ss << "};" << std::endl;
+	ss << std::endl;
+
+	// Matrix uniforms (existing names — setupUniforms() works unchanged)
+	ss << "uniform mat4 modelViewProjection;" << std::endl;
+	ss << "uniform mat4 modelView;" << std::endl;
+	ss << "uniform mat4 viewMatrix;" << std::endl;
+	ss << "uniform mat3 normalMatrix;" << std::endl;
+	ss << std::endl;
+
+	// Per-light uniforms (all 8 lights, superset of all modes)
+	for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+	{
+		ss << "uniform vec3 light" << i << "DirOrPos;" << std::endl;
+		ss << "uniform vec4 light" << i << "ColDiff;" << std::endl;
+		ss << "uniform vec4 light" << i << "ColSpec;" << std::endl;
+		ss << "uniform float light" << i << "Shininess;" << std::endl;
+		ss << "uniform float light" << i << "ConstAttn;" << std::endl;
+		ss << "uniform float light" << i << "LinAttn;" << std::endl;
+		ss << "uniform float light" << i << "QuadAttn;" << std::endl;
+		ss << "uniform vec3 light" << i << "SpotDir;" << std::endl;
+		ss << "uniform float light" << i << "SpotCutoff;" << std::endl;
+		ss << "uniform float light" << i << "SpotExp;" << std::endl;
+	}
+	ss << std::endl;
+
+	ss << "uniform vec4 selfIllumination;" << std::endl;
+	ss << "uniform vec4 materialColor;" << std::endl;
+	ss << std::endl;
+
+	// TexGen uniforms
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
+	ss << std::endl;
+
+	// Clip plane uniforms
+	if (clip)
+	{
+		for (int i = 0; i < 6; ++i)
+			ss << "uniform vec4 clipPlane" << i << ";" << std::endl;
+		ss << std::endl;
+	}
+
+	// Megashader control uniforms
+	ss << "uniform int nlLighting;" << std::endl;
+	for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		ss << "uniform int nlLightMode" << i << ";" << std::endl;
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		ss << "uniform int nlTexGenMode" << i << ";" << std::endl;
+	ss << "uniform int nlVertexColorLighted;" << std::endl;
+	ss << "uniform int nlVertexFormat;" << std::endl;
+	if (clip)
+		ss << "uniform int nlClipPlaneMask;" << std::endl;
+	ss << std::endl;
+
+	// Vertex format flag constants (matching g_VertexFlags / CVertexBuffer flags)
+	ss << "const int NL_VP_NORMAL_FLAG       = " << CVertexBuffer::NormalFlag << ";" << std::endl;
+	ss << "const int NL_VP_PRIMARY_COLOR_FLAG = " << CVertexBuffer::PrimaryColorFlag << ";" << std::endl;
+	ss << "const int NL_VP_SECONDARY_COLOR_FLAG = " << CVertexBuffer::SecondaryColorFlag << ";" << std::endl;
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		ss << "const int NL_VP_TEXCOORD" << i << "_FLAG = " << (int)g_VertexFlags[TexCoord0 + i] << ";" << std::endl;
+	ss << std::endl;
+
+	// All 16 vertex inputs (unbound → GL default (0,0,0,1))
+	for (int i = Position; i < NumOffsets; ++i)
+		ss << "layout(location = " << i << ") in vec4 v" << g_AttribNames[i] << ";" << std::endl;
+	ss << std::endl;
+
+	// All varyings output unconditionally
+	for (int i = Weight; i < NumOffsets; ++i)
+	{
+		if (i == PrimaryColor || i == SecondaryColor)
+			continue;
+		ss << "layout(location = " << i << ") smooth out vec4 " << g_AttribNames[i] << ";" << std::endl;
+	}
+	if (fog)
+		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
+	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
+	ss << std::endl;
+
+	// Light computation function (handles all modes via switch)
+	ss << "void computeLight(int lightMode, vec3 dirOrPos, vec4 colDiff, vec4 colSpec, float shininess," << std::endl;
+	ss << "                   float constAttn, float linAttn, float quadAttn," << std::endl;
+	ss << "                   vec3 spotDir, float spotCutoff, float spotExp," << std::endl;
+	ss << "                   vec3 normal3, vec3 ecPos3, vec3 eyeDir," << std::endl;
+	ss << "                   inout vec4 lightDiffuse, inout vec4 lightSpecular)" << std::endl;
+	ss << "{" << std::endl;
+	ss << "  if (lightMode < 0) return;" << std::endl;
+	ss << std::endl;
+	ss << "  vec3 lightDir;" << std::endl;
+	ss << "  float attnFactor = 1.0;" << std::endl;
+	ss << std::endl;
+	ss << "  if (lightMode == " << (int)CLight::DirectionalLight << ") {" << std::endl;
+	ss << "    lightDir = normalize(mat3(viewMatrix) * dirOrPos);" << std::endl;
+	ss << "  } else {" << std::endl;
+	ss << "    // Point or spot light" << std::endl;
+	ss << "    vec4 lightPos4 = viewMatrix * vec4(dirOrPos, 1.0);" << std::endl;
+	ss << "    vec3 lightPos = lightPos4.xyz / lightPos4.w;" << std::endl;
+	ss << "    vec3 lightVec = lightPos - ecPos3;" << std::endl;
+	ss << "    float lightDistance = length(lightVec);" << std::endl;
+	ss << "    lightDir = lightVec / lightDistance;" << std::endl;
+	ss << "    float attenuation = constAttn + linAttn * lightDistance + quadAttn * lightDistance * lightDistance;" << std::endl;
+	ss << "    attnFactor = 1.0 / attenuation;" << std::endl;
+	ss << "    if (lightMode == " << (int)CLight::SpotLight << ") {" << std::endl;
+	ss << "      vec3 spotDirView = normalize(mat3(viewMatrix) * spotDir);" << std::endl;
+	ss << "      float spotDot = dot(-lightDir, spotDirView);" << std::endl;
+	ss << "      attnFactor *= (spotDot >= spotCutoff) ? pow(spotDot, spotExp) : 0.0;" << std::endl;
+	ss << "    }" << std::endl;
+	ss << "  }" << std::endl;
+	ss << std::endl;
+	ss << "  float diffAngle = max(0.0, dot(lightDir, normal3));" << std::endl;
+	ss << "  lightDiffuse += diffAngle * attnFactor * colDiff;" << std::endl;
+	ss << std::endl;
+	ss << "  vec3 halfVector = normalize(lightDir + eyeDir);" << std::endl;
+	ss << "  float specAngle = max(0.0, dot(normal3, halfVector));" << std::endl;
+	ss << "  float specPow = pow(specAngle, shininess);" << std::endl;
+	ss << "  lightSpecular += specPow * attnFactor * colSpec;" << std::endl;
+	ss << "}" << std::endl;
+	ss << std::endl;
+
+	// Main function
+	ss << "void main(void)" << std::endl;
+	ss << "{" << std::endl;
+	ss << "  gl_Position = modelViewProjection * vposition;" << std::endl;
+	ss << std::endl;
+
+	// Eye-space position (always needed: lighting, texgen, clip, fog)
+	ss << "  vec4 ecPos4 = modelView * vposition;" << std::endl;
+	if (fog)
+		ss << "  ecPos = ecPos4;" << std::endl;
+	ss << std::endl;
+
+	// Pass through all varyings (always normalize normals)
+	for (int i = Weight; i < NumOffsets; ++i)
+	{
+		if (i == PrimaryColor || i == SecondaryColor)
+			continue;
+		if (i == Normal)
+			ss << "  " << g_AttribNames[i] << " = vec4(normalize(v" << g_AttribNames[i] << ".xyz), 0.0);" << std::endl;
+		else
+			ss << "  " << g_AttribNames[i] << " = v" << g_AttribNames[i] << ";" << std::endl;
+	}
+	ss << std::endl;
+
+	// Lighting
+	ss << "  vec4 diffuseVertex;" << std::endl;
+	ss << "  vec4 specularVertex = vec4(0.0);" << std::endl;
+	ss << "  bool doLighting = (nlLighting != 0) && ((nlVertexFormat & NL_VP_NORMAL_FLAG) != 0);" << std::endl;
+	ss << std::endl;
+
+	ss << "  if (doLighting) {" << std::endl;
+	ss << "    vec3 normal3 = normalize(normalMatrix * (vnormal.xyz / vnormal.w));" << std::endl;
+	ss << "    vec3 ecPos3 = ecPos4.xyz / ecPos4.w;" << std::endl;
+	ss << "    vec3 eyeDir = normalize(-ecPos3);" << std::endl;
+	ss << "    diffuseVertex = vec4(0.0);" << std::endl;
+	ss << "    specularVertex = vec4(0.0);" << std::endl;
+
+	// Unrolled 8-light calls
+	for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+	{
+		ss << "    computeLight(nlLightMode" << i
+			<< ", light" << i << "DirOrPos"
+			<< ", light" << i << "ColDiff"
+			<< ", light" << i << "ColSpec"
+			<< ", light" << i << "Shininess"
+			<< ", light" << i << "ConstAttn"
+			<< ", light" << i << "LinAttn"
+			<< ", light" << i << "QuadAttn"
+			<< ", light" << i << "SpotDir"
+			<< ", light" << i << "SpotCutoff"
+			<< ", light" << i << "SpotExp"
+			<< ", normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);" << std::endl;
+	}
+
+	ss << "    diffuseVertex.a = 1.0;" << std::endl;
+	ss << "    specularVertex.a = 1.0;" << std::endl;
+	ss << std::endl;
+
+	// Secondary color (lighted)
+	ss << "    if ((nlVertexFormat & NL_VP_SECONDARY_COLOR_FLAG) != 0)" << std::endl;
+	ss << "      specularVertex = specularVertex * vsecondaryColor;" << std::endl;
+	ss << std::endl;
+
+	// Primary color × lighting interaction
+	ss << "    if ((nlVertexFormat & NL_VP_PRIMARY_COLOR_FLAG) != 0 && nlVertexColorLighted != 0)" << std::endl;
+	ss << "      diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+	// When lighting && !VertexColorLighted: vprimaryColor is ignored (matDiffuse pre-multiplied on CPU)
+
+	ss << "  } else {" << std::endl;
+	ss << "    // Unlit" << std::endl;
+	ss << "    diffuseVertex = materialColor;" << std::endl;
+	ss << "    if ((nlVertexFormat & NL_VP_PRIMARY_COLOR_FLAG) != 0)" << std::endl;
+	ss << "      diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+	ss << "    if ((nlVertexFormat & NL_VP_SECONDARY_COLOR_FLAG) != 0)" << std::endl;
+	ss << "      specularVertex = vsecondaryColor;" << std::endl;
+	ss << "  }" << std::endl;
+	ss << std::endl;
+
+	// Combine diffuse and specular
+	ss << "  vertexColor = diffuseVertex;" << std::endl;
+	ss << "  vertexColor.rgb = vertexColor.rgb + (specularVertex.rgb * specularVertex.a);" << std::endl;
+	ss << "  if (doLighting)" << std::endl;
+	ss << "    vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl;
+	ss << "  vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
+	ss << std::endl;
+
+	// Compute reflection vector for texgen (shared by reflection/sphere stages)
+	ss << "  vec3 refl_r;" << std::endl;
+	ss << "  if ((nlVertexFormat & NL_VP_NORMAL_FLAG) != 0) {" << std::endl;
+	ss << "    vec3 refl_n = normalize(normalMatrix * (vnormal.xyz / vnormal.w));" << std::endl;
+	ss << "    vec3 refl_u = normalize(ecPos4.xyz);" << std::endl;
+	ss << "    refl_r = reflect(refl_u, refl_n);" << std::endl;
+	ss << "  } else {" << std::endl;
+	ss << "    refl_r = vec3(0.0, 0.0, -1.0);" << std::endl;
+	ss << "  }" << std::endl;
+	ss << std::endl;
+
+	// TexGen (unrolled per stage, uniform-switched)
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+	{
+		ss << "  if (nlTexGenMode" << i << " == " << TexGenObjectLinear << ")" << std::endl;
+		ss << "    texCoord" << i << " = texMatrix" << i << " * vposition;" << std::endl;
+		ss << "  else if (nlTexGenMode" << i << " == " << TexGenEyeLinear << ")" << std::endl;
+		ss << "    texCoord" << i << " = texMatrix" << i << " * ecPos4;" << std::endl;
+		ss << "  else if (nlTexGenMode" << i << " == " << TexGenReflectionMap << ")" << std::endl;
+		ss << "    texCoord" << i << " = texMatrix" << i << " * vec4(refl_r, 0.0);" << std::endl;
+		ss << "  else if (nlTexGenMode" << i << " == " << TexGenSphereMap << ") {" << std::endl;
+		ss << "    float refl_m = 2.0 * sqrt(refl_r.x * refl_r.x + refl_r.y * refl_r.y + (refl_r.z + 1.0) * (refl_r.z + 1.0));" << std::endl;
+		ss << "    texCoord" << i << " = texMatrix" << i << " * vec4(refl_r.x / refl_m + 0.5, refl_r.y / refl_m + 0.5, 0.0, 1.0);" << std::endl;
+		ss << "  }" << std::endl;
+		ss << "  // else: texCoord" << i << " already set from vertex attribute passthrough" << std::endl;
+		ss << std::endl;
+	}
+
+	// Clip planes (clip variant only)
+	if (clip)
+	{
+		for (int i = 0; i < 6; ++i)
+		{
+			ss << "  if ((nlClipPlaneMask & " << (1 << i) << ") != 0)" << std::endl;
+			ss << "    gl_ClipDistance[" << i << "] = dot(clipPlane" << i << ", ecPos4);" << std::endl;
+			ss << "  else" << std::endl;
+			ss << "    gl_ClipDistance[" << i << "] = 1.0;" << std::endl;
+		}
+	}
+
+	ss << "}" << std::endl;
+
+	result = ss.str();
+}
+
+} /* anonymous namespace */
+
+bool CDriverGL3::initMegaVertexPrograms()
+{
+	for (int fog = 0; fog < 2; ++fog)
+	{
+		for (int clip = 0; clip < 2; ++clip)
+		{
+			std::string result;
+			megaVPGenerate(result, fog != 0, clip != 0);
+
+			CVertexProgram *vp = new CVertexProgram();
+			IProgram::CSource *src = new IProgram::CSource();
+			src->Profile = IProgram::glsl330v;
+			src->DisplayName = NLMISC::toString("Mega VP (fog=%d, clip=%d)", fog, clip);
+			src->setSource(result);
+			vp->addSource(src);
+
+			nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+			if (!compileVertexProgram(vp))
+			{
+				nlwarning("GL3: Mega VP compilation failed (fog=%d, clip=%d)", fog, clip);
+				delete vp;
+				return false;
+			}
+
+			m_MegaVP[fog][clip] = vp;
+		}
+	}
+	return true;
+}
+
+bool CDriverGL3::setupMegaVertexProgram()
+{
+	// Note: touchVertexFormatVP() already called by setupBuiltinVertexProgram()
+
+	if (m_UserVertexProgram) return true;
+
+	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
+	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
+
+	CVertexProgram *vp = m_MegaVP[fog][clip];
+	nlassert(vp);
+
+	if (!activeVertexProgram(vp, true))
+		return false;
+
+	setupMegaVPUniforms();
+	return true;
+}
+
+void CDriverGL3::setupMegaVPUniforms()
+{
+	IProgram *p = m_DriverVertexProgram;
+	if (!p) return;
+	IProgramDrvInfos *di = p->m_DrvInfo;
+	if (!di) return;
+	CProgramDrvInfosGL3 *drvInfo = static_cast<CProgramDrvInfosGL3 *>(di);
+	GLuint progId = drvInfo->getProgramId();
+	if (!progId) return;
+
+	uint idx;
+
+	// Lighting mode
+	idx = p->getUniformIndex(CProgramIndex::NlLighting);
+	if (idx != ~0u)
+		nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.Lighting ? 1 : 0);
+
+	// Per-light modes
+	for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+	{
+		idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightMode0 + i));
+		if (idx != ~0u)
+		{
+			sint mode = _LightEnable[i] ? _LightMode[i] : -1;
+			nglProgramUniform1i(progId, idx, mode);
+		}
+	}
+
+	// TexGen modes
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+	{
+		idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlTexGenMode0 + i));
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.TexGenMode[i]);
+	}
+
+	// Vertex color lighted
+	idx = p->getUniformIndex(CProgramIndex::NlVertexColorLighted);
+	if (idx != ~0u)
+		nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.VertexColorLighted ? 1 : 0);
+
+	// Vertex format bitmask
+	idx = p->getUniformIndex(CProgramIndex::NlVertexFormat);
+	if (idx != ~0u)
+		nglProgramUniform1i(progId, idx, (sint32)m_VPBuiltinCurrent.VertexFormat);
+
+	// Clip plane mask (only in clip variant)
+	idx = p->getUniformIndex(CProgramIndex::NlClipPlaneMask);
+	if (idx != ~0u)
+		nglProgramUniform1i(progId, idx, (sint32)m_VPBuiltinCurrent.ClipPlaneMask);
+}
+
+} // NLDRIVERGL3
+} // NL3D
+
+/* end of file */

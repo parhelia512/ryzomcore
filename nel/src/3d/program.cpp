@@ -330,7 +330,37 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"embmMatrix3",
 
 	"bump0ScaleBias",
-	"bump1ScaleBias"
+	"bump1ScaleBias",
+
+	// Megashader control uniforms
+	"nlLighting",
+	"nlLightMode0",
+	"nlLightMode1",
+	"nlLightMode2",
+	"nlLightMode3",
+	"nlLightMode4",
+	"nlLightMode5",
+	"nlLightMode6",
+	"nlLightMode7",
+	"nlTexGenMode0",
+	"nlTexGenMode1",
+	"nlTexGenMode2",
+	"nlTexGenMode3",
+	"nlVertexColorLighted",
+	"nlVertexFormat",
+	"nlClipPlaneMask",
+	"nlShader",
+	"nlTextureActive",
+	"nlTexEnvMode0",
+	"nlTexEnvMode1",
+	"nlTexEnvMode2",
+	"nlTexEnvMode3",
+	"nlAlphaTest",
+	"nlFogMode",
+	"samplerCube0",
+	"samplerCube1",
+	"samplerCube2",
+	"samplerCube3"
 };
 
 void IProgram::buildInfo(CSource *source)

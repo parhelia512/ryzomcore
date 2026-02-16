@@ -693,6 +693,8 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 {
 	touchVertexFormatVP(); // Always update — PP builtin depends on vertex format
 
+	if (m_UseMegaShaders) return setupMegaVertexProgram();
+
 	if (m_UserVertexProgram) return true;
 
 	if (m_VPBuiltinTouched)
@@ -712,6 +714,8 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 
 bool CDriverGL3::setupBuiltinPixelProgram()
 {
+	if (m_UseMegaShaders) return setupMegaPixelProgram();
+
 	if (m_UserPixelProgram) return true;
 
 	nlassert(_CurrentMaterial);
