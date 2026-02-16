@@ -517,7 +517,7 @@ uint CStereoDebugger::getFlareContext()
 /// Returns true if a new render target was set, always fase if not using render targets
 bool CStereoDebugger::beginRenderTarget()
 {
-	if (m_Stage >= 3 && m_Stage <= 4 && m_Driver && (m_Driver->getPolygonMode() == UDriver::Filled))
+	if (m_PixelProgram && m_Stage >= 3 && m_Stage <= 4 && m_Driver && (m_Driver->getPolygonMode() == UDriver::Filled))
 	{
 		if (!m_LeftTexU) getTextures();
 		if (m_Stage == 3) static_cast<CDriverUser *>(m_Driver)->setRenderTarget(*m_LeftTexU, 0, 0, 0, 0);
@@ -530,7 +530,7 @@ bool CStereoDebugger::beginRenderTarget()
 /// Returns true if a render target was fully drawn, always false if not using render targets
 bool CStereoDebugger::endRenderTarget()
 {
-	if (m_Stage >= 3 && m_Stage <= 4 && m_Driver && (m_Driver->getPolygonMode() == UDriver::Filled))
+	if (m_PixelProgram && m_Stage >= 3 && m_Stage <= 4 && m_Driver && (m_Driver->getPolygonMode() == UDriver::Filled))
 	{
 		CTextureUser cu;
 		(static_cast<CDriverUser *>(m_Driver))->setRenderTarget(cu);
