@@ -85,9 +85,13 @@ public:
 		TType Type;
 		sint Offset;
 		sint Count;
+		sint StructIndex; // Index into m_StructNames/m_StructFormats (-1 for primitive entries)
+		sint StructSize; // Cached size of one struct element (valid when StructIndex >= 0)
 
 		inline sint stride() const
 		{
+			if (StructIndex >= 0)
+				return StructSize;
 			return Count == 1
 				? s_TypeSize[Type]
 				: ((s_TypeSize[Type] + 15) & ~0xF);
@@ -106,9 +110,17 @@ public:
 	// Note: Does not check for duplicate names. However, names must be unique
 	sint push(const std::string &name, TType type, sint count = 1);
 
+	// Push a struct or array of structs. Returns the byte offset in uniform buffer
+	sint pushStruct(const std::string &name, const std::string &structName,
+		const CUniformBufferFormat &structFormat, sint count = 1);
+
 	inline const CEntry &get(sint i) const { return m_Entries[i]; }
 	inline size_t count() const { return m_Entries.size(); } // Return number of entries
-	inline void clear() { m_Entries.clear(); m_Hash = 0; }
+	inline void clear() { m_Entries.clear(); m_StructNames.clear(); m_StructFormats.clear(); m_Hash = 0; }
+
+	inline sint structCount() const { return (sint)m_StructNames.size(); }
+	inline const std::string &getStructName(sint i) const { return m_StructNames[i]; }
+	inline const CUniformBufferFormat &getStructFormat(sint i) const { return m_StructFormats[i]; }
 
 	inline sint size() const { return m_Entries.size() ? (((m_Entries.back().Offset + m_Entries.back().size()) + 15) & ~0xF) : 0; } // Return size of format in bytes
 	inline size_t hash() const { return m_Hash; }
@@ -123,6 +135,9 @@ private:
 	typedef std::vector<CEntry> TEntries;
 	TEntries m_Entries;
 	size_t m_Hash;
+
+	std::vector<std::string> m_StructNames;
+	std::vector<CUniformBufferFormat> m_StructFormats;
 
 };
 

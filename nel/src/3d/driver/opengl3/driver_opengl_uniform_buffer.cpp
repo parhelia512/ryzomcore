@@ -87,12 +87,33 @@ static const char *s_TypeKeyword[] = {
 
 void generateUniformBufferGLSL(std::stringstream &ss, const CUniformBufferFormat &ubf, sint binding)
 {
+	// Emit struct definitions
+	for (sint i = 0; i < ubf.structCount(); ++i)
+	{
+		ss << "struct " << ubf.getStructName(i) << "\n";
+		ss << "{\n";
+		const CUniformBufferFormat &sf = ubf.getStructFormat(i);
+		for (sint j = 0; j < sf.count(); ++j)
+		{
+			const CUniformBufferFormat::CEntry &field = sf.get(j);
+			ss << "\t" << s_TypeKeyword[field.Type] << " " << NLMISC::CStringMapper::unmap(field.Name);
+			if (field.Count != 1)
+				ss << "[" << field.Count << "]";
+			ss << ";\n";
+		}
+		ss << "};\n";
+	}
+
 	ss << "layout(std140, binding = " << s_UniformBufferBindDefine[binding] << ") uniform " << s_UniformBufferName[binding] << "\n";
 	ss << "{\n";
 	for (sint i = 0; i < ubf.count(); ++i)
 	{
 		const CUniformBufferFormat::CEntry &entry = ubf.get(i);
-		ss << "\t" << s_TypeKeyword[entry.Type] << " " << NLMISC::CStringMapper::unmap(entry.Name);
+		if (entry.StructIndex >= 0)
+			ss << "\t" << ubf.getStructName(entry.StructIndex);
+		else
+			ss << "\t" << s_TypeKeyword[entry.Type];
+		ss << " " << NLMISC::CStringMapper::unmap(entry.Name);
 		if (entry.Count != 1)
 			ss << "[" << entry.Count << "]";
 		ss << ";\n";
