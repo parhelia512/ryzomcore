@@ -1385,7 +1385,7 @@ void	CDriverGL3::setSwapVBLInterval(uint interval)
 #if defined(NL_OS_WINDOWS)
 	if (_Extensions.WGLEXTSwapControl)
 	{
-		res = nwglSwapIntervalEXT(_Interval) == TRUE;
+		res = nwglSwapIntervalEXT(interval) == TRUE;
 	}
 #elif defined(NL_OS_MAC)
 #elif defined(NL_OS_UNIX)

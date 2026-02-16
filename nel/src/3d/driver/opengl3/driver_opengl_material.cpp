@@ -512,6 +512,8 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 	// 4. Misc
 	//=====================================
 	// Textures user matrix
+	// NOTE: Only supported for Normal shader. D3D applies it generically for all shaders,
+	// but in practice only Normal uses it. Specular handles its own matrix separately.
 	if (matShader == CMaterial::Normal)
 	{
 		setupUserTextureMatrix(IDRV_MAT_MAXTEXTURES, mat);
