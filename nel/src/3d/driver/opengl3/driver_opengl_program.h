@@ -33,7 +33,7 @@ static sint TexGenEyeLinear = 3; // GL_EYE_LINEAR
 /// Builtin vertex program description
 struct CVPBuiltin
 {
-	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), ClipPlaneMask(0) { }
+	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), ClipPlaneMask(0) { }
 
 	uint16 VertexFormat;
 	bool Lighting;
@@ -42,6 +42,7 @@ struct CVPBuiltin
 	bool Specular; // Reflection
 	bool Fog;
 	bool VertexColorLighted;
+	bool Normalize; // Force-normalize normals (for MRM geomorphing, scaled models)
 	uint8 ClipPlaneMask; // Bitmask of enabled clip planes (0-5)
 
 	NLMISC::CRefPtr<CVertexProgram> VertexProgram;

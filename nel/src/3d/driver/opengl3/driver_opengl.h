@@ -426,11 +426,12 @@ public:
 
 	virtual	void			forceNormalize(bool normalize)
 	{
-		_ForceNormalize= normalize;
-		// if ForceNormalize, must enable GLNormalize now.
-		//if (normalize)
-		//	enableGlNormalize(true);
-		// FIXME GL3 FORCE NORMALIZE NOT IMPLEMENTED (VP STATE GL_NORMALIZE)
+		_ForceNormalize = normalize;
+		if (m_VPBuiltinCurrent.Normalize != normalize)
+		{
+			m_VPBuiltinCurrent.Normalize = normalize;
+			m_VPBuiltinTouched = true;
+		}
 	}
 
 	virtual	bool			isForceNormalize() const

@@ -49,6 +49,8 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 		return right.Fog;
 	if (left.VertexColorLighted != right.VertexColorLighted)
 		return right.VertexColorLighted;
+	if (left.Normalize != right.Normalize)
+		return right.Normalize;
 	if (left.ClipPlaneMask != right.ClipPlaneMask)
 		return left.ClipPlaneMask < right.ClipPlaneMask;
 
@@ -74,6 +76,8 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 		return false;
 	if (left.VertexColorLighted != right.VertexColorLighted)
 		return false;
+	if (left.Normalize != right.Normalize)
+		return false;
 	if (left.ClipPlaneMask != right.ClipPlaneMask)
 		return false;
 
@@ -89,7 +93,7 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 {
 	uint32 h;
 
-	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0) | ((uint32)v.ClipPlaneMask << 20));
+	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0) | ((uint32)v.ClipPlaneMask << 20) | (v.Normalize ? (1 << 26) : 0));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			h = NLMISC::wangHash(h ^ v.LightMode[i]);
@@ -402,7 +406,10 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 			// Skip texcoord passthrough when texgen overrides that stage
 			if (i >= TexCoord0 && i <= TexCoord7 && desc.TexGenMode[i - TexCoord0] >= 0)
 				continue;
-			ss << g_AttribNames[i] << " = " << "v" << g_AttribNames[i] << ";" << std::endl;
+			if (i == Normal && desc.Normalize)
+				ss << g_AttribNames[i] << " = vec4(normalize(v" << g_AttribNames[i] << ".xyz), 0.0);" << std::endl;
+			else
+				ss << g_AttribNames[i] << " = " << "v" << g_AttribNames[i] << ";" << std::endl;
 		}
 	}
 
