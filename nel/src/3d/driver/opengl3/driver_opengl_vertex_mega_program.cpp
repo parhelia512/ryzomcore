@@ -443,16 +443,16 @@ bool CDriverGL3::setupMegaVertexProgram()
 	if (m_UserVertexProgram)
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
-		m_VPUsesLightTableUBO = _LightTableMode && m_UserVertexProgram->features().UsesLightTableUBO;
+		m_VPUsesLightTableUBO = m_UserVertexProgram->features().UsesLightTableUBO;
 		return true;
 	}
 
 	m_VPSpecularOutput = true; // Mega VP always outputs specularColor
-	m_VPUsesLightTableUBO = _LightTableMode; // Mega VP uses UBO when in table mode
+	m_VPUsesLightTableUBO = m_UseLightUBO; // Mega VP uses UBO when driver switch is on
 
 	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
-	int table = _LightTableMode ? 1 : 0;
+	int table = m_UseLightUBO ? 1 : 0;
 
 	CVertexProgram *vp = m_MegaVP[fog][clip][table];
 	nlassert(vp);

@@ -324,8 +324,10 @@ CDriverGL3::CDriverGL3()
 	_LightMapDynamicLightEnabled = false;
 	_LightMapDynamicLightDirty= false;
 	_LightTableMode= false;
+	m_UseLightUBO = true; // Default to UBO mode; set false for legacy uniform debugging
 	_LightTableUBOId = 0;
 	_LightTableDirty = false;
+	_UserLightUBODirty = true;
 	_LightTableUBOCapacity = 0;
 	_LightTableObjCount = 0;
 	for (uint i = 0; i < MaxLight; ++i)

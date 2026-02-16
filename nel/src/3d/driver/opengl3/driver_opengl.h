@@ -949,9 +949,11 @@ private:
 	bool						_LightTableMode;
 	std::vector<CLight>			_LightTable;
 
-	// Light table UBO
+	// Light UBO (shared by light table mode and non-table fallback)
+	bool						m_UseLightUBO; // Driver init switch: true=UBO mode, false=legacy uniforms
 	GLuint						_LightTableUBOId;
-	bool						_LightTableDirty;
+	bool						_LightTableDirty; // Light table entries changed
+	bool						_UserLightUBODirty; // _UserLight[] changed (for non-table UBO mode)
 	sint						_LightTableUBOCapacity; // Current GPU buffer capacity (entries)
 	void						uploadLightTableUBO();
 

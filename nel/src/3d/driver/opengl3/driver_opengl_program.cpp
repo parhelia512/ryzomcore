@@ -698,7 +698,7 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 	if (m_UserVertexProgram)
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
-		m_VPUsesLightTableUBO = _LightTableMode && m_UserVertexProgram->features().UsesLightTableUBO;
+		m_VPUsesLightTableUBO = m_UserVertexProgram->features().UsesLightTableUBO;
 		return true;
 	}
 
@@ -865,13 +865,28 @@ void CDriverGL3::setupUniforms(TProgram program)
 		// Per-object light indices and factors
 		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
+			sint32 lightIdx;
+			float lightFactor;
+			if (_LightTableMode)
+			{
+				// Table mode: indices and factors from setLights()
+				lightIdx = (sint32)_LightTableObjIndices[i];
+				lightFactor = _LightTableObjFactors[i];
+			}
+			else
+			{
+				// Non-table mode: trivial mapping, slot i → UBO entry i
+				lightIdx = _LightEnable[i] ? (sint32)i : -1;
+				lightFactor = 1.0f;
+			}
+
 			uint idxIdx = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlLightIndex0 + i));
 			if (idxIdx != ~0u)
-				nglProgramUniform1i(progId, idxIdx, (sint32)_LightTableObjIndices[i]);
+				nglProgramUniform1i(progId, idxIdx, lightIdx);
 
 			uint factIdx = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlLightFactor0 + i));
 			if (factIdx != ~0u)
-				nglProgramUniform1f(progId, factIdx, _LightTableObjFactors[i]);
+				nglProgramUniform1f(progId, factIdx, lightFactor);
 		}
 
 		// Material properties for GPU-side light×material multiply
