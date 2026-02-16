@@ -29,6 +29,7 @@
 
 #if defined (NL_COMP_MINGW)
 # define NL3D_GL_DLL_NAME "libnel_drv_opengl_win"
+# define NL3D_GL3_DLL_NAME "libnel_drv_opengl3_win"
 # define NL3D_GLES_DLL_NAME "libnel_drv_opengles_win"
 # define NL3D_D3D_DLL_NAME "libnel_drv_direct3d_win"
 #elif defined (NL_OS_WINDOWS)
