@@ -35,14 +35,14 @@ static const char *WaterFPGLSL_Header =
 	"#extension GL_ARB_separate_shader_objects : enable\n";
 
 static const char *WaterFPGLSL_Body =
-	"smooth in vec4 texCoord0;\n"
-	"smooth in vec4 texCoord1;\n"
-	"smooth in vec4 texCoord2;\n"
+	"layout(location = 8) smooth in vec4 texCoord0;\n"
+	"layout(location = 9) smooth in vec4 texCoord1;\n"
+	"layout(location = 10) smooth in vec4 texCoord2;\n"
 	"#ifdef USE_DIFFUSE\n"
-	"smooth in vec4 texCoord3;\n"
+	"layout(location = 11) smooth in vec4 texCoord3;\n"
 	"#endif\n"
 	"#ifdef USE_FOG\n"
-	"smooth in vec4 ecPos;\n"
+	"layout(location = 0) smooth in vec4 ecPos;\n"
 	"#endif\n"
 	"uniform sampler2D sampler0;\n"
 	"uniform sampler2D sampler1;\n"

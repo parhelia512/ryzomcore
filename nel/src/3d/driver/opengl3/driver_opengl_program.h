@@ -100,6 +100,12 @@ enum TAttribOffset
 	NumOffsets
 };
 
+// Varying locations for VP/PP interface matching (GL_ARB_separate_shader_objects).
+// VB-sourced varyings use their TAttribOffset index as the location.
+// ecPos and vertexColor reuse slots that are never occupied by VB varyings.
+static const int VaryingLocationEcPos = Position; // = 0, Position is never output as a varying
+static const int VaryingLocationVertexColor = PrimaryColor; // = 3, PrimaryColor is always skipped
+
 extern const uint16 g_VertexFlags[CVertexBuffer::NumValue];
 extern const char *g_AttribNames[CVertexBuffer::NumValue];
 extern const char *g_TexelNames[IDRV_PROGRAM_MAXSAMPLERS];

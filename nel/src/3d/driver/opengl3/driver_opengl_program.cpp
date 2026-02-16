@@ -144,7 +144,7 @@ bool CDriverGL3::supportVertexProgram(CVertexProgram::TProfile profile) const
 bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 {
 	if (program->m_DrvInfo != NULL)
-		return false;
+		return true;
 
 	IProgram::CSource *src = NULL;
 	for (int i = 0; i < program->getSourceNb(); i++)
@@ -253,7 +253,7 @@ bool CDriverGL3::supportPixelProgram(IProgram::TProfile profile) const
 bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 {
 	if (program->m_DrvInfo != NULL)
-		return false;
+		return true;
 
 	IProgram::CSource *src = NULL;
 
@@ -691,9 +691,9 @@ bool CDriverGL3::setupBuiltinPrograms()
 
 bool CDriverGL3::setupBuiltinVertexProgram()
 {
-	if (m_UserVertexProgram) return true;
+	touchVertexFormatVP(); // Always update — PP builtin depends on vertex format
 
-	touchVertexFormatVP(); // TODO
+	if (m_UserVertexProgram) return true;
 
 	if (m_VPBuiltinTouched)
 	{

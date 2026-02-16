@@ -482,7 +482,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 	{
 		if (hasFlag(desc.VertexFormat, g_VertexFlags[i]))
 		{
-			ss << "smooth in vec4 ";
+			ss << "layout(location = " << i << ") smooth in vec4 ";
 			ss << g_AttribNames[i] << ";" << std::endl;
 		}
 	}
@@ -546,7 +546,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 			//ss << "uniform float fogDensity;" << std::endl;
 		/*}*/
 
-		ss << "smooth in vec4 ecPos;" << std::endl;
+		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
 		
 		/*switch(desc->getFogMode())
 		{*/
@@ -568,7 +568,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		ss << std::endl;
 	}
 
-	ss << "smooth in vec4 vertexColor;" << std::endl;
+	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
 	ss << std::endl;
 	
 	ss << "void main(void)" << std::endl;

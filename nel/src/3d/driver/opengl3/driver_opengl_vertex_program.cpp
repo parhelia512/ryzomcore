@@ -253,7 +253,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 			// Skip texcoord output when texgen overrides that stage
 			if (i >= TexCoord0 && i <= TexCoord7 && desc.TexGenMode[i - TexCoord0] >= 0)
 				continue;
-			ss << "smooth out vec4 " << g_AttribNames[i] << "; // vertex buffer" << std::endl;
+			ss << "layout(location = " << i << ") smooth out vec4 " << g_AttribNames[i] << "; // vertex buffer" << std::endl;
 		}
 	ss << std::endl;
 
@@ -264,7 +264,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	{
 		if (desc.TexGenMode[i] >= 0)
 		{
-			ss << "smooth out vec4 texCoord" << i << "; // texgen" << std::endl;
+			ss << "layout(location = " << (TexCoord0 + i) << ") smooth out vec4 texCoord" << i << "; // texgen" << std::endl;
 			needTexGen = true;
 			if (desc.TexGenMode[i] == TexGenObjectLinear || desc.TexGenMode[i] == TexGenEyeLinear
 				|| desc.TexGenMode[i] == TexGenReflectionMap || desc.TexGenMode[i] == TexGenSphereMap)
@@ -299,13 +299,13 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	if (needReflection && !lighting)
 		ss << "uniform mat3 normalMatrix;" << std::endl;
 	if (desc.Fog)
-		ss << "smooth out vec4 ecPos;" << std::endl;
+		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
 	ss << std::endl;
 
 	if (!lighting)
 		ss << "uniform vec4 materialColor;" << std::endl; // Verify
 
-	ss << "smooth out vec4 vertexColor;" << std::endl;
+	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
 	ss << std::endl;
 
 	if (lighting)
