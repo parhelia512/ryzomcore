@@ -348,7 +348,7 @@ static GLint	getGlSrcTextureFormat(ITexture &tex, GLint glfmt)
 	H_AUTO_OGL(getGlSrcTextureFormat)
 
 	// Is destination format is alpha or lumiance ?
-	if ((glfmt==GL_R8)||(glfmt==GL_RG8))
+	if ((glfmt==GL_R8)||(glfmt==GL_RG8)||(glfmt==GL_RG8_SNORM))
 	{
 		switch(tex.getPixelFormat())
 		{
@@ -359,7 +359,7 @@ static GLint	getGlSrcTextureFormat(ITexture &tex, GLint glfmt)
 		}
 	}
 
-	if (glfmt == GL_RG8)
+	if (glfmt == GL_RG8 || glfmt == GL_RG8_SNORM)
 		return GL_RG;
 
 	// Else, not a Src format for upload, or RGBA.
