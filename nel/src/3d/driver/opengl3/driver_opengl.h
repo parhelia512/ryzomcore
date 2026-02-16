@@ -1267,8 +1267,9 @@ private:
 
 	bool			isUniformProgramState() { return false; }
 
+	// Double-sided vertex color is not supported. No engine code uses it; D3D never supported it either.
 	void			enableVertexProgramDoubleSidedColor(bool doubleSided) {}
-	bool		    supportVertexProgramDoubleSidedColor() const{ return true; };
+	bool		    supportVertexProgramDoubleSidedColor() const { return false; }
 
 	virtual	bool			supportMADOperator() const ;
 
