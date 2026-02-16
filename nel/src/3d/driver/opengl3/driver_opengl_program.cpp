@@ -842,12 +842,7 @@ void CDriverGL3::setupUniforms(TProgram program)
 			continue;
 
 		selfIllumination += NLMISC::CRGBAF(_UserLight[i].getAmbiant());
-		
-		////////////////// Temporary insanity  ///////////////////////////////
-		if ((_LightMode[i] != CLight::DirectionalLight) && (_LightMode[i] != CLight::PointLight))
-			continue;
-		//////////////////////////////////////////////////////////////////////
-		
+
 		if (_LightMode[i] == CLight::DirectionalLight)
 		{
 			uint ld = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::Light0DirOrPos + i));
@@ -857,7 +852,7 @@ void CDriverGL3::setupUniforms(TProgram program)
 				nglProgramUniform3f(progId, ld, v.x, v.y, v.z);
 			}
 		}
-		else
+		else if (_LightMode[i] == CLight::PointLight || _LightMode[i] == CLight::SpotLight)
 		{
 			uint lp = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::Light0DirOrPos + i));
 			if (lp != ~0)
@@ -865,6 +860,10 @@ void CDriverGL3::setupUniforms(TProgram program)
 				CVector v = _UserLight[i].getPosition() - _PZBCameraPos;
 				nglProgramUniform3f(progId, lp, v.x, v.y, v.z);
 			}
+		}
+		else
+		{
+			continue; // Unknown light mode
 		}
 
 		uint ldc = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::Light0ColDiff + i));
@@ -903,6 +902,28 @@ void CDriverGL3::setupUniforms(TProgram program)
 		if (lqa != ~0)
 		{
 			nglProgramUniform1f(progId, lqa, _UserLight[ i ].getQuadraticAttenuation());
+		}
+
+		if (_LightMode[i] == CLight::SpotLight)
+		{
+			uint lsd = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::Light0SpotDir + i));
+			if (lsd != ~0)
+			{
+				CVector d = _UserLight[i].getDirection();
+				nglProgramUniform3f(progId, lsd, d.x, d.y, d.z);
+			}
+
+			uint lsc = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::Light0SpotCutoff + i));
+			if (lsc != ~0)
+			{
+				nglProgramUniform1f(progId, lsc, cosf(_UserLight[i].getCutoff()));
+			}
+
+			uint lse = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::Light0SpotExp + i));
+			if (lse != ~0)
+			{
+				nglProgramUniform1f(progId, lse, _UserLight[i].getExponent());
+			}
 		}
 	}
 

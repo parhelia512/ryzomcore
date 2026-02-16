@@ -132,6 +132,18 @@ void vpLightUniforms(std::stringstream &ss, const CVPBuiltin &desc, int i)
 		ss << "uniform float light" << i << "LinAttn;" << std::endl;
 		ss << "uniform float light" << i << "QuadAttn;" << std::endl;
 		break;
+	case CLight::SpotLight:
+		ss << "uniform vec3 light" << i << "DirOrPos;" << std::endl;
+		ss << "uniform vec4 light" << i << "ColDiff;" << std::endl;
+		ss << "uniform vec4 light" << i << "ColSpec;" << std::endl;
+		ss << "uniform float light" << i << "Shininess;" << std::endl;
+		ss << "uniform float light" << i << "ConstAttn;" << std::endl;
+		ss << "uniform float light" << i << "LinAttn;" << std::endl;
+		ss << "uniform float light" << i << "QuadAttn;" << std::endl;
+		ss << "uniform vec3 light" << i << "SpotDir;" << std::endl;
+		ss << "uniform float light" << i << "SpotCutoff;" << std::endl; // cosine of cutoff angle
+		ss << "uniform float light" << i << "SpotExp;" << std::endl;
+		break;
 	}
 }
 
@@ -210,6 +222,55 @@ void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
 		ss << "vec3 eyeDir = normalize(-ecPos3);" << std::endl;
 
 		ss << "float invattn = 1.0 / attenuation;" << std::endl;
+		ss << "lightDiffuse = lightDiffuse + getIntensity" << i << "(normal3, lightDirection) * invattn * light" << i << "ColDiff;" << std::endl;
+		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) * invattn * light" << i << "ColSpec;" << std::endl;
+		ss << "}" << std::endl;
+		ss << std::endl;
+		break;
+	case CLight::SpotLight:
+		ss << "float getIntensity" << i << "(vec3 normal3, vec3 direction3)" << std::endl;
+		ss << "{" << std::endl;
+		ss << "float angle = dot(direction3, normal3);" << std::endl;
+		ss << "angle = max(0.0, angle);" << std::endl;
+		ss << "return angle;" << std::endl;
+		ss << "}" << std::endl;
+		ss << std::endl;
+
+		ss << "float getSpecIntensity" << i << "(vec3 normal3, vec3 direction3, vec3 eyeDir)" << std::endl;
+		ss << "{" << std::endl;
+		ss << "vec3 halfVector = normalize(direction3 + eyeDir);" << std::endl;
+		ss << "float angle = dot(normal3, halfVector);" << std::endl;
+		ss << "angle = max(0.0, angle);" << std::endl;
+		ss << "float si = pow(angle, light" << i << "Shininess);" << std::endl;
+		ss << "return si;" << std::endl;
+		ss << "}" << std::endl;
+		ss << std::endl;
+
+		ss << "void addLight" << i << "Color(inout vec4 lightDiffuse, inout vec4 lightSpecular)" << std::endl;
+		ss << "{" << std::endl;
+		ss << "vec3 ecPos3 = ecPos4.xyz / ecPos4.w;" << std::endl;
+		ss << "vec4 lightPos4 = viewMatrix * vec4(light" << i << "DirOrPos, 1.0);" << std::endl;
+		ss << "vec3 lightPos = lightPos4.xyz / lightPos4.w;" << std::endl;
+		ss << "vec3 lightDirection = lightPos - ecPos3;" << std::endl;
+		ss << "float lightDistance = length(lightDirection);" << std::endl;
+		ss << "lightDirection = normalize(lightDirection);" << std::endl;
+
+		// Spot cone attenuation
+		ss << "vec3 spotDir = normalize(mat3(viewMatrix) * light" << i << "SpotDir);" << std::endl;
+		ss << "float spotDot = dot(-lightDirection, spotDir);" << std::endl;
+		ss << "float spotAttn = (spotDot >= light" << i << "SpotCutoff) ? pow(spotDot, light" << i << "SpotExp) : 0.0;" << std::endl;
+
+		// Distance attenuation
+		ss << "float attenuation = light" << i << "ConstAttn + ";
+		ss << "light" << i << "LinAttn * lightDistance +";
+		ss << "light" << i << "QuadAttn * lightDistance * lightDistance;" << std::endl;
+
+		ss << "vec3 normal3 = vnormal.xyz / vnormal.w;" << std::endl;
+		ss << "normal3 = normalMatrix * normal3;" << std::endl;
+		ss << "normal3 = normalize(normal3);" << std::endl;
+		ss << "vec3 eyeDir = normalize(-ecPos3);" << std::endl;
+
+		ss << "float invattn = spotAttn / attenuation;" << std::endl;
 		ss << "lightDiffuse = lightDiffuse + getIntensity" << i << "(normal3, lightDirection) * invattn * light" << i << "ColDiff;" << std::endl;
 		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) * invattn * light" << i << "ColSpec;" << std::endl;
 		ss << "}" << std::endl;
@@ -347,7 +408,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "vec4 diffuseLight;" << std::endl;
 		ss << "vec4 specularLight;" << std::endl;
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; i++)
-			if (desc.LightMode[i] == CLight::DirectionalLight || desc.LightMode[i] == CLight::PointLight)
+			if (desc.LightMode[i] == CLight::DirectionalLight || desc.LightMode[i] == CLight::PointLight || desc.LightMode[i] == CLight::SpotLight)
 				ss << "addLight" << i << "Color(diffuseVertex, specularVertex);" << std::endl;
 		ss << "diffuseVertex.a = 1.0;" << std::endl;
 		ss << "specularVertex.a = 1.0;" << std::endl;
