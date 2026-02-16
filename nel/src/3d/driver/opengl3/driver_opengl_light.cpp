@@ -248,6 +248,13 @@ void	CDriverGL3::setLights(
 	{
 		touchLightVP(i);
 	}
+
+	// Synchronize user state for setupLightMapDynamicLighting restore
+	for (uint i = 0; i < MaxLight; ++i)
+		_UserLightEnable[i] = _LightEnable[i];
+	if (count > 0)
+		_UserLight0 = _UserLight[0];
+	_LightMapDynamicLightDirty = true;
 }
 
 
