@@ -295,7 +295,12 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"clipPlane2",
 	"clipPlane3",
 	"clipPlane4",
-	"clipPlane5"
+	"clipPlane5",
+
+	"embmMatrix0",
+	"embmMatrix1",
+	"embmMatrix2",
+	"embmMatrix3"
 };
 
 void IProgram::buildInfo(CSource *source)

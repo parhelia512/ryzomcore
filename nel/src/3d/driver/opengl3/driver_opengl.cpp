@@ -1338,6 +1338,7 @@ void CDriverGL3::setEMBMMatrix(const uint stage,const float mat[4])
 	H_AUTO_OGL(CDriverGL3_setEMBMMatrix)
 
 	nlassert(stage < IDRV_MAT_MAXTEXTURES);
+	memcpy(_EMBMMatrix[stage], mat, sizeof(float) * 4);
 }
 
 // ***************************************************************************
@@ -1345,6 +1346,13 @@ void CDriverGL3::initEMBM()
 {
 	H_AUTO_OGL(CDriverGL3_initEMBM);
 
+	for (uint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+	{
+		_EMBMMatrix[i][0] = 0.0f;
+		_EMBMMatrix[i][1] = 0.0f;
+		_EMBMMatrix[i][2] = 0.0f;
+		_EMBMMatrix[i][3] = 0.0f;
+	}
 }
 
 // ***************************************************************************

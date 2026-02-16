@@ -211,11 +211,47 @@ void ppTexEnv(std::stringstream &ss, const CPPBuiltin &desc)
 {
 	uint maxTex = maxTextures(desc.Shader);
 	CMaterial::CTexEnv texEnv;
+	int embmOffsetStage = -1;
 	for (uint stage = 0; stage < maxTex; ++stage)
 	{
 		if (useTex(desc, stage))
 		{
 			texEnv.EnvPacked = desc.TexEnvMode[stage];
+
+			// If previous stage was EMBM, re-sample this texture with offset UVs
+			if (embmOffsetStage >= 0)
+			{
+				std::string tcExpr;
+				if (stage < maxTex && hasFlag(desc.VertexFormat, g_VertexFlags[TexCoord0 + stage]))
+					tcExpr = std::string(g_AttribNames[TexCoord0 + stage]) + ".st";
+				else if (hasFlag(desc.VertexFormat, g_VertexFlags[TexCoord0]))
+					tcExpr = std::string(g_AttribNames[TexCoord0]) + ".st";
+				else
+					tcExpr = "vec2(0.0, 0.0)";
+				uint64 samplerMode = (desc.TexSamplerMode >> (stage * 2)) & 0x3;
+				ss << "texel" << stage << " = texture(sampler" << stage << ", "
+					<< tcExpr << " + embmOffset" << embmOffsetStage
+					<< ((samplerMode == SamplerCube) ? ".stp);" : ");")
+					<< std::endl;
+				embmOffsetStage = -1;
+			}
+
+			// EMBM stage: compute UV offset, pass through previous color
+			if (texEnv.Env.OpRGB == CMaterial::EMBM)
+			{
+				ss << "vec4 texop" << stage << " = ";
+				if (stage > 0)
+					ss << "texop" << (stage - 1);
+				else
+					ss << "fragColor";
+				ss << "; // EMBM passthrough" << std::endl;
+				ss << "vec2 embmOffset" << stage
+					<< " = vec2(dot(embmMatrix" << stage << ".xy, texel" << stage << ".rg), dot(embmMatrix" << stage << ".zw, texel" << stage << ".rg));"
+					<< std::endl;
+				embmOffsetStage = (int)stage;
+				continue;
+			}
+
 			for (uint arg = 0; arg < 3; ++arg)
 			{
 				// Texop arg
@@ -347,7 +383,7 @@ void ppTexEnv(std::stringstream &ss, const CPPBuiltin &desc)
 				ss << "texop" << stage << "arg0.rgb * texop" << stage << "arg1.rgb + texop" << stage << "arg2.rgb";
 				break;
 			default:
-				ss << "texop" << stage << "arg0.rgb"; // Fallback (e.g. EMBM)
+				ss << "texop" << stage << "arg0.rgb"; // Fallback
 				break;
 			}
 			ss << ";" << std::endl;
@@ -396,7 +432,7 @@ void ppTexEnv(std::stringstream &ss, const CPPBuiltin &desc)
 				ss << "texop" << stage << "arg0.a * texop" << stage << "arg1.a + texop" << stage << "arg2.a";
 				break;
 			default:
-				ss << "texop" << stage << "arg0.a"; // Fallback (e.g. EMBM)
+				ss << "texop" << stage << "arg0.a"; // Fallback
 				break;
 			}
 			ss << ";" << std::endl;
@@ -525,6 +561,14 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 			if (useTex(desc, stage))
 			{
 				ss << "uniform vec4 constant" << stage << ";" << std::endl;
+				// Declare EMBM matrix uniform for stages with EMBM tex env op
+				if (stage < maxTex)
+				{
+					CMaterial::CTexEnv stageEnv;
+					stageEnv.EnvPacked = desc.TexEnvMode[stage];
+					if (stageEnv.Env.OpRGB == CMaterial::EMBM)
+						ss << "uniform vec4 embmMatrix" << stage << ";" << std::endl;
+				}
 				ss << std::endl;
 			}
 		}

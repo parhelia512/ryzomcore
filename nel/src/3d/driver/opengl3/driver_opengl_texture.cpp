@@ -333,12 +333,7 @@ GLint	CDriverGL3::getGlTextureFormat(ITexture& tex, bool &compressed)
 		case ITexture::Alpha: return GL_R8; // GL_ALPHA8;
 		case ITexture::AlphaLuminance: return GL_RG8; // GL_LUMINANCE8_ALPHA8;
 		case ITexture::DsDt:
-			{
-				return GL_RG8;
-				// Used to check for ATI EMBM stuff
-				//nlassert(0);
-				//return 0;
-			}
+			return GL_RG8_SNORM; // Signed normalized for du/dv bump map data
 		break;
 		default:
 		break;

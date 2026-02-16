@@ -327,6 +327,11 @@ struct CProgramIndex
 		ClipPlane4,
 		ClipPlane5,
 
+		EmbmMatrix0,
+		EmbmMatrix1,
+		EmbmMatrix2,
+		EmbmMatrix3,
+
 		NUM_UNIFORMS
 	};
 	static const char *Names[NUM_UNIFORMS];

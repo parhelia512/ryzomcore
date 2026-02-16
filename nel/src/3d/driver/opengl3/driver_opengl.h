@@ -1341,8 +1341,9 @@ private:
 	CVPBuiltin m_VPBuiltinCurrent;
 	bool m_VPBuiltinTouched;
 
-	// init EMBM settings (set each stage to modify the next)
+	// EMBM support
 	void	initEMBM();
+	float	_EMBMMatrix[IDRV_MAT_MAXTEXTURES][4];
 
 
 

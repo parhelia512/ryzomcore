@@ -646,6 +646,15 @@ void CDriverGL3::setupNormalPass()
 			setUniform4f(IDriver::PixelProgram, constantIdx, glCol[0], glCol[1], glCol[2], glCol[3]);
 		}
 
+		// Set pixel program EMBM matrix
+		uint embmIdx = m_DriverPixelProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::EmbmMatrix0 + stage));
+		if (embmIdx != ~0u)
+		{
+			setUniform4f(IDriver::PixelProgram, embmIdx,
+				_EMBMMatrix[stage][0], _EMBMMatrix[stage][1],
+				_EMBMMatrix[stage][2], _EMBMMatrix[stage][3]);
+		}
+
 		// Set vertex program constants for TexMatrix
 		uint texMatrixIdx = m_DriverVertexProgram->getUniformIndex((CProgramIndex::TName)(CProgramIndex::TexMatrix0 + stage));
 		if (texMatrixIdx != ~0)
