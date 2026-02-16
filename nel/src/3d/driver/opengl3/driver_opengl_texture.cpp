@@ -127,9 +127,11 @@ bool CTextureDrvInfosGL3::initFrameBufferObject(ITexture * tex)
 {
 	if (!InitFBO)
 	{
-		if (tex->isBloomTexture())
+		// Depth/stencil defaults to true (set in constructor).
+		// 2D-only render targets (bloom blur passes) skip it.
+		if (tex->isBloomTexture() && ((CTextureBloom*)tex)->isMode2D())
 		{
-			AttachDepthStencil = !((CTextureBloom*)tex)->isMode2D();
+			AttachDepthStencil = false;
 		}
 
 		// generate IDs
@@ -1532,11 +1534,9 @@ uintptr_t CDriverGL3::getTextureHandle(const ITexture &tex)
 // ***************************************************************************
 
 /*
-	Under opengl, "render to texture" uses the frame buffer. The scene is rendered into the current frame buffer and the result
-	is copied into the texture.
-
-	setRenderTarget (tex) does nothing but backup the framebuffer area used and updates the viewport and scissor
-	setRenderTarget (NULL) copies the modified framebuffer area into "tex" and then, updates the viewport and scissor
+	GL 3.3: render to texture always uses FBOs.
+	setRenderTarget (tex) activates the FBO for the texture and sets the viewport.
+	setRenderTarget (NULL) deactivates the FBO and restores the viewport.
  */
 
 bool CDriverGL3::setRenderTarget (ITexture *tex, uint32 x, uint32 y, uint32 width, uint32 height, uint32 mipmapLevel, uint32 cubeFace)
@@ -1557,31 +1557,20 @@ bool CDriverGL3::setRenderTarget (ITexture *tex, uint32 x, uint32 y, uint32 widt
 		// Check the texture is a render target
 		nlassertex (tex->getRenderTarget(), ("The texture must be a render target. Call ITexture::setRenderTarget(true)."));
 
-		if (tex->isBloomTexture() && supportBloomEffect())
-		{
-			getViewport(_OldViewport);
+		// GL 3.3: always use FBO path for render targets (matching D3D9 behavior)
+		getViewport(_OldViewport);
 
-			if (!width) width = tex->getWidth();
-			if (!height) height = tex->getHeight();
+		if (!width) width = tex->getWidth();
+		if (!height) height = tex->getHeight();
 
-			_RenderTargetFBO = tex;
+		_RenderTargetFBO = tex;
 
-			CViewport newVP;
-			newVP.init(0, 0, (float)width / (float)tex->getWidth(),
-			                  (float)height / (float)tex->getHeight());
-			setupViewport(newVP);
+		CViewport newVP;
+		newVP.init(0, 0, (float)width / (float)tex->getWidth(),
+		                  (float)height / (float)tex->getHeight());
+		setupViewport(newVP);
 
-			return activeFrameBufferObject(tex);
-		}
-
-		// Backup the parameters
-		_TextureTargetLevel = mipmapLevel;
-		_TextureTargetX = x;
-		_TextureTargetY = y;
-		_TextureTargetWidth = width;
-		_TextureTargetHeight = height;
-		_TextureTargetUpload = true;
-		_TextureTargetCubeFace = cubeFace;
+		return activeFrameBufferObject(tex);
 	}
 	else if (_RenderTargetFBO)
 	{
