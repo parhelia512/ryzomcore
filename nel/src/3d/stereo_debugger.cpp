@@ -105,6 +105,38 @@ const char *a_arbfp1 =
 	"END\n";
 	// 24 instructions, 3 R-regs
 
+// GLSL 330 version of the same shader for the GL3 driver.
+// Sampler names match CProgramIndex convention for automatic texture unit binding.
+// texCoord0 at location 8 matches TAttribOffset::TexCoord0 from the builtin VP.
+const char *a_glsl330f =
+	"#version 330\n"
+	"#extension GL_ARB_separate_shader_objects : enable\n"
+	"\n"
+	"out vec4 fragColor;\n"
+	"\n"
+	"layout(location = 8) smooth in vec4 texCoord0;\n"
+	"\n"
+	"uniform sampler2D sampler0;\n"
+	"uniform sampler2D sampler1;\n"
+	"\n"
+	"void main()\n"
+	"{\n"
+	"  vec4 left = texture(sampler0, texCoord0.xy);\n"
+	"  vec4 right = texture(sampler1, texCoord0.xy);\n"
+	"  vec4 avg = (left + right) * 0.5;\n"
+	"\n"
+	"  vec3 d = abs(left.rgb - right.rgb);\n"
+	"  float md = max(max(d.r, d.g), d.b);\n"
+	"\n"
+	"  fragColor = avg;\n"
+	"  if (md >= 0.01)\n"
+	"    fragColor.r = 0.5 + (fragColor.r * 0.5);\n"
+	"  else if (md > 0.0)\n"
+	"    fragColor.b = 0.5 + (fragColor.b * 0.5);\n"
+	"  else\n"
+	"    fragColor.g = 0.5 + (fragColor.g * 0.5);\n"
+	"}\n";
+
 const char *a_ps_2_0 =
 	"ps_2_0\n"
 	"// cgc version 3.1.0013, build date Apr 18 2012\n"
@@ -203,6 +235,14 @@ void CStereoDebugger::setDriver(NL3D::UDriver *driver)
 	if (drvInternal->supportBloomEffect() && drvInternal->supportNonPowerOfTwoTextures())
 	{
 		m_PixelProgram = new CPixelProgram();
+		// glsl330f
+		{
+			IProgram::CSource *source = new IProgram::CSource();
+			source->Features.MaterialFlags = CProgramFeatures::TextureStages;
+			source->Profile = IProgram::glsl330f;
+			source->setSourcePtr(a_glsl330f);
+			m_PixelProgram->addSource(source);
+		}
 		// arbfp1
 		{
 			IProgram::CSource *source = new IProgram::CSource();
