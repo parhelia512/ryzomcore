@@ -1638,7 +1638,8 @@ bool CDriverGL3::supportCloudRenderSinglePass() const
 {
 	H_AUTO_OGL(CDriverGL3_supportCloudRenderSinglePass)
 
-	return _Extensions.GLCore;
+	// Cloud shader is deprecated and will not be supported in the GL3 driver.
+	return false;
 }
 
 // ***************************************************************************

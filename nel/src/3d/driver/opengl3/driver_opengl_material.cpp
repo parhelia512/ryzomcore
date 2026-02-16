@@ -1245,6 +1245,7 @@ void		CDriverGL3::setupCloudPass()
 {
 	H_AUTO_OGL(CDriverGL3_setupCloudPass)
 	nlassert(_CurrentMaterial->getShader() == CMaterial::Cloud);
+	// Cloud shader is deprecated and will not be supported in the GL3 driver.
 }
 
 // ***************************************************************************
