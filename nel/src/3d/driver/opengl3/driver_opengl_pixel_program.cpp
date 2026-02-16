@@ -131,7 +131,7 @@ namespace std {
 
 size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::CPPBuiltin & v) const
 {
-#if (HAVE_X86_64)
+#if defined(_WIN64) || (defined(HAVE_X86_64) && !defined(_WIN32))
 	uint32 h32;
 	uint64 h64;
 
@@ -159,8 +159,8 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 	h = NLMISC::wangHash(h ^ (uint32)v.TextureActive);
 	h = NLMISC::wangHash(h ^ (uint32)(v.TexSamplerMode & 0xFFFFFFFF));
 	h = NLMISC::wangHash(h ^ (uint32)(v.TexSamplerMode >> 32));
-	uint maxTex = NL3D::maxTextures(v.Shader);
-	if (NL3D::useTexEnv(v.Shader))
+	uint maxTex = NL3D::NLDRIVERGL3::maxTextures(v.Shader);
+	if (NL3D::NLDRIVERGL3::useTexEnv(v.Shader))
 		for (uint stage = 0; stage < maxTex; ++stage)
 			h = NLMISC::wangHash(h ^ (uint32)v.TexEnvMode[stage]);
 
