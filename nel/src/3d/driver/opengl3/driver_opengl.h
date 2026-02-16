@@ -647,6 +647,7 @@ public:
 	virtual	bool			supportBlendConstantColor() const;
 	virtual	void			setBlendConstantColor(NLMISC::CRGBA col);
 	virtual	NLMISC::CRGBA	getBlendConstantColor() const;
+	virtual bool			supportMonitorColorProperties () const;
 	virtual bool			setMonitorColorProperties (const CMonitorColorProperties &properties);
 	virtual	void			finish();
 	virtual	void			flush();
@@ -1339,10 +1340,6 @@ private:
 	void	initEMBM();
 
 
-
-	// Monitor color parameters backup
-	bool							_NeedToRestaureGammaRamp;
-	uint16							_GammaRampBackuped[3*256];
 
 	bool				_PolygonSmooth;
 

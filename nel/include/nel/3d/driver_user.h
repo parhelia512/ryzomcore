@@ -489,6 +489,7 @@ public:
 	virtual uint			getAnisotropicFilter() const;
 	virtual uint			getAnisotropicFilterMaximum() const;
 	virtual void			forceTextureResize(uint divisor);
+	virtual bool			supportMonitorColorProperties () const;
 	virtual bool			setMonitorColorProperties (const CMonitorColorProperties &properties);
 	// @}
 

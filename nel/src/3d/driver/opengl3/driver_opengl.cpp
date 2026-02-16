@@ -225,8 +225,6 @@ CDriverGL3::CDriverGL3()
 	_CursorScale = 1.f;
 	_MouseCaptured = false;
 
-	_NeedToRestaureGammaRamp = false;
-
 	_win = EmptyWindow;
 	_WindowX = 0;
 	_WindowY = 0;

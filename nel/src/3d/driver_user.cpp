@@ -1517,6 +1517,12 @@ void			CDriverUser::forceTextureResize(uint divisor)
 
 	_Driver->forceTextureResize(divisor);
 }
+bool			CDriverUser::supportMonitorColorProperties () const
+{
+	NL3D_HAUTO_UI_DRIVER;
+
+	return _Driver->supportMonitorColorProperties ();
+}
 bool			CDriverUser::setMonitorColorProperties (const CMonitorColorProperties &properties)
 {
 	NL3D_HAUTO_UI_DRIVER;

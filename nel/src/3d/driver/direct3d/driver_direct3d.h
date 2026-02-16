@@ -1096,6 +1096,7 @@ public:
 	virtual	NLMISC::CRGBA	getBlendConstantColor() const;
 
 	// Monitor properties
+	virtual bool			supportMonitorColorProperties () const;
 	virtual bool			setMonitorColorProperties (const CMonitorColorProperties &properties);
 
 	// Polygon smoothing

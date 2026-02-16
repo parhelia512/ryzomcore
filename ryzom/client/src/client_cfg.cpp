@@ -1793,7 +1793,7 @@ void CClientConfig::setValues()
 		Scene->setForceWaterEnvMap(ClientCfg.ForceWaterEnvMap);
 	}
 
-	if (Driver)
+	if (Driver && Driver->supportMonitorColorProperties())
 	{
 		// Set the monitor color properties
 		CMonitorColorProperties monitorColor;

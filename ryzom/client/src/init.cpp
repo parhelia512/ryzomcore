@@ -1286,16 +1286,19 @@ void prelogInit()
 		FPU_CHECKER_ONCE
 
 		// Set the monitor color properties
-		CMonitorColorProperties monitorColor;
-		for (uint i=0; i<3; i++)
+		if (Driver->supportMonitorColorProperties())
 		{
-			monitorColor.Contrast[i] = ClientCfg.Contrast;
-			monitorColor.Luminosity[i] = ClientCfg.Luminosity;
-			monitorColor.Gamma[i] = ClientCfg.Gamma;
-		}
-		if (!Driver->setMonitorColorProperties (monitorColor))
-		{
-			nlwarning("init : setMonitorColorProperties fails");
+			CMonitorColorProperties monitorColor;
+			for (uint i=0; i<3; i++)
+			{
+				monitorColor.Contrast[i] = ClientCfg.Contrast;
+				monitorColor.Luminosity[i] = ClientCfg.Luminosity;
+				monitorColor.Gamma[i] = ClientCfg.Gamma;
+			}
+			if (!Driver->setMonitorColorProperties (monitorColor))
+			{
+				nlwarning("init : setMonitorColorProperties fails");
+			}
 		}
 
 		// The client require at least 2 textures.

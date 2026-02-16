@@ -2986,6 +2986,11 @@ static vector<UDriver::CMode> VideoModes;
 #define GAME_CONFIG_ANISOTROPIC_COMBO	"ui:interface:game_config:content:fx:anisotropic_gr:anisotropic"
 #define GAME_CONFIG_ANISOTROPIC_DB		"UI:TEMP:ANISOTROPIC"
 
+// Monitor color properties (gamma, contrast, luminosity)
+#define GAME_CONFIG_CONTRAST_GROUP		"ui:interface:game_config:content:general:con"
+#define GAME_CONFIG_LUMINOSITY_GROUP	"ui:interface:game_config:content:general:lum"
+#define GAME_CONFIG_GAMMA_GROUP			"ui:interface:game_config:content:general:gam"
+
 // Sound driver
 #define GAME_CONFIG_SOUND_DRIVER_COMBO	"ui:interface:game_config:content:sound:driver_gr:driver"
 #define GAME_CONFIG_SOUND_DRIVER_DB		"UI:TEMP:SOUND_DRIVER"
@@ -3213,6 +3218,18 @@ public:
 		}
 
 		updateVRDevicesComboUI(ClientCfg.VREnable);
+
+		// Gray out gamma/contrast/luminosity if unsupported by driver
+		{
+			bool gammaSupported = Driver && Driver->supportMonitorColorProperties();
+			CInterfaceElement *pElm;
+			pElm = CWidgetManager::getInstance()->getElementFromId(GAME_CONFIG_CONTRAST_GROUP);
+			if (pElm) pElm->setActive(gammaSupported);
+			pElm = CWidgetManager::getInstance()->getElementFromId(GAME_CONFIG_LUMINOSITY_GROUP);
+			if (pElm) pElm->setActive(gammaSupported);
+			pElm = CWidgetManager::getInstance()->getElementFromId(GAME_CONFIG_GAMMA_GROUP);
+			if (pElm) pElm->setActive(gammaSupported);
+		}
 
 		// init the mode in DB
 		TTextureMode	texMode;

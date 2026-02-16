@@ -253,6 +253,9 @@ public:
 	// Must be a HWND for Windows (WIN32).
 	virtual nlWindow		getDisplay() = 0;
 
+	/// Return true if the driver supports monitor color properties (gamma, contrast, luminosity)
+	virtual bool			supportMonitorColorProperties() const = 0;
+
 	/// Setup monitor color properties. Return false if setup failed
 	virtual bool			setMonitorColorProperties(const CMonitorColorProperties &properties) = 0;
 

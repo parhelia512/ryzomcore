@@ -322,19 +322,7 @@ bool CDriverGL3::init(uintptr_t windowIcon, emptyProc exitFunc)
 		_Registered=1;
 	}
 
-	// Backup monitor color parameters
-	HDC dc = CreateDC ("DISPLAY", NULL, NULL, NULL);
-	if (dc)
-	{
-		_NeedToRestaureGammaRamp = GetDeviceGammaRamp (dc, _GammaRampBackuped) != FALSE;
-
-		// Release the DC
-		ReleaseDC (NULL, dc);
-	}
-	else
-	{
-		nlwarning ("(CDriverGL3::init): can't create DC");
-	}
+	// No gamma ramp support on GL3 driver (deprecated on modern displays)
 
 #elif defined(NL_OS_MAC)
 
@@ -458,23 +446,7 @@ bool CDriverGL3::unInit()
 	}
 	_Registered = 0;
 
-	// Restaure monitor color parameters
-	if (_NeedToRestaureGammaRamp)
-	{
-		HDC dc = CreateDC ("DISPLAY", NULL, NULL, NULL);
-		if (dc)
-		{
-			if (!SetDeviceGammaRamp (dc, _GammaRampBackuped))
-				nlwarning ("(CDriverGL3::release): SetDeviceGammaRamp failed");
-
-			// Release the DC
-			ReleaseDC (NULL, dc);
-		}
-		else
-		{
-			nlwarning ("(CDriverGL3::release): can't create DC");
-		}
-	}
+	// No gamma ramp support on GL3 driver (deprecated on modern displays)
 
 #elif defined(NL_OS_MAC)
 
@@ -2704,65 +2676,15 @@ bool CDriverGL3::isActive()
 }
 
 // ***************************************************************************
+bool CDriverGL3::supportMonitorColorProperties () const
+{
+	// Gamma ramp control is deprecated on modern displays
+	return false;
+}
+
+// ***************************************************************************
 bool CDriverGL3::setMonitorColorProperties (const CMonitorColorProperties &properties)
 {
-	H_AUTO_OGL(CDriverGL3_setMonitorColorProperties)
-
-#ifdef NL_OS_WINDOWS
-
-	// Get a DC
-	HDC dc = CreateDC ("DISPLAY", NULL, NULL, NULL);
-	if (dc)
-	{
-		// The ramp
-		WORD ramp[256*3];
-
-		// For each composant
-		uint c;
-		for (c=0; c<3; c++)
-		{
-			uint i;
-			for (i=0; i<256; i++)
-			{
-				// Floating value
-				float value = (float)i / 256;
-
-				// Contrast
-				value = (float) max (0.0f, (value-0.5f) * (float) pow (3.f, properties.Contrast[c]) + 0.5f);
-
-				// Gamma
-				value = (float) pow (value, (properties.Gamma[c]>0) ? 1 - 3 * properties.Gamma[c] / 4 : 1 - properties.Gamma[c]);
-
-				// Luminosity
-				value = value + properties.Luminosity[c] / 2.f;
-				ramp[i+(c<<8)] = (WORD)min ((int)65535, max (0, (int)(value * 65535)));
-			}
-		}
-
-		// Set the ramp
-		bool result = SetDeviceGammaRamp (dc, ramp) != FALSE;
-
-		// Release the DC
-		ReleaseDC (NULL, dc);
-
-		// Returns result
-		return result;
-	}
-	else
-	{
-		nlwarning ("(CDriverGL3::setMonitorColorProperties): can't create DC");
-	}
-
-#elif defined(NL_OS_MAC)
-	// TODO for Mac: implement CDriverGL3::setMonitorColorProperties
-	nlwarning ("CDriverGL3::setMonitorColorProperties not implemented");
-
-#elif defined (NL_OS_UNIX)
-	// TODO for Linux: implement CDriverGL3::setMonitorColorProperties
-	nlwarning ("CDriverGL3::setMonitorColorProperties not implemented");
-
-#endif
-
 	return false;
 }
 

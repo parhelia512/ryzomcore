@@ -3211,6 +3211,13 @@ void CDriverD3D::flush()
 
 // ***************************************************************************
 
+bool CDriverD3D::supportMonitorColorProperties () const
+{
+	return _DesktopGammaRampValid;
+}
+
+// ***************************************************************************
+
 bool CDriverD3D::setMonitorColorProperties (const CMonitorColorProperties &properties)
 {
 	/*
