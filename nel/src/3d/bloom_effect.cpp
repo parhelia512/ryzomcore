@@ -30,6 +30,7 @@
 #include "nel/3d/texture_user.h"
 
 #include "nel/3d/bloom_effect.h"
+#include "nel/3d/vertex_program.h"
 
 
 using namespace NLMISC;
@@ -61,6 +62,41 @@ static const char *TextureOffset =
 	ADD o[TEX3], v[TEX0], c[13];											\n\
 	END \n";
 
+// GLSL 330 version of the same vertex program for the GL3 driver.
+// Uniforms at locations 8-13 match the indices used by setUniform*f calls.
+// Varying locations follow TAttribOffset: vertexColor=3, texCoord0-3=8-11.
+static const char *TextureOffsetGLSL =
+	"#version 330\n"
+	"#extension GL_ARB_separate_shader_objects : enable\n"
+	"\n"
+	"out gl_PerVertex { vec4 gl_Position; };\n"
+	"\n"
+	"layout(location = 0) in vec4 vposition;\n"
+	"layout(location = 8) in vec4 vtexCoord0;\n"
+	"\n"
+	"layout(location = 3) smooth out vec4 vertexColor;\n"
+	"layout(location = 8) smooth out vec4 texCoord0;\n"
+	"layout(location = 9) smooth out vec4 texCoord1;\n"
+	"layout(location = 10) smooth out vec4 texCoord2;\n"
+	"layout(location = 11) smooth out vec4 texCoord3;\n"
+	"\n"
+	"layout(location = 8) uniform vec4 c8;\n"
+	"layout(location = 9) uniform vec4 c9;\n"
+	"layout(location = 10) uniform vec2 offset0;\n"
+	"layout(location = 11) uniform vec2 offset1;\n"
+	"layout(location = 12) uniform vec2 offset2;\n"
+	"layout(location = 13) uniform vec2 offset3;\n"
+	"\n"
+	"void main()\n"
+	"{\n"
+	"  gl_Position = vec4(vposition.xyz, c9.w);\n"
+	"  vertexColor = c8;\n"
+	"  texCoord0 = vec4(vtexCoord0.xy + offset0, 0.0, 0.0);\n"
+	"  texCoord1 = vec4(vtexCoord0.xy + offset1, 0.0, 0.0);\n"
+	"  texCoord2 = vec4(vtexCoord0.xy + offset2, 0.0, 0.0);\n"
+	"  texCoord3 = vec4(vtexCoord0.xy + offset3, 0.0, 0.0);\n"
+	"}\n";
+
 
 static NLMISC::CSmartPtr<CVertexProgram> TextureOffsetVertexProgram;
 
@@ -72,6 +108,13 @@ CBloomEffect::CBloomEffect()
 	if (!TextureOffsetVertexProgram)
 	{
 		TextureOffsetVertexProgram = new CVertexProgram(TextureOffset);
+
+		// Add GLSL 330 source for GL3 driver
+		IProgram::CSource *glslSrc = new IProgram::CSource();
+		glslSrc->Profile = CVertexProgram::glsl330v;
+		glslSrc->DisplayName = "TextureOffset/glsl330v";
+		glslSrc->setSourcePtr(TextureOffsetGLSL);
+		TextureOffsetVertexProgram->addSource(glslSrc);
 	}
 
 	_Driver = NULL;
