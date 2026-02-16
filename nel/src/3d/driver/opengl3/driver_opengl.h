@@ -384,12 +384,6 @@ public:
 	/// disable all texture matrix
 	void					disableUserTextureMatrix();
 
-	/// For objects with caustics, setup the first texture (which actually is the one from the material)
-	/*static inline void	setupCausticsFirstTex(const CMaterial &mat);
-
-	/// For objects with caustics, setup the caustic texture itself
-	static inline void		setupCausticsSecondTex(uint stage);*/
-
 	virtual bool			setupMaterial(CMaterial& mat);
 	// void					generateShaderDesc(CShaderDesc &desc, CMaterial &mat);
 	bool					setupBuiltinPrograms();
@@ -1149,12 +1143,7 @@ private:
 
 	// @}
 
-	/// \name Caustics
-	// @{
-	/*sint			beginCausticsMultiPass(const CMaterial &mat);
-	void			setupCausticsPass(const CMaterial &mat, uint pass);
-	void			endCausticsMultiPass(const CMaterial &mat);*/
-	// @}
+	// Caustics shader is deprecated and will not be supported in the GL3 driver.
 
 	/// \name Cloud Shader
 	void			setupCloudPass();
@@ -1312,11 +1301,7 @@ private:
 	static const uint GLMatrix[IDriver::NumMatrix];
 	static const uint GLTransform[IDriver::NumTransform];
 
-	/// \name Caustics shaders
-	// @{
-		NLMISC::CSmartPtr<CTextureCube>	_CausticCubeMap; // a cube map used for the rendering of caustics
-		static void initCausticCubeMap();
-	// @}
+	// Caustics shader is deprecated and will not be supported in the GL3 driver.
 
 
 	NLMISC::CRGBA					_CurrentBlendConstantColor;

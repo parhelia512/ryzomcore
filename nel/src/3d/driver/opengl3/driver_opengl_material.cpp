@@ -396,11 +396,7 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 		}
 	}
 
-	// Here, for caustic shader, setup the lightmaps
-	/*if (matShader == CMaterial::Caustics)
-	{
-		if (mat.getTexture(stage))
-	}*/
+	// Caustics shader is deprecated and will not be supported in the GL3 driver.
 
 	// NOTE: A vertex buffer MUST be enabled before calling setupMaterial!
 	nlassert(_CurrentVertexBufferGL);
@@ -411,7 +407,6 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 	// This avoid the useless multiple change of texture states per lightmapped object.
 	if (matShader != CMaterial::LightMap
 		&& matShader != CMaterial::PerPixelLighting
-		/* && matShader != CMaterial::Caustics	*/
 		&& matShader != CMaterial::Cloud
 		&& matShader != CMaterial::Water
 	  )
