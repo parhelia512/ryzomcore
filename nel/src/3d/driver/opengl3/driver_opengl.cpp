@@ -82,7 +82,7 @@ namespace NL3D {
 
 IDriver* createGl3DriverInstance ()
 {
-	return new NLDRIVERGL::CDriverGL3;
+	return new NLDRIVERGL3::CDriverGL3;
 }
 
 #else
@@ -114,7 +114,7 @@ extern "C"
 {
 	IDriver* NL3D_createIDriverInstance ()
 	{
-		return new CDriverGL3;
+		return new NLDRIVERGL3::CDriverGL3;
 	}
 
 	uint32 NL3D_interfaceVersion ()
@@ -258,7 +258,7 @@ CDriverGL3::CDriverGL3()
 	_CurrentFogColor[2]= 0;
 	_CurrentFogColor[3]= 0;
 
-	_RenderTargetFBO = false;
+	_RenderTargetFBO = NULL;
 
 	uint i;
 
@@ -1302,7 +1302,7 @@ void CDriverGL3::setBlendConstantColor(NLMISC::CRGBA col)
 	_CurrentBlendConstantColor = col;
 
 	static const float OO255 = 1.0f / 255.0f;
-	nglBlendColor(col.R * OO255, col.G * OO255, col.B * OO255, col.A * OO255);
+	glBlendColor(col.R * OO255, col.G * OO255, col.B * OO255, col.A * OO255);
 }
 
 // ***************************************************************************

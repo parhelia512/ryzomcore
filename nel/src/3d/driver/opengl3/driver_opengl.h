@@ -94,6 +94,7 @@ namespace NLDRIVERGL3 {
 
 class	CDriverGL3;
 class	IVertexBufferGL3;
+class	CVertexBufferGL3;
 class   COcclusionQueryGL3;
 
 void displayGLError(GLenum error);
@@ -311,7 +312,7 @@ public:
 	virtual void			disableHardwareVertexArrayAGP() {}
 	virtual void			disableHardwareTextureShader() {}
 	
-	virtual bool			setDisplay(nlWindow wnd, const GfxMode& mode, bool show, bool resizeable) throw(EBadDisplay);
+	virtual bool			setDisplay(nlWindow wnd, const GfxMode& mode, bool show, bool resizeable);
 	virtual bool			setMode(const GfxMode& mode);
 	virtual bool			getModes(std::vector<GfxMode> &modes);
 	virtual bool			getCurrentScreenMode(GfxMode &mode);

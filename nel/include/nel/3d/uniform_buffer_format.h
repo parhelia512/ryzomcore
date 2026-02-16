@@ -64,10 +64,10 @@ public:
 		UIntVec2,
 		UIntVec3,
 		UIntVec4,
-		Bool,
-		BoolVec2,
-		BoolVec3,
-		BoolVec4,
+		Boolean,
+		BooleanVec2,
+		BooleanVec3,
+		BooleanVec4,
 		FloatMat2,
 		FloatMat3,
 		FloatMat4, // CMatrix
@@ -114,7 +114,7 @@ public:
 	inline size_t hash() const { return m_Hash; }
 
 	// Get the offset by entry id (counted from 0 in the order of addition to the format) and index of array
-	inline sint offset(sint entry, sint index = 0) const { m_Entries[entry].offset(index); }
+	inline sint offset(sint entry, sint index = 0) const { return m_Entries[entry].offset(index); }
 
 private:
 	static const sint s_TypeAlignment[];
