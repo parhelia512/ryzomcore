@@ -762,6 +762,14 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		// Setup the programs now
 		setupBuiltinPrograms();
 
+		// Override selfIllumination to black (no LMC ambient for empty lightmap)
+		if (m_DriverVertexProgram)
+		{
+			int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
+			if (siIdx != -1)
+				setUniform4f(IDriver::VertexProgram, siIdx, 0.0f, 0.0f, 0.0f, 0.0f);
+		}
+
 		return;
 	}
 
@@ -975,8 +983,27 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		}
 	}
 
-	// Set self illumination
-	// FIXME GL3: selfIllumination
+	// Override VP selfIllumination with per-pass LMC ambient
+	if (m_DriverVertexProgram)
+	{
+		int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
+		if (siIdx != -1)
+			setUniform4f(IDriver::VertexProgram, siIdx,
+				selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
+
+		// Scale dynamic light diffuse: full for pass 0, zero for pass 1+
+		if (pass > 0)
+		{
+			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			{
+				if (!_LightEnable[i]) continue;
+				uint ldc = m_DriverVertexProgram->getUniformIndex(
+					CProgramIndex::TName(CProgramIndex::Light0ColDiff + i));
+				if (ldc != ~0u)
+					setUniform4f(IDriver::VertexProgram, ldc, 0.0f, 0.0f, 0.0f, 0.0f);
+			}
+		}
+	}
 }
 
 // ***************************************************************************

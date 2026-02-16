@@ -451,18 +451,17 @@ void ppLightmap(std::stringstream &ss, const CPPBuiltin &desc, CGlExtensions &gl
 	}
 	else if (nstages == 1)
 	{
-		// single map (doesn't support alpha)
-		nlwarning("PP: Lightmap material without lightmaps setup %i %i %i %i", useTex(desc, 0), useTex(desc, 1), useTex(desc, 2), useTex(desc, 3));
-		ss << "fragColor = vec4(1.0, 1.0, 1.0, 1.0);" << std::endl; // HACK FIXME GL3
-		ss << "fragColor = texel" << (nstages - 1) << " * fragColor;" << std::endl;
+		// Diffuse texture only (no lightmaps this pass), modulated by vertex lighting
+		ss << "fragColor = texel0 * fragColor;" << std::endl;
 	}
 	else
 	{
-		ss << "fragColor = vec4(1.0, 1.0, 1.0, 1.0);" << std::endl; // HACK FIXME GL3
+		// Accumulate lightmap * factor, then multiply by (vertexLighting + lightmapSum) * diffuseTexture
 		ss << "vec4 lightmapop = vec4(0.0, 0.0, 0.0, 0.0);" << std::endl;
 		for (uint stage = 0; stage < (nstages - 1); ++stage)
-			ss << "lightmapop = lightmapop + texel" << stage << " * constant" << stage << " * texel" << (nstages - 1) << ";" << std::endl;
-		ss << "fragColor = fragColor * lightmapop;" << std::endl;
+			ss << "lightmapop += texel" << stage << " * constant" << stage << ";" << std::endl;
+		ss << "fragColor.rgb = texel" << (nstages - 1) << ".rgb * (fragColor.rgb + lightmapop.rgb);" << std::endl;
+		ss << "fragColor.a = texel" << (nstages - 1) << ".a;" << std::endl;
 	}
 }
 
