@@ -1302,7 +1302,7 @@ void CDriverGL3::setBlendConstantColor(NLMISC::CRGBA col)
 	_CurrentBlendConstantColor = col;
 
 	static const float OO255 = 1.0f / 255.0f;
-	glBlendColor(col.R * OO255, col.G * OO255, col.B * OO255, col.A * OO255);
+	nglBlendColor(col.R * OO255, col.G * OO255, col.B * OO255, col.A * OO255);
 }
 
 // ***************************************************************************

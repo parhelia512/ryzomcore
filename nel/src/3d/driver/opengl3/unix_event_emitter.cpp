@@ -632,14 +632,13 @@ bool CUnixEventEmitter::processMessage (XEvent &event, CEventServer *server)
 		else if (req.target == XA_STRING)
 		{
 			respond.xselection.property = req.property;
-			std::string str = _CopiedString.toString();
+			std::string str = _CopiedString;
 			XChangeProperty(req.display, req.requestor, req.property, XA_STRING, 8, PropModeReplace, (const unsigned char*)str.c_str(), str.length());
 		}
 		else if (req.target == XA_UTF8_STRING)
 		{
 			respond.xselection.property = req.property;
-			std::string str = _CopiedString.toUtf8();
-			XChangeProperty(req.display, req.requestor, respond.xselection.property, XA_UTF8_STRING, 8, PropModeReplace, (const unsigned char*)str.c_str(), str.length());
+			XChangeProperty(req.display, req.requestor, respond.xselection.property, XA_UTF8_STRING, 8, PropModeReplace, (const unsigned char*)_CopiedString.c_str(), _CopiedString.length());
 		}
 		else
 		{

@@ -273,6 +273,9 @@ extern PFNGLCOMPRESSEDTEXSUBIMAGE2DPROC					nglCompressedTexSubImage2D;
 extern PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC					nglCompressedTexSubImage1D;
 extern PFNGLGETCOMPRESSEDTEXIMAGEPROC					nglGetCompressedTexImage;
 
+typedef void (APIENTRYP NEL_PFNGLBLENDCOLORPROC) (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
+extern NEL_PFNGLBLENDCOLORPROC							nglBlendColor;
+
 extern PFNGLFENCESYNCPROC								nglFenceSync;
 extern PFNGLISSYNCPROC									nglIsSync;
 extern PFNGLDELETESYNCPROC								nglDeleteSync;

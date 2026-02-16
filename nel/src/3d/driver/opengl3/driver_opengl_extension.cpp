@@ -176,6 +176,8 @@ PFNGLCOMPRESSEDTEXSUBIMAGE2DPROC				nglCompressedTexSubImage2D;
 PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC				nglCompressedTexSubImage1D;
 PFNGLGETCOMPRESSEDTEXIMAGEPROC					nglGetCompressedTexImage;
 
+NEL_PFNGLBLENDCOLORPROC							nglBlendColor;
+
 PFNGLFENCESYNCPROC								nglFenceSync;
 PFNGLISSYNCPROC									nglIsSync;
 PFNGLDELETESYNCPROC								nglDeleteSync;
@@ -480,6 +482,9 @@ static bool setupGLCore(std::vector<const char *> &glext)
 	CHECK_ADDRESS(PFNGLCOMPRESSEDTEXSUBIMAGE2DPROC, glCompressedTexSubImage2D);
 	CHECK_ADDRESS(PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC, glCompressedTexSubImage1D);
 	CHECK_ADDRESS(PFNGLGETCOMPRESSEDTEXIMAGEPROC, glGetCompressedTexImage);
+
+	nglBlendColor = (NEL_PFNGLBLENDCOLORPROC)nglGetProcAddress("glBlendColor");
+	if (!nglBlendColor) { nlwarning("3D: GetProcAddress(\"glBlendColor\") returns NULL"); return false; }
 
 	CHECK_ADDRESS(PFNGLFENCESYNCPROC, glFenceSync);
 	CHECK_ADDRESS(PFNGLISSYNCPROC, glIsSync);
