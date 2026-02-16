@@ -572,7 +572,7 @@ void clearBuffers()
 void renderScene(bool forceFullDetail, bool bloom)
 {
 	CTextureUser *effectRenderTarget = NULL;
-	if (bloom)
+	if (bloom && Driver->supportBloomEffect())
 	{
 		// set bloom parameters before applying bloom effect
 		CBloomEffect::getInstance().setSquareBloom(ClientCfg.SquareBloom);
@@ -592,7 +592,7 @@ void renderScene(bool forceFullDetail, bool bloom)
 	{
 		s_ForceFullDetail.restore();
 	}
-	if (bloom)
+	if (bloom && Driver->supportBloomEffect())
 	{
 		// apply bloom effect
 		CBloomEffect::getInstance().applyBloom();
@@ -1653,6 +1653,7 @@ bool mainLoop()
 		uint i = 0;
 		CTextureUser *effectRenderTarget = NULL;
 		bool haveEffects = Render && Driver->getPolygonMode() == UDriver::Filled
+			&& Driver->supportBloomEffect()
 			&& (ClientCfg.Bloom || FXAA);
 		bool defaultRenderTarget = false;
 		if (haveEffects)
