@@ -394,7 +394,7 @@ void CVertexBufferGL3::flush()
 	// keeps reading from the old allocation while we upload new data.
 	const uint size = VB->getNumVertices() * VB->getVertexSize();
 	m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId[m_CurrentIndex]);
-	nglBufferData(GL_ARRAY_BUFFER, size, m_ShadowData.data(), GL_DYNAMIC_DRAW);
+	nglBufferData(GL_ARRAY_BUFFER, size, m_ShadowData.data(), GL_STREAM_DRAW);
 	m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
 	m_ShadowDirty = false;
 }

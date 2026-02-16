@@ -260,6 +260,7 @@ GLenum CDriverGL3::vertexBufferUsageGL3(CVertexBuffer::TPreferredMemory usage)
 	switch (usage)
 	{
 	case CVertexBuffer::RAMPreferred:
+		return GL_STREAM_DRAW; // Shadow buffer: orphan + full upload each frame
 	case CVertexBuffer::AGPPreferred:
 		return GL_DYNAMIC_DRAW;
 	case CVertexBuffer::StaticPreferred:
