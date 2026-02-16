@@ -531,6 +531,9 @@ bool CDriverGL3::activeFrameBufferObject(ITexture * tex)
 	{
 		if (tex)
 		{
+			// Ensure the texture is set up in the driver before accessing its driver info
+			if (!tex->TextureDrvShare || !tex->TextureDrvShare->DrvTexture)
+				setupTexture(*tex);
 			CTextureDrvInfosGL3*	gltext = (CTextureDrvInfosGL3*)(ITextureDrvInfos*)(tex->TextureDrvShare->DrvTexture);
 			return gltext->activeFrameBufferObject(tex);
 		}
