@@ -1121,6 +1121,8 @@ private:
 	sint			beginWaterMultiPass();
 	void			setupWaterPass(uint pass);
 	void			endWaterMultiPass();
+	// Water fragment programs: [fog | diffuse<<1]
+	NLMISC::CSmartPtr<CPixelProgram>	_WaterFP[4];
 	// @}
 
 	/// \name Per pixel lighting

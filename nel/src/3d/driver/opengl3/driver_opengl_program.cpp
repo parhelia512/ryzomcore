@@ -225,9 +225,13 @@ bool CDriverGL3::activeVertexProgram(CVertexProgram *program, bool driver)
 	IProgramDrvInfos *di = program->m_DrvInfo;
 	if (di == NULL)
 	{
-		m_UserVertexProgram = NULL;
-		m_DriverVertexProgram = NULL;
-		return false;
+		if (!compileVertexProgram(program))
+		{
+			m_UserVertexProgram = NULL;
+			m_DriverVertexProgram = NULL;
+			return false;
+		}
+		di = program->m_DrvInfo;
 	}
 	CProgramDrvInfosGL3 *drvInfo = static_cast<CProgramDrvInfosGL3 *>(di);
 
@@ -328,19 +332,16 @@ bool CDriverGL3::activePixelProgram(CPixelProgram *program, bool driver)
 		return true;
 	}
 
-	if (program->m_DrvInfo == NULL)
-	{
-		m_UserPixelProgram = NULL;
-		m_DriverPixelProgram = NULL;
-		return false;
-	}
-	
 	IProgramDrvInfos *di = program->m_DrvInfo;
 	if (di == NULL)
 	{
-		m_UserPixelProgram = NULL;
-		m_DriverPixelProgram = NULL;
-		return false;
+		if (!compilePixelProgram(program))
+		{
+			m_UserPixelProgram = NULL;
+			m_DriverPixelProgram = NULL;
+			return false;
+		}
+		di = program->m_DrvInfo;
 	}
 	CProgramDrvInfosGL3 *drvInfo = static_cast<CProgramDrvInfosGL3 *>(di);
 

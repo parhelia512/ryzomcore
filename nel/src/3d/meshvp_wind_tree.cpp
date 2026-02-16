@@ -431,7 +431,7 @@ void CMeshVPWindTree::initVertexPrograms()
 			bool	specular= (i&2)!=0;
 
 			// combine
-			_VertexProgram[i] = new CVertexProgramWindTree(numPls, normalize, specular);
+			_VertexProgram[i] = new CVertexProgramWindTree(numPls, specular, normalize);
 		}
 	}
 }

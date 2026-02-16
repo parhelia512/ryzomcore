@@ -29,6 +29,54 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
+// Water fragment program GLSL source (4 variants via #defines)
+static const char *WaterFPGLSL_Header =
+	"#version 330\n"
+	"#extension GL_ARB_separate_shader_objects : enable\n";
+
+static const char *WaterFPGLSL_Body =
+	"smooth in vec4 texCoord0;\n"
+	"smooth in vec4 texCoord1;\n"
+	"smooth in vec4 texCoord2;\n"
+	"#ifdef USE_DIFFUSE\n"
+	"smooth in vec4 texCoord3;\n"
+	"#endif\n"
+	"#ifdef USE_FOG\n"
+	"smooth in vec4 ecPos;\n"
+	"#endif\n"
+	"uniform sampler2D sampler0;\n"
+	"uniform sampler2D sampler1;\n"
+	"uniform sampler2D sampler2;\n"
+	"#ifdef USE_DIFFUSE\n"
+	"uniform sampler2D sampler3;\n"
+	"#endif\n"
+	"uniform vec4 bump0ScaleBias;\n"
+	"uniform vec4 bump1ScaleBias;\n"
+	"#ifdef USE_FOG\n"
+	"uniform vec2 fogParams;\n"
+	"uniform vec4 fogColor;\n"
+	"#endif\n"
+	"layout(location = 0) out vec4 fragColor;\n"
+	"void main()\n"
+	"{\n"
+	"  vec2 b0 = texture(sampler0, texCoord0.xy).xy;\n"
+	"  b0 = b0 * bump0ScaleBias.x + bump0ScaleBias.y;\n"
+	"  vec2 uv1 = texCoord1.xy + b0;\n"
+	"  vec2 b1 = texture(sampler1, uv1).xy;\n"
+	"  b1 = b1 * bump1ScaleBias.x + bump1ScaleBias.y;\n"
+	"  vec2 uv2 = texCoord2.xy + b1;\n"
+	"  vec4 col = texture(sampler2, uv2);\n"
+	"#ifdef USE_DIFFUSE\n"
+	"  col *= texture(sampler3, texCoord3.xy);\n"
+	"#endif\n"
+	"#ifdef USE_FOG\n"
+	"  float z = abs(ecPos.y / ecPos.w);\n"
+	"  float fogFactor = clamp((fogParams.t - z) / (fogParams.t - fogParams.s), 0.0, 1.0);\n"
+	"  col = vec4(mix(fogColor.rgb, col.rgb, fogFactor), col.a);\n"
+	"#endif\n"
+	"  fragColor = col;\n"
+	"}\n";
+
 static void convBlend(CMaterial::TBlend blend, GLenum& glenum)
 {
 	H_AUTO_OGL(convBlend)
@@ -490,6 +538,7 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 	switch (matShader)
 	{
 	case CMaterial::LightMap:
+	case CMaterial::Water:
 		// Programs are setup in multipass
 		return true;
 	default:
@@ -1214,6 +1263,47 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 		activateTexture(k, NULL);
 	}
 
+	// Select water FP variant: bit 0 = fog, bit 1 = diffuse
+	uint fpIdx = (_FogEnabled ? 1 : 0) | (mat.getTexture(3) != NULL ? 2 : 0);
+
+	// Lazy creation of water FP programs
+	if (!_WaterFP[fpIdx])
+	{
+		std::string src = WaterFPGLSL_Header;
+		if (fpIdx & 1) src += "#define USE_FOG\n";
+		if (fpIdx & 2) src += "#define USE_DIFFUSE\n";
+		src += WaterFPGLSL_Body;
+
+		_WaterFP[fpIdx] = new CPixelProgram();
+		IProgram::CSource *s = new IProgram::CSource();
+		s->Profile = IProgram::glsl330f;
+		s->DisplayName = NLMISC::toString("WaterFP/%s/%s",
+			(fpIdx & 1) ? "fog" : "noFog",
+			(fpIdx & 2) ? "diffuse" : "noDiffuse");
+		s->setSource(src);
+		_WaterFP[fpIdx]->addSource(s);
+	}
+
+	// Activate the water FP (auto-compiles on first use)
+	activePixelProgram(_WaterFP[fpIdx], true);
+
+	// Set bump scale/bias uniforms
+	float factor0 = 1.f, factor1 = 1.f;
+	if (mat.getTexture(0) && mat.getTexture(0)->isBumpMap())
+		factor0 = 0.25f * NLMISC::safe_cast<CTextureBump *>(mat.getTexture(0))->getNormalizationFactor();
+	if (mat.getTexture(1) && mat.getTexture(1)->isBumpMap())
+		factor1 = NLMISC::safe_cast<CTextureBump *>(mat.getTexture(1))->getNormalizationFactor();
+
+	uint b0idx = _WaterFP[fpIdx]->getUniformIndex("bump0ScaleBias");
+	if (b0idx != ~0u)
+		setUniform4f(IDriver::PixelProgram, b0idx, 2.f * factor0, -factor0, 0.f, 0.f);
+	uint b1idx = _WaterFP[fpIdx]->getUniformIndex("bump1ScaleBias");
+	if (b1idx != ~0u)
+		setUniform4f(IDriver::PixelProgram, b1idx, 2.f * factor1, -factor1, 0.f, 0.f);
+
+	// Auto-set standard uniforms (fogParams, fogColor for FP; modelView for VP)
+	setupUniforms(IDriver::PixelProgram);
+	setupUniforms(IDriver::VertexProgram);
 }
 
 // ***************************************************************************
@@ -1222,6 +1312,9 @@ void CDriverGL3::endWaterMultiPass()
 	H_AUTO_OGL(CDriverGL3_endWaterMultiPass);
 
 	nlassert(_CurrentMaterial->getShader() == CMaterial::Water);
+
+	// Deactivate the water fragment program
+	activePixelProgram(NULL, true);
 }
 
 } // NLDRIVERGL3
