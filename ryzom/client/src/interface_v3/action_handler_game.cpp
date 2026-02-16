@@ -93,6 +93,7 @@
 // Game Config
 #include "nel/gui/dbgroup_combo_box.h"
 #include "nel/gui/ctrl_button.h"
+#include "nel/gui/ctrl_scroll.h"
 #include "../global.h"
 
 #include "nel/sound/u_audio_mixer.h"
@@ -2987,9 +2988,9 @@ static vector<UDriver::CMode> VideoModes;
 #define GAME_CONFIG_ANISOTROPIC_DB		"UI:TEMP:ANISOTROPIC"
 
 // Monitor color properties (gamma, contrast, luminosity)
-#define GAME_CONFIG_CONTRAST_GROUP		"ui:interface:game_config:content:general:con"
-#define GAME_CONFIG_LUMINOSITY_GROUP	"ui:interface:game_config:content:general:lum"
-#define GAME_CONFIG_GAMMA_GROUP			"ui:interface:game_config:content:general:gam"
+#define GAME_CONFIG_CONTRAST_SCROLL		"ui:interface:game_config:content:general:con:c"
+#define GAME_CONFIG_LUMINOSITY_SCROLL	"ui:interface:game_config:content:general:lum:c"
+#define GAME_CONFIG_GAMMA_SCROLL		"ui:interface:game_config:content:general:gam:c"
 
 // Sound driver
 #define GAME_CONFIG_SOUND_DRIVER_COMBO	"ui:interface:game_config:content:sound:driver_gr:driver"
@@ -3221,14 +3222,14 @@ public:
 
 		// Gray out gamma/contrast/luminosity if unsupported by driver
 		{
-			bool gammaSupported = Driver && Driver->supportMonitorColorProperties();
-			CInterfaceElement *pElm;
-			pElm = CWidgetManager::getInstance()->getElementFromId(GAME_CONFIG_CONTRAST_GROUP);
-			if (pElm) pElm->setActive(gammaSupported);
-			pElm = CWidgetManager::getInstance()->getElementFromId(GAME_CONFIG_LUMINOSITY_GROUP);
-			if (pElm) pElm->setActive(gammaSupported);
-			pElm = CWidgetManager::getInstance()->getElementFromId(GAME_CONFIG_GAMMA_GROUP);
-			if (pElm) pElm->setActive(gammaSupported);
+			bool gammaFrozen = !(Driver && Driver->supportMonitorColorProperties());
+			CCtrlScroll *pScroll;
+			pScroll = dynamic_cast<CCtrlScroll *>(CWidgetManager::getInstance()->getElementFromId(GAME_CONFIG_CONTRAST_SCROLL));
+			if (pScroll) pScroll->setFrozen(gammaFrozen);
+			pScroll = dynamic_cast<CCtrlScroll *>(CWidgetManager::getInstance()->getElementFromId(GAME_CONFIG_LUMINOSITY_SCROLL));
+			if (pScroll) pScroll->setFrozen(gammaFrozen);
+			pScroll = dynamic_cast<CCtrlScroll *>(CWidgetManager::getInstance()->getElementFromId(GAME_CONFIG_GAMMA_SCROLL));
+			if (pScroll) pScroll->setFrozen(gammaFrozen);
 		}
 
 		// init the mode in DB
