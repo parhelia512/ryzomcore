@@ -706,13 +706,8 @@ sint CDriverGL3::beginLightMapMultiPass()
 	if (_LightMapDynamicLightDirty)
 		setupLightMapDynamicLighting(true);
 
-	// reset Ambient and specular lighting
-	// static	uint32	packedColorBlack= CRGBA(0,0,0,255).getPacked();
-	// static	GLfloat glcolBlack[4]= {0,0,0,1};
-	// lightmap get no specular/ambient. Emissive and Diffuse are setuped in setupLightMapPass()
-	// _DriverGLStates.setAmbient(packedColorBlack, glcolBlack);
-	// _DriverGLStates.setSpecular(packedColorBlack, glcolBlack);
-	// FIXME GL3 LIGHTMAP
+	// Ambient/specular zeroing: In GL3, selfIllumination is overridden per-pass in
+	// setupLightMapPass() with the LMC ambient, and specular uniforms are zeroed there too.
 
 	// Manage too if no lightmaps.
 	return std::max(_NLightMapPass, (uint)1);
@@ -727,11 +722,6 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	H_AUTO_OGL(CDriverGL3_setupLightMapPass)
 	const CMaterial &mat= *_CurrentMaterial;
 
-	// common colors
-	static const GLfloat glcolBlack[4] = { 0.f, 0.f, 0.f, 1.f };
-	static const GLfloat glcolWhite[4] = { 1.f, 1.f, 1.f, 1.f };
-	static const GLfloat glcolGrey[4] = { 0.5f, 0.5f, 0.5f, 1.f };
-
 	// No lightmap or all blacks??, just setup "black texture" for stage 0.
 	if (_NLightMaps == 0)
 	{
@@ -739,15 +729,6 @@ void CDriverGL3::setupLightMapPass(uint pass)
 
 		ITexture *text = mat.getTexture(0);
 		activateTexture(0, text);
-
-		// setup std modulate env
-		// CMaterial::CTexEnv	env;
-		// activateTexEnvMode(0, env); // FIXME GL3: standard modulate env
-
-		// Since Lighting is disabled, as well as colorArray, must setup alpha.
-		// setup color to 0 => blackness. in emissive cause texture can still be lighted by dynamic light
-		// _DriverGLStates.setEmissive(packedColorBlack, glcolBlack);
-		// FIXME GL3 LIGHTMAP
 
 		// Setup gen tex off
 		setTexGenModeVP(0, TexGenDisabled);
@@ -762,12 +743,20 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		// Setup the programs now
 		setupBuiltinPrograms();
 
-		// Override selfIllumination to black (no LMC ambient for empty lightmap)
+		// Override selfIllumination to black and zero specular (no LMC ambient for empty lightmap)
 		if (m_DriverVertexProgram)
 		{
 			int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
 			if (siIdx != -1)
 				setUniform4f(IDriver::VertexProgram, siIdx, 0.0f, 0.0f, 0.0f, 0.0f);
+			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			{
+				if (!_LightEnable[i]) continue;
+				uint lsc = m_DriverVertexProgram->getUniformIndex(
+					CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
+				if (lsc != ~0u)
+					setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
+			}
 		}
 
 		return;
@@ -900,12 +889,25 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		}
 	}
 
+	// For x2 mode, double selfIllumination and lightmap constants on CPU side.
+	// This is equivalent to D3D9's MODULATE2X / old GL's GL_RGB_SCALE_EXT=2,
+	// combined with halving the dynamic light diffuse (which we skip since we
+	// keep light at full and double the other terms instead).
+	if (mat._LightMapsMulx2)
+	{
+		selfIllumination.R *= 2.0f;
+		selfIllumination.G *= 2.0f;
+		selfIllumination.B *= 2.0f;
+		for (uint stage = 0; stage < nstages - 1; ++stage)
+		{
+			constant[stage].R *= 2.0f;
+			constant[stage].G *= 2.0f;
+			constant[stage].B *= 2.0f;
+		}
+	}
+
 	// setup blend / lighting.
 	//=========================
-
-	/* If multi-pass, then must setup a black Fog color for 1+ pass (just do it for the pass 1).
-		This is because Transparency ONE/ONE is used.
-	*/
 
 	// Blend is different if the material is blended or not
 	if (!mat.getBlend())
@@ -953,27 +955,10 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		}
 	}
 
-	// Dynamic lighting: The influence of the dynamic light must be added only in the first pass (only one time)
-	if (pass==0)
-	{
-		// If the lightmap is in x2 mode, then must divide effect of the dynamic light too
-		// if (mat._LightMapsMulx2)
-		// 	_DriverGLStates.setDiffuse(packedColorGrey, glcolGrey);
-		// else
-		// 	_DriverGLStates.setDiffuse(packedColorWhite, glcolWhite);
-		// FIXME GL3 LIGHTMAP
-	}
-	// no need to reset for pass after 1, since same than prec pass (black)!
-	else if (pass==1)
-	{
-		// _DriverGLStates.setDiffuse(packedColorBlack, glcolBlack);
-		// FIXME GL3 LIGHTMAP
-	}
-
 	// Setup the programs now
 	setupBuiltinPrograms();
 
-	// Set constants
+	// Set PP constants (lightmap factors, possibly x2 scaled)
 	for (uint stage = 0; stage < std::min(_Extensions.MaxFragmentTextureImageUnits, (GLint)IDRV_PROGRAM_MAXSAMPLERS); ++stage)
 	{
 		uint constantIdx = m_DriverPixelProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::Constant0 + stage));
@@ -983,15 +968,25 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		}
 	}
 
-	// Override VP selfIllumination with per-pass LMC ambient
+	// If multi-pass, set fog color to black for pass 1+ (additive blending must not add fog)
+	if (pass > 0 && _FogEnabled)
+	{
+		uint fogColorIdx = m_DriverPixelProgram->getUniformIndex(CProgramIndex::FogColor);
+		if (fogColorIdx != ~0u)
+			setUniform4f(IDriver::PixelProgram, fogColorIdx, 0.0f, 0.0f, 0.0f, 0.0f);
+	}
+
+	// Override VP uniforms for per-pass lightmap rendering
 	if (m_DriverVertexProgram)
 	{
+		// Override selfIllumination with per-pass LMC ambient (possibly x2 scaled)
 		int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
 		if (siIdx != -1)
 			setUniform4f(IDriver::VertexProgram, siIdx,
 				selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
 
-		// Scale dynamic light diffuse: full for pass 0, zero for pass 1+
+		// Dynamic light diffuse: full for pass 0 (x2 mode not applied here since we
+		// doubled selfIllumination and constants instead), zero for pass 1+
 		if (pass > 0)
 		{
 			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
@@ -1003,6 +998,16 @@ void CDriverGL3::setupLightMapPass(uint pass)
 					setUniform4f(IDriver::VertexProgram, ldc, 0.0f, 0.0f, 0.0f, 0.0f);
 			}
 		}
+
+		// Zero light specular — lightmap materials get no specular contribution
+		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			if (!_LightEnable[i]) continue;
+			uint lsc = m_DriverVertexProgram->getUniformIndex(
+				CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
+			if (lsc != ~0u)
+				setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
+		}
 	}
 }
 
@@ -1010,6 +1015,18 @@ void CDriverGL3::setupLightMapPass(uint pass)
 void			CDriverGL3::endLightMapMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_endLightMapMultiPass)
+
+	// If multi-pass was used with fog, restore the real fog color
+	if (_NLightMapPass >= 2 && _FogEnabled)
+	{
+		if (m_DriverPixelProgram)
+		{
+			uint fogColorIdx = m_DriverPixelProgram->getUniformIndex(CProgramIndex::FogColor);
+			if (fogColorIdx != ~0u)
+				setUniform4f(IDriver::PixelProgram, fogColorIdx,
+					_CurrentFogColor[0], _CurrentFogColor[1], _CurrentFogColor[2], _CurrentFogColor[3]);
+		}
+	}
 }
 
 // ***************************************************************************
