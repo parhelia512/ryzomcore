@@ -341,7 +341,7 @@ CDriverGL3::CDriverGL3()
 
 	m_VPBuiltinTouched = true;
 
-	m_UseMegaShaders = false;
+	m_UseMegaShaders = true;
 }
 
 // ***************************************************************************
