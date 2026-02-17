@@ -605,5 +605,280 @@ void CDriverGL3::setClipPlane(uint index, const NLMISC::CPlane &plane)
 	_CameraUBODirty = true;
 }
 
+// ***************************************************************************
+// Per-Object UBO data layout (std140, 288 bytes, matches GLSL NlModel block)
+struct CObjectUBOData
+{
+	float modelViewProjection[16]; // 64
+	float modelView[16];           // 64
+	float normalMatrix[12];        // 48 (3 cols × {x,y,z,pad} for std140 mat3)
+	sint32 lightIndices01[4];      // 16
+	sint32 lightIndices45[4];      // 16
+	float lightFactors01[4];       // 16
+	float lightFactors45[4];       // 16
+	float selfIllumination[4];     // 16
+	sint32 texGenMode[4];          // 16
+	sint32 lighting;               // 4
+	sint32 vertexColorLighted;     // 4
+	sint32 vertexFormat;           // 4
+	sint32 _pad0;                  // 4
+};                                 // 288
+static_assert(sizeof(CObjectUBOData) == 288, "Object UBO layout mismatch");
+
+void CDriverGL3::uploadObjectUBO()
+{
+	H_AUTO_OGL(CDriverGL3_uploadObjectUBO)
+
+	if (!_ObjectUBOId)
+		return;
+
+	CMaterial &mat = *_CurrentMaterial;
+
+	CObjectUBOData data;
+
+	// ModelViewProjection
+	CMatrix mvp = _GLProjMat * _ChangeBasis * _ModelViewMatrix;
+	memcpy(data.modelViewProjection, mvp.get(), 16 * sizeof(float));
+
+	// ModelView
+	memcpy(data.modelView, _ModelViewMatrix.get(), 16 * sizeof(float));
+
+	// NormalMatrix (3×3 → std140 mat3 = 3 columns of vec4, padded)
+	const float *mv = _ModelViewMatrix.get();
+	// Column 0
+	data.normalMatrix[0] = mv[0]; data.normalMatrix[1] = mv[1]; data.normalMatrix[2] = mv[2]; data.normalMatrix[3] = 0.0f;
+	// Column 1
+	data.normalMatrix[4] = mv[4]; data.normalMatrix[5] = mv[5]; data.normalMatrix[6] = mv[6]; data.normalMatrix[7] = 0.0f;
+	// Column 2
+	data.normalMatrix[8] = mv[8]; data.normalMatrix[9] = mv[9]; data.normalMatrix[10] = mv[10]; data.normalMatrix[11] = 0.0f;
+
+	// Light indices and factors (packed into ivec4 / vec4)
+	for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+	{
+		sint32 lightIdx;
+		float lightFactor;
+		if (_LightTableMode)
+		{
+			lightIdx = (sint32)_LightTableObjIndices[i];
+			lightFactor = _LightMapUBOOverride.Active && _LightMapUBOOverride.ZeroLightFactors
+				? 0.0f : _LightTableObjFactors[i];
+		}
+		else
+		{
+			lightIdx = _LightEnable[i] ? (sint32)i : -1;
+			lightFactor = _LightMapUBOOverride.Active && _LightMapUBOOverride.ZeroLightFactors
+				? 0.0f : 1.0f;
+		}
+
+		if (i < 4)
+		{
+			data.lightIndices01[i] = lightIdx;
+			data.lightFactors01[i] = lightFactor;
+		}
+		else
+		{
+			data.lightIndices45[i - 4] = lightIdx;
+			data.lightFactors45[i - 4] = lightFactor;
+		}
+	}
+
+	// Self illumination (precomputed on CPU, or overridden for lightmap passes)
+	if (_LightMapUBOOverride.Active)
+	{
+		memcpy(data.selfIllumination, _LightMapUBOOverride.SelfIllumination, sizeof(data.selfIllumination));
+	}
+	else
+	{
+		NLMISC::CRGBAF selfIllumination = NLMISC::CRGBAF(_AmbientGlobal);
+		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			if (_LightEnable[i])
+				selfIllumination += NLMISC::CRGBAF(_UserLight[i].getAmbiant());
+		}
+		selfIllumination *= NLMISC::CRGBAF(mat.getAmbient());
+		if (mat.getShader() != CMaterial::LightMap)
+			selfIllumination += NLMISC::CRGBAF(mat.getEmissive());
+		data.selfIllumination[0] = selfIllumination.R;
+		data.selfIllumination[1] = selfIllumination.G;
+		data.selfIllumination[2] = selfIllumination.B;
+		data.selfIllumination[3] = 0.0f;
+	}
+
+	// TexGen modes
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		data.texGenMode[i] = m_VPBuiltinCurrent.TexGenMode[i];
+
+	// Scalar state
+	data.lighting = m_VPBuiltinCurrent.Lighting ? 1 : 0;
+	data.vertexColorLighted = m_VPBuiltinCurrent.VertexColorLighted ? 1 : 0;
+	data.vertexFormat = (sint32)m_VPBuiltinCurrent.VertexFormat;
+	data._pad0 = 0;
+
+	// Upload
+	const GLsizeiptr dataSize = sizeof(CObjectUBOData);
+	nglBindBuffer(GL_UNIFORM_BUFFER, _ObjectUBOId);
+
+	if (_ObjectUBOCapacity < (sint)dataSize)
+	{
+		nglBufferData(GL_UNIFORM_BUFFER, dataSize, &data, GL_STREAM_DRAW);
+		_ObjectUBOCapacity = (sint)dataSize;
+	}
+	else
+	{
+		// Orphan + rewrite
+		nglBufferData(GL_UNIFORM_BUFFER, _ObjectUBOCapacity, NULL, GL_STREAM_DRAW);
+		nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, &data);
+	}
+
+	nglBindBuffer(GL_UNIFORM_BUFFER, 0);
+	nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_MODEL_BINDING, _ObjectUBOId);
+}
+
+// ***************************************************************************
+// Per-Material UBO data layout (std140, 96 bytes, matches GLSL NlMaterial block)
+struct CMaterialUBOData
+{
+	float materialColor[4];        // 16
+	float materialDiffuse[4];      // 16
+	float materialSpecular[4];     // 16
+	float materialShininess;       // 4
+	float alphaRef;                // 4
+	sint32 nlShader;               // 4
+	sint32 nlTextureActive;        // 4
+	sint32 nlAlphaTest;            // 4
+	uint32 nlTexEnvMode[4];        // 16
+	sint32 _pad[3];               // 12
+};                                 // 96
+static_assert(sizeof(CMaterialUBOData) == 96, "Material UBO layout mismatch");
+
+void CDriverGL3::uploadMaterialUBO()
+{
+	H_AUTO_OGL(CDriverGL3_uploadMaterialUBO)
+
+	CMaterial &mat = *_CurrentMaterial;
+	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+	if (!matDrv) return;
+
+	// When lightmap override is active, upload to global override buffer (not per-material cache)
+	if (_LightMapUBOOverride.Active)
+	{
+		CMaterialUBOData data;
+
+		// Material color (from material)
+		CRGBA col = mat.getColor();
+		data.materialColor[0] = col.R / 255.0f;
+		data.materialColor[1] = col.G / 255.0f;
+		data.materialColor[2] = col.B / 255.0f;
+		data.materialColor[3] = col.A / 255.0f;
+
+		// Overridden diffuse and specular
+		memcpy(data.materialDiffuse, _LightMapUBOOverride.MaterialDiffuse, sizeof(data.materialDiffuse));
+		memcpy(data.materialSpecular, _LightMapUBOOverride.MaterialSpecular, sizeof(data.materialSpecular));
+
+		data.materialShininess = mat.getShininess();
+		data.alphaRef = mat.getAlphaTestThreshold();
+
+		int shaderInt = 0;
+		switch (matDrv->PPBuiltin.Shader)
+		{
+		case CMaterial::Normal:    shaderInt = 0; break;
+		case CMaterial::UserColor: shaderInt = 1; break;
+		case CMaterial::Specular:  shaderInt = 2; break;
+		case CMaterial::LightMap:  shaderInt = 3; break;
+		default:                   shaderInt = 0; break;
+		}
+		data.nlShader = shaderInt;
+		data.nlTextureActive = (sint32)matDrv->PPBuiltin.TextureActive;
+		data.nlAlphaTest = (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0;
+		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+			data.nlTexEnvMode[i] = matDrv->PPBuiltin.TexEnvMode[i];
+		data._pad[0] = 0; data._pad[1] = 0; data._pad[2] = 0;
+
+		const GLsizeiptr dataSize = sizeof(CMaterialUBOData);
+		nglBindBuffer(GL_UNIFORM_BUFFER, _OverrideMaterialUBOId);
+		nglBufferData(GL_UNIFORM_BUFFER, dataSize, &data, GL_STREAM_DRAW);
+		nglBindBuffer(GL_UNIFORM_BUFFER, 0);
+		nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_MATERIAL_BINDING, _OverrideMaterialUBOId);
+		return;
+	}
+
+	// Check if dirty
+	if (!matDrv->MaterialUBODirty && matDrv->MaterialUBOId)
+	{
+		// Just bind the existing buffer
+		nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_MATERIAL_BINDING, matDrv->MaterialUBOId);
+		return;
+	}
+
+	// Create buffer if needed
+	if (!matDrv->MaterialUBOId)
+		nglGenBuffers(1, &matDrv->MaterialUBOId);
+
+	CMaterialUBOData data;
+
+	// Material color
+	CRGBA col = mat.getColor();
+	data.materialColor[0] = col.R / 255.0f;
+	data.materialColor[1] = col.G / 255.0f;
+	data.materialColor[2] = col.B / 255.0f;
+	data.materialColor[3] = col.A / 255.0f;
+
+	// Material diffuse (raw, not adjusted for vertexColorLighted)
+	CRGBA diff = mat.getDiffuse();
+	data.materialDiffuse[0] = diff.R / 255.0f;
+	data.materialDiffuse[1] = diff.G / 255.0f;
+	data.materialDiffuse[2] = diff.B / 255.0f;
+	data.materialDiffuse[3] = diff.A / 255.0f;
+
+	// Material specular
+	CRGBA spec = mat.getSpecular();
+	data.materialSpecular[0] = spec.R / 255.0f;
+	data.materialSpecular[1] = spec.G / 255.0f;
+	data.materialSpecular[2] = spec.B / 255.0f;
+	data.materialSpecular[3] = spec.A / 255.0f;
+
+	// Material shininess
+	data.materialShininess = mat.getShininess();
+
+	// Alpha ref
+	data.alphaRef = mat.getAlphaTestThreshold();
+
+	// Shader type
+	int shaderInt = 0;
+	switch (matDrv->PPBuiltin.Shader)
+	{
+	case CMaterial::Normal:    shaderInt = 0; break;
+	case CMaterial::UserColor: shaderInt = 1; break;
+	case CMaterial::Specular:  shaderInt = 2; break;
+	case CMaterial::LightMap:  shaderInt = 3; break;
+	default:                   shaderInt = 0; break;
+	}
+	data.nlShader = shaderInt;
+
+	// Texture active
+	data.nlTextureActive = (sint32)matDrv->PPBuiltin.TextureActive;
+
+	// Alpha test
+	data.nlAlphaTest = (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0;
+
+	// TexEnv modes
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		data.nlTexEnvMode[i] = matDrv->PPBuiltin.TexEnvMode[i];
+
+	// Padding
+	data._pad[0] = 0;
+	data._pad[1] = 0;
+	data._pad[2] = 0;
+
+	// Upload
+	const GLsizeiptr dataSize = sizeof(CMaterialUBOData);
+	nglBindBuffer(GL_UNIFORM_BUFFER, matDrv->MaterialUBOId);
+	nglBufferData(GL_UNIFORM_BUFFER, dataSize, &data, GL_STREAM_DRAW);
+	nglBindBuffer(GL_UNIFORM_BUFFER, 0);
+	nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_MATERIAL_BINDING, matDrv->MaterialUBOId);
+
+	matDrv->MaterialUBODirty = false;
+}
+
 } // NLDRIVERGL3
 } // NL3D

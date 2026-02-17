@@ -64,11 +64,29 @@ namespace /* anonymous */ {
 
 
 
-void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool cameraUBO)
+// Packed accessors for light indices/factors in object UBO
+static const char *s_LightIdxAccess[8] = {
+	"nlLightIndices01.x", "nlLightIndices01.y", "nlLightIndices01.z", "nlLightIndices01.w",
+	"nlLightIndices45.x", "nlLightIndices45.y", "nlLightIndices45.z", "nlLightIndices45.w"
+};
+static const char *s_LightFacAccess[8] = {
+	"nlLightFactors01.x", "nlLightFactors01.y", "nlLightFactors01.z", "nlLightFactors01.w",
+	"nlLightFactors45.x", "nlLightFactors45.y", "nlLightFactors45.z", "nlLightFactors45.w"
+};
+static const char *s_TexGenAccess[4] = {
+	"nlTexGenMode.x", "nlTexGenMode.y", "nlTexGenMode.z", "nlTexGenMode.w"
+};
+
+void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool cameraUBO, bool objectUBO, bool materialUBO)
 {
+	// Object UBO implies table and camera UBO
+	if (objectUBO) { table = true; cameraUBO = true; }
+
 	std::stringstream ss;
 	ss << "// Megashader Vertex Program";
-	ss << " (fog=" << (int)fog << ", clip=" << (int)clip << ", table=" << (int)table << ", cameraUBO=" << (int)cameraUBO << ")" << std::endl;
+	ss << " (fog=" << (int)fog << ", clip=" << (int)clip << ", table=" << (int)table
+	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
+	   << ", materialUBO=" << (int)materialUBO << ")" << std::endl;
 	ss << std::endl;
 	ss << "#version 330" << std::endl;
 	ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
@@ -84,30 +102,40 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 	ss << std::endl;
 
 	// NlCamera UBO block is provided by GLSLCameraHeader
-	// (prepended automatically by compileVertexProgram when UsesCameraUBO is set).
+	// NlModel UBO block is provided by GLSLObjectHeader
+	// NlMaterial UBO block is provided by GLSLMaterialHeader
+	// (all prepended automatically by compileVertexProgram when respective flags are set).
 
-	// Matrix uniforms (existing names — setupUniforms() works unchanged)
-	ss << "uniform mat4 modelViewProjection;" << std::endl;
-	ss << "uniform mat4 modelView;" << std::endl;
+	// Matrix uniforms (skip when object UBO provides them)
+	if (!objectUBO)
+	{
+		ss << "uniform mat4 modelViewProjection;" << std::endl;
+		ss << "uniform mat4 modelView;" << std::endl;
+		ss << "uniform mat3 normalMatrix;" << std::endl;
+	}
 	if (!cameraUBO)
 		ss << "uniform mat4 viewMatrix;" << std::endl;
-	ss << "uniform mat3 normalMatrix;" << std::endl;
 	ss << std::endl;
 
 	if (table)
 	{
 		// NlLightInfo struct and NlLightTable UBO block are provided by GLSLBuiltinHeader
-		// (prepended automatically by compileVertexProgram).
 
-		// Per-object light table uniforms
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		if (!objectUBO)
 		{
-			ss << "uniform int nlLightIndex" << i << ";" << std::endl;
-			ss << "uniform float nlLightFactor" << i << ";" << std::endl;
+			// Per-object light table uniforms
+			for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			{
+				ss << "uniform int nlLightIndex" << i << ";" << std::endl;
+				ss << "uniform float nlLightFactor" << i << ";" << std::endl;
+			}
 		}
-		ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
-		ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
-		ss << "uniform float nlMaterialShininess;" << std::endl;
+		if (!materialUBO)
+		{
+			ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
+			ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
+			ss << "uniform float nlMaterialShininess;" << std::endl;
+		}
 		if (!cameraUBO)
 			ss << "uniform vec3 pzbCameraPos;" << std::endl;
 		ss << std::endl;
@@ -131,11 +159,13 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 		ss << std::endl;
 	}
 
-	ss << "uniform vec4 selfIllumination;" << std::endl;
-	ss << "uniform vec4 materialColor;" << std::endl;
+	if (!objectUBO)
+		ss << "uniform vec4 selfIllumination;" << std::endl;
+	if (!materialUBO)
+		ss << "uniform vec4 materialColor;" << std::endl;
 	ss << std::endl;
 
-	// TexGen uniforms
+	// TexGen uniforms (texMatrix always individual — not in UBOs)
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
 	ss << std::endl;
@@ -148,17 +178,20 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 		ss << std::endl;
 	}
 
-	// Megashader control uniforms
-	ss << "uniform int nlLighting;" << std::endl;
-	if (!table)
+	// Megashader control uniforms (skip those in object/material UBO)
+	if (!objectUBO)
+	{
+		ss << "uniform int nlLighting;" << std::endl;
+		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+			ss << "uniform int nlTexGenMode" << i << ";" << std::endl;
+		ss << "uniform int nlVertexColorLighted;" << std::endl;
+		ss << "uniform int nlVertexFormat;" << std::endl;
+	}
+	if (!table && !objectUBO)
 	{
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			ss << "uniform int nlLightMode" << i << ";" << std::endl;
 	}
-	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-		ss << "uniform int nlTexGenMode" << i << ";" << std::endl;
-	ss << "uniform int nlVertexColorLighted;" << std::endl;
-	ss << "uniform int nlVertexFormat;" << std::endl;
 	if (clip && !cameraUBO)
 		ss << "uniform int nlClipPlaneMask;" << std::endl;
 	ss << std::endl;
@@ -266,25 +299,46 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 	ss << "    diffuseVertex = vec4(0.0);" << std::endl;
 	ss << "    specularVertex = vec4(0.0);" << std::endl;
 
+	// When materialUBO is active, compute effective diffuse from UBO members
+	if (materialUBO)
+	{
+		ss << "    vec4 effectiveDiffuse = (nlVertexColorLighted != 0) ? vec4(1.0) : materialDiffuse;" << std::endl;
+	}
+
 	if (table)
 	{
+		// Material properties: from UBO or individual uniforms
+		const char *matDiffStr = materialUBO ? "effectiveDiffuse" : "nlMaterialDiffuse";
+		const char *matSpecStr = materialUBO ? "materialSpecular" : "nlMaterialSpecular";
+		const char *matShinStr = materialUBO ? "materialShininess" : "nlMaterialShininess";
+
 		// Unrolled light table lookups
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
+			// Light index/factor accessor: packed from UBO or individual uniforms
+			const char *idxAccess = objectUBO ? s_LightIdxAccess[i] : NULL;
+			const char *facAccess = objectUBO ? s_LightFacAccess[i] : NULL;
+
 			ss << "    {" << std::endl;
-			ss << "      int idx = nlLightIndex" << i << ";" << std::endl;
+			if (objectUBO)
+				ss << "      int idx = " << idxAccess << ";" << std::endl;
+			else
+				ss << "      int idx = nlLightIndex" << i << ";" << std::endl;
 			ss << "      if (idx >= 0) {" << std::endl;
 			ss << "        NlLightInfo li = nlLights[idx];" << std::endl;
-			ss << "        float factor = nlLightFactor" << i << ";" << std::endl;
+			if (objectUBO)
+				ss << "        float factor = " << facAccess << ";" << std::endl;
+			else
+				ss << "        float factor = nlLightFactor" << i << ";" << std::endl;
 			ss << "        vec3 adjDirOrPos;" << std::endl;
 			ss << "        if (li.mode == " << (int)CLight::DirectionalLight << ")" << std::endl;
 			ss << "          adjDirOrPos = -li.dirOrPos;" << std::endl;
 			ss << "        else" << std::endl;
 			ss << "          adjDirOrPos = li.dirOrPos - pzbCameraPos;" << std::endl;
 			ss << "        computeLight(li.mode, adjDirOrPos," << std::endl;
-			ss << "          li.diffuse * factor * nlMaterialDiffuse," << std::endl;
-			ss << "          li.specular * factor * nlMaterialSpecular," << std::endl;
-			ss << "          nlMaterialShininess," << std::endl;
+			ss << "          li.diffuse * factor * " << matDiffStr << "," << std::endl;
+			ss << "          li.specular * factor * " << matSpecStr << "," << std::endl;
+			ss << "          " << matShinStr << "," << std::endl;
 			ss << "          li.constAttn, li.linAttn, li.quadAttn," << std::endl;
 			ss << "          li.spotDir, li.spotCutoff, li.spotExp," << std::endl;
 			ss << "          normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);" << std::endl;
@@ -358,13 +412,28 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 	// TexGen (unrolled per stage, uniform-switched)
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 	{
-		ss << "  if (nlTexGenMode" << i << " == " << TexGenObjectLinear << ")" << std::endl;
+		// TexGen mode accessor: packed from UBO or individual uniforms
+		const char *tgmAccess = objectUBO ? s_TexGenAccess[i] : NULL;
+
+		if (objectUBO)
+			ss << "  if (" << tgmAccess << " == " << TexGenObjectLinear << ")" << std::endl;
+		else
+			ss << "  if (nlTexGenMode" << i << " == " << TexGenObjectLinear << ")" << std::endl;
 		ss << "    texCoord" << i << " = texMatrix" << i << " * vposition;" << std::endl;
-		ss << "  else if (nlTexGenMode" << i << " == " << TexGenEyeLinear << ")" << std::endl;
+		if (objectUBO)
+			ss << "  else if (" << tgmAccess << " == " << TexGenEyeLinear << ")" << std::endl;
+		else
+			ss << "  else if (nlTexGenMode" << i << " == " << TexGenEyeLinear << ")" << std::endl;
 		ss << "    texCoord" << i << " = texMatrix" << i << " * ecPos4;" << std::endl;
-		ss << "  else if (nlTexGenMode" << i << " == " << TexGenReflectionMap << ")" << std::endl;
+		if (objectUBO)
+			ss << "  else if (" << tgmAccess << " == " << TexGenReflectionMap << ")" << std::endl;
+		else
+			ss << "  else if (nlTexGenMode" << i << " == " << TexGenReflectionMap << ")" << std::endl;
 		ss << "    texCoord" << i << " = texMatrix" << i << " * vec4(refl_r, 0.0);" << std::endl;
-		ss << "  else if (nlTexGenMode" << i << " == " << TexGenSphereMap << ") {" << std::endl;
+		if (objectUBO)
+			ss << "  else if (" << tgmAccess << " == " << TexGenSphereMap << ") {" << std::endl;
+		else
+			ss << "  else if (nlTexGenMode" << i << " == " << TexGenSphereMap << ") {" << std::endl;
 		ss << "    float refl_m = 2.0 * sqrt(refl_r.x * refl_r.x + refl_r.y * refl_r.y + (refl_r.z + 1.0) * (refl_r.z + 1.0));" << std::endl;
 		ss << "    texCoord" << i << " = texMatrix" << i << " * vec4(refl_r.x / refl_m + 0.5, refl_r.y / refl_m + 0.5, 0.0, 1.0);" << std::endl;
 		ss << "  }" << std::endl;
@@ -401,28 +470,40 @@ bool CDriverGL3::initMegaVertexPrograms()
 			{
 				for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
 				{
-					std::string result;
-					megaVPGenerate(result, fog != 0, clip != 0, table != 0, cameraUBO != 0);
-
-					CVertexProgram *vp = new CVertexProgram();
-					IProgram::CSource *src = new IProgram::CSource();
-					src->Profile = IProgram::glsl330v;
-					src->DisplayName = NLMISC::toString("Mega VP (fog=%d, clip=%d, table=%d, cameraUBO=%d)", fog, clip, table, cameraUBO);
-					src->Features.UsesLightTableUBO = (table != 0);
-					src->Features.UsesCameraUBO = (cameraUBO != 0);
-					src->setSource(result);
-					vp->addSource(src);
-
-					nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
-
-					if (!compileVertexProgram(vp))
+					for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
 					{
-						nlwarning("GL3: Mega VP compilation failed (fog=%d, clip=%d, table=%d, cameraUBO=%d)", fog, clip, table, cameraUBO);
-						delete vp;
-						return false;
-					}
+						for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
+						{
+							// objectUBO implies table and cameraUBO
+							if (objectUBO && (!table || !cameraUBO))
+								continue;
 
-					m_MegaVP[fog][clip][table][cameraUBO] = vp;
+							std::string result;
+							megaVPGenerate(result, fog != 0, clip != 0, table != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
+
+							CVertexProgram *vp = new CVertexProgram();
+							IProgram::CSource *src = new IProgram::CSource();
+							src->Profile = IProgram::glsl330v;
+							src->DisplayName = NLMISC::toString("Mega VP (fog=%d, clip=%d, table=%d, cam=%d, obj=%d, mat=%d)", fog, clip, table, cameraUBO, objectUBO, materialUBO);
+							src->Features.UsesLightTableUBO = (table != 0);
+							src->Features.UsesCameraUBO = (cameraUBO != 0);
+							src->Features.UsesObjectUBO = (objectUBO != 0);
+							src->Features.UsesMaterialUBO = (materialUBO != 0);
+							src->setSource(result);
+							vp->addSource(src);
+
+							nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+							if (!compileVertexProgram(vp))
+							{
+								nlwarning("GL3: Mega VP compilation failed (%s)", src->DisplayName.c_str());
+								delete vp;
+								return false;
+							}
+
+							m_MegaVP[fog][clip][table][cameraUBO][objectUBO][materialUBO] = vp;
+						}
+					}
 				}
 			}
 		}
@@ -439,19 +520,38 @@ bool CDriverGL3::setupMegaVertexProgram()
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
 		m_VPUsesLightTableUBO = m_UserVertexProgram->features().UsesLightTableUBO;
 		m_VPUsesCameraUBO = m_UserVertexProgram->features().UsesCameraUBO;
+		m_VPUsesObjectUBO = m_UserVertexProgram->features().UsesObjectUBO;
+		m_VPUsesMaterialUBO = m_UserVertexProgram->features().UsesMaterialUBO;
+		// Object UBO implies table and camera UBO
+		if (m_VPUsesObjectUBO)
+		{
+			m_VPUsesLightTableUBO = true;
+			m_VPUsesCameraUBO = true;
+		}
 		return true;
 	}
 
 	m_VPSpecularOutput = true; // Mega VP always outputs specularColor
 	m_VPUsesLightTableUBO = m_UseLightUBO; // Mega VP uses UBO when driver switch is on
 	m_VPUsesCameraUBO = m_UseCameraUBO;
+	m_VPUsesObjectUBO = m_UseObjectUBO;
+	m_VPUsesMaterialUBO = m_UseMaterialUBO;
+
+	// Object UBO implies table and camera UBO
+	if (m_VPUsesObjectUBO)
+	{
+		m_VPUsesLightTableUBO = true;
+		m_VPUsesCameraUBO = true;
+	}
 
 	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
-	int table = m_UseLightUBO ? 1 : 0;
-	int cameraUBO = m_UseCameraUBO ? 1 : 0;
+	int table = m_VPUsesLightTableUBO ? 1 : 0;
+	int cameraUBO = m_VPUsesCameraUBO ? 1 : 0;
+	int objectUBO = m_VPUsesObjectUBO ? 1 : 0;
+	int materialUBO = m_VPUsesMaterialUBO ? 1 : 0;
 
-	CVertexProgram *vp = m_MegaVP[fog][clip][table][cameraUBO];
+	CVertexProgram *vp = m_MegaVP[fog][clip][table][cameraUBO][objectUBO][materialUBO];
 	nlassert(vp);
 
 	if (!activeVertexProgram(vp, true))
@@ -473,42 +573,47 @@ void CDriverGL3::setupMegaVPUniforms()
 
 	uint idx;
 
-	// Lighting mode
-	idx = p->getUniformIndex(CProgramIndex::NlLighting);
-	if (idx != ~0u)
-		nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.Lighting ? 1 : 0);
-
-	// Per-light modes (non-table variant only — table variant reads from UBO)
-	if (!m_VPUsesLightTableUBO)
+	// When object UBO is active, nlLighting/nlTexGenMode/nlVertexColorLighted/nlVertexFormat
+	// are all in the UBO — skip individual uploads
+	if (!m_VPUsesObjectUBO)
 	{
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		// Lighting mode
+		idx = p->getUniformIndex(CProgramIndex::NlLighting);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.Lighting ? 1 : 0);
+
+		// Per-light modes (non-table variant only — table variant reads from UBO)
+		if (!m_VPUsesLightTableUBO)
 		{
-			idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightMode0 + i));
-			if (idx != ~0u)
+			for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			{
-				sint mode = _LightEnable[i] ? _LightMode[i] : -1;
-				nglProgramUniform1i(progId, idx, mode);
+				idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightMode0 + i));
+				if (idx != ~0u)
+				{
+					sint mode = _LightEnable[i] ? _LightMode[i] : -1;
+					nglProgramUniform1i(progId, idx, mode);
+				}
 			}
 		}
-	}
 
-	// TexGen modes
-	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-	{
-		idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlTexGenMode0 + i));
+		// TexGen modes
+		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		{
+			idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlTexGenMode0 + i));
+			if (idx != ~0u)
+				nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.TexGenMode[i]);
+		}
+
+		// Vertex color lighted
+		idx = p->getUniformIndex(CProgramIndex::NlVertexColorLighted);
 		if (idx != ~0u)
-			nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.TexGenMode[i]);
+			nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.VertexColorLighted ? 1 : 0);
+
+		// Vertex format bitmask
+		idx = p->getUniformIndex(CProgramIndex::NlVertexFormat);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, (sint32)m_VPBuiltinCurrent.VertexFormat);
 	}
-
-	// Vertex color lighted
-	idx = p->getUniformIndex(CProgramIndex::NlVertexColorLighted);
-	if (idx != ~0u)
-		nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.VertexColorLighted ? 1 : 0);
-
-	// Vertex format bitmask
-	idx = p->getUniformIndex(CProgramIndex::NlVertexFormat);
-	if (idx != ~0u)
-		nglProgramUniform1i(progId, idx, (sint32)m_VPBuiltinCurrent.VertexFormat);
 
 	// Clip plane mask (only in clip variant, skip when camera UBO provides it)
 	if (!m_VPUsesCameraUBO)

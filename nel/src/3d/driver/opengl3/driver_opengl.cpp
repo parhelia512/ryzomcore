@@ -360,6 +360,15 @@ CDriverGL3::CDriverGL3()
 	m_UseMegaShaders = true;
 	m_VPSpecularOutput = true;
 	m_VPUsesLightTableUBO = false;
+	m_VPUsesCameraUBO = false;
+	m_UseObjectUBO = true;
+	_ObjectUBOId = 0;
+	_ObjectUBOCapacity = 0;
+	m_VPUsesObjectUBO = false;
+	m_UseMaterialUBO = true;
+	m_VPUsesMaterialUBO = false;
+	_OverrideMaterialUBOId = 0;
+	memset(&_LightMapUBOOverride, 0, sizeof(_LightMapUBOOverride));
 }
 
 // ***************************************************************************
@@ -493,6 +502,8 @@ bool CDriverGL3::setupDisplay()
 	// Create UBOs
 	nglGenBuffers(1, &_LightTableUBOId);
 	nglGenBuffers(1, &_CameraUBOId);
+	nglGenBuffers(1, &_ObjectUBOId);
+	nglGenBuffers(1, &_OverrideMaterialUBOId);
 
 	if (m_UseMegaShaders)
 	{
@@ -501,8 +512,8 @@ bool CDriverGL3::setupDisplay()
 		else if (!initMegaPixelPrograms())
 			nlwarning("GL3: Failed to init mega pixel programs, falling back to per-material shaders");
 		else
-			nlinfo("GL3: Mega shaders initialized (16 VP + 16 PP variants)");
-		if (!m_MegaVP[0][0][0][0] || !m_MegaPP[0][0][0][0])
+			nlinfo("GL3: Mega shaders initialized (64 VP + 64 PP variants)");
+		if (!m_MegaVP[0][0][0][0][0][0] || !m_MegaPP[0][0][0][0][0][0])
 			m_UseMegaShaders = false; // Fallback
 	}
 
@@ -828,6 +839,16 @@ bool CDriverGL3::release()
 	{
 		nglDeleteBuffers(1, &_CameraUBOId);
 		_CameraUBOId = 0;
+	}
+	if (_ObjectUBOId)
+	{
+		nglDeleteBuffers(1, &_ObjectUBOId);
+		_ObjectUBOId = 0;
+	}
+	if (_OverrideMaterialUBOId)
+	{
+		nglDeleteBuffers(1, &_OverrideMaterialUBOId);
+		_OverrideMaterialUBOId = 0;
 	}
 
 	// Call IDriver::release() before, to destroy textures, shaders and VBs...
@@ -2051,6 +2072,8 @@ IProgramDrvInfos(drv, it)
 	programId = 0;
 	lightTableBlockIndex = GL_INVALID_INDEX;
 	cameraBlockIndex = GL_INVALID_INDEX;
+	objectBlockIndex = GL_INVALID_INDEX;
+	materialBlockIndex = GL_INVALID_INDEX;
 }
 
 CProgramDrvInfosGL3::~CProgramDrvInfosGL3()

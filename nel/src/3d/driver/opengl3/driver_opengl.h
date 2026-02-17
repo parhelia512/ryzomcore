@@ -245,7 +245,12 @@ public:
 	// PP builtin
 	CPPBuiltin	PPBuiltin;
 
-	CMaterialDrvInfosGL3(IDriver *drv, ItMatDrvInfoPtrList it) : IMaterialDrvInfos(drv, it) {}
+	// Material UBO (per-material GL buffer for NlMaterial block)
+	GLuint	MaterialUBOId;          // 0 = not created
+	bool	MaterialUBODirty;       // Needs re-upload
+
+	CMaterialDrvInfosGL3(IDriver *drv, ItMatDrvInfoPtrList it) : IMaterialDrvInfos(drv, it), MaterialUBOId(0), MaterialUBODirty(true) {}
+	~CMaterialDrvInfosGL3();
 };
 
 
@@ -1373,10 +1378,11 @@ private:
 	CVPBuiltin m_VPBuiltinCurrent;
 	bool m_VPBuiltinTouched;
 
-	// Megashader support: m_MegaVP[fog][clip][table][cameraUBO], m_MegaPP[fog][cube][specular][cameraUBO]
+	// Megashader support: m_MegaVP[fog][clip][table][cameraUBO][objectUBO][materialUBO]
+	//                     m_MegaPP[fog][cube][specular][cameraUBO][objectUBO][materialUBO]
 	bool m_UseMegaShaders;
-	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2];
-	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2];
+	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2][2][2];
+	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2];
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;
@@ -1386,6 +1392,29 @@ private:
 
 	// Whether the current VP/PP reads camera/fog/clip state from UBO
 	bool m_VPUsesCameraUBO;
+
+	// Per-Object UBO
+	bool    m_UseObjectUBO;         // Debug switch (default true)
+	GLuint  _ObjectUBOId;           // Global GL buffer
+	sint    _ObjectUBOCapacity;     // Current GPU buffer capacity (bytes)
+	bool    m_VPUsesObjectUBO;      // Current VP reads from NlModel UBO
+
+	// Material UBO
+	bool    m_UseMaterialUBO;       // Debug switch (default true)
+	bool    m_VPUsesMaterialUBO;    // Current VP/PP reads from NlMaterial UBO
+	GLuint  _OverrideMaterialUBOId; // Global buffer for per-pass material overrides (lightmap)
+	void    uploadObjectUBO();
+	void    uploadMaterialUBO();
+
+	// Lightmap UBO override (set before setupBuiltinPrograms for lightmap passes)
+	struct CLightMapUBOOverride
+	{
+		bool  Active;
+		float SelfIllumination[4];
+		bool  ZeroLightFactors;       // Zero all light factors (pass > 0)
+		float MaterialDiffuse[4];
+		float MaterialSpecular[4];
+	} _LightMapUBOOverride;
 
 	// EMBM support
 	void	initEMBM();
@@ -1459,11 +1488,17 @@ public:
 	void setLightTableBlockIndex(GLuint idx) { lightTableBlockIndex = idx; }
 	GLuint getCameraBlockIndex() const { return cameraBlockIndex; }
 	void setCameraBlockIndex(GLuint idx) { cameraBlockIndex = idx; }
+	GLuint getObjectBlockIndex() const { return objectBlockIndex; }
+	void setObjectBlockIndex(GLuint idx) { objectBlockIndex = idx; }
+	GLuint getMaterialBlockIndex() const { return materialBlockIndex; }
+	void setMaterialBlockIndex(GLuint idx) { materialBlockIndex = idx; }
 
 private:
 	GLuint programId;
 	GLuint lightTableBlockIndex;
 	GLuint cameraBlockIndex;
+	GLuint objectBlockIndex;
+	GLuint materialBlockIndex;
 };
 
 /*

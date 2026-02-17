@@ -46,6 +46,8 @@ namespace NLDRIVERGL3 {
 // Each header is inserted independently based on CProgramFeatures flags.
 extern const char *GLSLLightTableHeader; // NlLightTable UBO block (UsesLightTableUBO)
 extern const char *GLSLCameraHeader;     // NlCamera UBO block (UsesCameraUBO)
+extern const char *GLSLObjectHeader;     // NlModel UBO block (UsesObjectUBO)
+extern const char *GLSLMaterialHeader;   // NlMaterial UBO block (UsesMaterialUBO)
 
 void generateUniformBufferGLSL(std::stringstream &ss, const CUniformBufferFormat &ubf, sint binding);
 

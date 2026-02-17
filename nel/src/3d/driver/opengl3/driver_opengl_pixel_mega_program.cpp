@@ -61,11 +61,16 @@ namespace /* anonymous */ {
 
 #define MEGA_PP_MAX_SAMPLERS 8
 
-void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, bool cameraUBO)
+void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, bool cameraUBO, bool objectUBO, bool materialUBO)
 {
+	// Object UBO implies camera UBO
+	if (objectUBO) { cameraUBO = true; }
+
 	std::stringstream ss;
 	ss << "// Megashader Pixel Program";
-	ss << " (fog=" << (int)fog << ", cube=" << (int)cube << ", specular=" << (int)specular << ", cameraUBO=" << (int)cameraUBO << ")" << std::endl;
+	ss << " (fog=" << (int)fog << ", cube=" << (int)cube << ", specular=" << (int)specular
+	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
+	   << ", materialUBO=" << (int)materialUBO << ")" << std::endl;
 	ss << std::endl;
 	ss << "#version 330" << std::endl;
 	ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
@@ -100,20 +105,24 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 	}
 	ss << std::endl;
 
-	// Existing uniforms (same names as old shaders — setupUniforms works unchanged)
-	ss << "uniform vec4 materialColor;" << std::endl;
-	ss << "uniform float alphaRef;" << std::endl;
+	// NlModel UBO block is provided by GLSLObjectHeader (for nlVertexFormat)
+	// NlMaterial UBO block is provided by GLSLMaterialHeader (for materialColor, alphaRef, etc.)
+	// NlCamera UBO block is provided by GLSLCameraHeader
+
+	// Existing uniforms (skip when material UBO provides them)
+	if (!materialUBO)
+	{
+		ss << "uniform vec4 materialColor;" << std::endl;
+		ss << "uniform float alphaRef;" << std::endl;
+	}
 	ss << std::endl;
 
-	// Per-stage constants and EMBM matrices
+	// Per-stage constants and EMBM matrices (always individual uniforms)
 	for (int i = 0; i < MEGA_PP_MAX_SAMPLERS; ++i)
 		ss << "uniform vec4 constant" << i << ";" << std::endl;
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		ss << "uniform vec4 embmMatrix" << i << ";" << std::endl;
 	ss << std::endl;
-
-	// NlCamera UBO block is provided by GLSLCameraHeader
-	// (prepended automatically by compilePixelProgram when UsesCameraUBO is set).
 
 	// Fog uniforms (individual uniforms only when no camera UBO)
 	if (fog && !cameraUBO)
@@ -124,15 +133,19 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 		ss << std::endl;
 	}
 
-	// Megashader control uniforms
-	ss << "uniform int nlShader;" << std::endl;
-	ss << "uniform int nlTextureActive;" << std::endl;
-	ss << "uniform uint nlTexEnvMode0;" << std::endl;
-	ss << "uniform uint nlTexEnvMode1;" << std::endl;
-	ss << "uniform uint nlTexEnvMode2;" << std::endl;
-	ss << "uniform uint nlTexEnvMode3;" << std::endl;
-	ss << "uniform int nlAlphaTest;" << std::endl;
-	ss << "uniform int nlVertexFormat;" << std::endl;
+	// Megashader control uniforms (skip those in object/material UBO)
+	if (!materialUBO)
+	{
+		ss << "uniform int nlShader;" << std::endl;
+		ss << "uniform int nlTextureActive;" << std::endl;
+		ss << "uniform uint nlTexEnvMode0;" << std::endl;
+		ss << "uniform uint nlTexEnvMode1;" << std::endl;
+		ss << "uniform uint nlTexEnvMode2;" << std::endl;
+		ss << "uniform uint nlTexEnvMode3;" << std::endl;
+		ss << "uniform int nlAlphaTest;" << std::endl;
+	}
+	if (!objectUBO)
+		ss << "uniform int nlVertexFormat;" << std::endl;
 	if (fog && !cameraUBO)
 		ss << "uniform int nlFogMode;" << std::endl;
 	ss << std::endl;
@@ -427,27 +440,39 @@ bool CDriverGL3::initMegaPixelPrograms()
 			{
 				for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
 				{
-					std::string result;
-					megaPPGenerate(result, fog != 0, cube != 0, specular != 0, cameraUBO != 0);
-
-					CPixelProgram *pp = new CPixelProgram();
-					IProgram::CSource *src = new IProgram::CSource();
-					src->Profile = IProgram::glsl330f;
-					src->DisplayName = NLMISC::toString("Mega PP (fog=%d, cube=%d, specular=%d, cameraUBO=%d)", fog, cube, specular, cameraUBO);
-					src->Features.UsesCameraUBO = (cameraUBO != 0);
-					src->setSource(result);
-					pp->addSource(src);
-
-					nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
-
-					if (!compilePixelProgram(pp))
+					for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
 					{
-						nlwarning("GL3: Mega PP compilation failed (fog=%d, cube=%d, specular=%d, cameraUBO=%d)", fog, cube, specular, cameraUBO);
-						delete pp;
-						return false;
-					}
+						for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
+						{
+							// objectUBO implies cameraUBO
+							if (objectUBO && !cameraUBO)
+								continue;
 
-					m_MegaPP[fog][cube][specular][cameraUBO] = pp;
+							std::string result;
+							megaPPGenerate(result, fog != 0, cube != 0, specular != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
+
+							CPixelProgram *pp = new CPixelProgram();
+							IProgram::CSource *src = new IProgram::CSource();
+							src->Profile = IProgram::glsl330f;
+							src->DisplayName = NLMISC::toString("Mega PP (fog=%d, cube=%d, spec=%d, cam=%d, obj=%d, mat=%d)", fog, cube, specular, cameraUBO, objectUBO, materialUBO);
+							src->Features.UsesCameraUBO = (cameraUBO != 0);
+							src->Features.UsesObjectUBO = (objectUBO != 0);
+							src->Features.UsesMaterialUBO = (materialUBO != 0);
+							src->setSource(result);
+							pp->addSource(src);
+
+							nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+							if (!compilePixelProgram(pp))
+							{
+								nlwarning("GL3: Mega PP compilation failed (%s)", src->DisplayName.c_str());
+								delete pp;
+								return false;
+							}
+
+							m_MegaPP[fog][cube][specular][cameraUBO][objectUBO][materialUBO] = pp;
+						}
+					}
 				}
 			}
 		}
@@ -469,13 +494,19 @@ bool CDriverGL3::setupMegaPixelProgram()
 	matDrv->PPBuiltin.checkDriverMaterialStateTouched(this, mat);
 	matDrv->PPBuiltin.checkMaterialStateTouched(mat);
 
+	// Propagate PP state changes to material UBO dirty flag
+	if (matDrv->PPBuiltin.Touched)
+		matDrv->MaterialUBODirty = true;
+
 	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	// Cube variant: any cubemap in the material's sampler modes
 	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
 	int specular = m_VPSpecularOutput ? 1 : 0;
 	int cameraUBO = m_VPUsesCameraUBO ? 1 : 0;
+	int objectUBO = m_VPUsesObjectUBO ? 1 : 0;
+	int materialUBO = m_VPUsesMaterialUBO ? 1 : 0;
 
-	CPixelProgram *pp = m_MegaPP[fog][cube][specular][cameraUBO];
+	CPixelProgram *pp = m_MegaPP[fog][cube][specular][cameraUBO][objectUBO][materialUBO];
 	nlassert(pp);
 
 	if (!activePixelProgram(pp, true))
@@ -500,38 +531,42 @@ void CDriverGL3::setupMegaPPUniforms()
 
 	uint idx;
 
-	// Shader type
-	CMaterial::TShader shader = matDrv->PPBuiltin.Shader;
-	int shaderInt = 0;
-	switch (shader)
+	// When material UBO is active, nlShader/nlTextureActive/nlTexEnvMode/nlAlphaTest are in UBO
+	if (!m_VPUsesMaterialUBO)
 	{
-	case CMaterial::Normal:    shaderInt = 0; break;
-	case CMaterial::UserColor: shaderInt = 1; break;
-	case CMaterial::Specular:  shaderInt = 2; break;
-	case CMaterial::LightMap:  shaderInt = 3; break;
-	default:                   shaderInt = 0; break;
-	}
-	idx = p->getUniformIndex(CProgramIndex::NlShader);
-	if (idx != ~0u)
-		nglProgramUniform1i(progId, idx, shaderInt);
-
-	// Texture active bitmask
-	idx = p->getUniformIndex(CProgramIndex::NlTextureActive);
-	if (idx != ~0u)
-		nglProgramUniform1i(progId, idx, (sint32)matDrv->PPBuiltin.TextureActive);
-
-	// TexEnv modes (packed uint32)
-	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-	{
-		idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlTexEnvMode0 + i));
+		// Shader type
+		CMaterial::TShader shader = matDrv->PPBuiltin.Shader;
+		int shaderInt = 0;
+		switch (shader)
+		{
+		case CMaterial::Normal:    shaderInt = 0; break;
+		case CMaterial::UserColor: shaderInt = 1; break;
+		case CMaterial::Specular:  shaderInt = 2; break;
+		case CMaterial::LightMap:  shaderInt = 3; break;
+		default:                   shaderInt = 0; break;
+		}
+		idx = p->getUniformIndex(CProgramIndex::NlShader);
 		if (idx != ~0u)
-			nglProgramUniform1ui(progId, idx, matDrv->PPBuiltin.TexEnvMode[i]);
-	}
+			nglProgramUniform1i(progId, idx, shaderInt);
 
-	// Alpha test
-	idx = p->getUniformIndex(CProgramIndex::NlAlphaTest);
-	if (idx != ~0u)
-		nglProgramUniform1i(progId, idx, (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0);
+		// Texture active bitmask
+		idx = p->getUniformIndex(CProgramIndex::NlTextureActive);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, (sint32)matDrv->PPBuiltin.TextureActive);
+
+		// TexEnv modes (packed uint32)
+		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		{
+			idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlTexEnvMode0 + i));
+			if (idx != ~0u)
+				nglProgramUniform1ui(progId, idx, matDrv->PPBuiltin.TexEnvMode[i]);
+		}
+
+		// Alpha test
+		idx = p->getUniformIndex(CProgramIndex::NlAlphaTest);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0);
+	}
 
 	// Fog mode (skip when camera UBO provides it)
 	if (!m_VPUsesCameraUBO)
@@ -541,10 +576,13 @@ void CDriverGL3::setupMegaPPUniforms()
 			nglProgramUniform1i(progId, idx, (int)_FogMode);
 	}
 
-	// Vertex format (for texcoord availability)
-	idx = p->getUniformIndex(CProgramIndex::NlVertexFormat);
-	if (idx != ~0u)
-		nglProgramUniform1i(progId, idx, (sint32)matDrv->PPBuiltin.VertexFormat);
+	// Vertex format (skip when object UBO provides it)
+	if (!m_VPUsesObjectUBO)
+	{
+		idx = p->getUniformIndex(CProgramIndex::NlVertexFormat);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, (sint32)matDrv->PPBuiltin.VertexFormat);
+	}
 }
 
 } // NLDRIVERGL3

@@ -29,6 +29,15 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
+CMaterialDrvInfosGL3::~CMaterialDrvInfosGL3()
+{
+	if (MaterialUBOId)
+	{
+		nglDeleteBuffers(1, &MaterialUBOId);
+		MaterialUBOId = 0;
+	}
+}
+
 // Water fragment program GLSL source (4 variants via #defines)
 static const char *WaterFPGLSL_Header =
 	"#version 330\n"
@@ -349,6 +358,10 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 
 		// Optimize: reset all flags at the end.
 		// mat.clearTouched(0xFFFFFFFF); // FIXME GL3 THIS IS NOW DONE IN GENERATE OF PP DESC, THIS NEED RESTRUCTURING
+
+		// Mark material UBO dirty when relevant fields change
+		if (touched & (IDRV_TOUCHED_COLOR | IDRV_TOUCHED_LIGHTING | IDRV_TOUCHED_DEFMAT | IDRV_TOUCHED_ALPHA_TEST_THRE | IDRV_TOUCHED_TEXENV))
+			pShader->MaterialUBODirty = true;
 	}
 
 	// 2b. User supplied pixel shader overrides material
@@ -741,22 +754,53 @@ void CDriverGL3::setupLightMapPass(uint pass)
 			activateTexture(stage, NULL);
 		}
 
+		// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up
+		if (m_UseObjectUBO || m_UseMaterialUBO)
+		{
+			_LightMapUBOOverride.Active = true;
+			memset(_LightMapUBOOverride.SelfIllumination, 0, sizeof(_LightMapUBOOverride.SelfIllumination));
+			_LightMapUBOOverride.ZeroLightFactors = false;
+			// White diffuse (material diffuse not applied to dynamic light)
+			_LightMapUBOOverride.MaterialDiffuse[0] = 1.0f;
+			_LightMapUBOOverride.MaterialDiffuse[1] = 1.0f;
+			_LightMapUBOOverride.MaterialDiffuse[2] = 1.0f;
+			_LightMapUBOOverride.MaterialDiffuse[3] = 1.0f;
+			// Zero specular (lightmaps have no specular)
+			memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
+		}
+
 		// Setup the programs now
 		setupBuiltinPrograms();
+
+		_LightMapUBOOverride.Active = false;
 
 		// Override selfIllumination to black and zero specular (no LMC ambient for empty lightmap)
 		if (m_DriverVertexProgram)
 		{
-			int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
-			if (siIdx != -1)
-				setUniform4f(IDriver::VertexProgram, siIdx, 0.0f, 0.0f, 0.0f, 0.0f);
-			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			if (!m_VPUsesObjectUBO)
 			{
-				if (!_LightEnable[i]) continue;
-				uint lsc = m_DriverVertexProgram->getUniformIndex(
-					CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
-				if (lsc != ~0u)
-					setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
+				int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
+				if (siIdx != -1)
+					setUniform4f(IDriver::VertexProgram, siIdx, 0.0f, 0.0f, 0.0f, 0.0f);
+			}
+			if (!m_VPUsesLightTableUBO)
+			{
+				// Non-table path: zero individual light specular uniforms
+				for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+				{
+					if (!_LightEnable[i]) continue;
+					uint lsc = m_DriverVertexProgram->getUniformIndex(
+						CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
+					if (lsc != ~0u)
+						setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
+				}
+			}
+			else if (!m_VPUsesMaterialUBO)
+			{
+				// Table path without material UBO: override individual material uniforms
+				int msIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialSpecular));
+				if (msIdx != -1)
+					setUniform4f(IDriver::VertexProgram, msIdx, 0.0f, 0.0f, 0.0f, 0.0f);
 			}
 		}
 
@@ -966,8 +1010,28 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		_CameraUBODirty = true;
 	}
 
+	// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up
+	if (m_UseObjectUBO || m_UseMaterialUBO)
+	{
+		_LightMapUBOOverride.Active = true;
+		_LightMapUBOOverride.SelfIllumination[0] = selfIllumination.R;
+		_LightMapUBOOverride.SelfIllumination[1] = selfIllumination.G;
+		_LightMapUBOOverride.SelfIllumination[2] = selfIllumination.B;
+		_LightMapUBOOverride.SelfIllumination[3] = 0.0f;
+		_LightMapUBOOverride.ZeroLightFactors = (pass > 0);
+		// White diffuse (material diffuse not applied to dynamic light for lightmaps)
+		_LightMapUBOOverride.MaterialDiffuse[0] = 1.0f;
+		_LightMapUBOOverride.MaterialDiffuse[1] = 1.0f;
+		_LightMapUBOOverride.MaterialDiffuse[2] = 1.0f;
+		_LightMapUBOOverride.MaterialDiffuse[3] = 1.0f;
+		// Zero specular (lightmaps have no specular contribution)
+		memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
+	}
+
 	// Setup the programs now
 	setupBuiltinPrograms();
+
+	_LightMapUBOOverride.Active = false;
 
 	// Restore fog color (UBO already uploaded with black for this pass)
 	if (pass > 0 && _FogEnabled)
@@ -983,48 +1047,82 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		}
 	}
 
-	// Override VP uniforms for per-pass lightmap rendering
+	// Override VP uniforms for per-pass lightmap rendering (non-UBO paths)
 	if (m_DriverVertexProgram)
 	{
 		// Override selfIllumination with per-pass LMC ambient (possibly x2 scaled)
-		int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
-		if (siIdx != -1)
-			setUniform4f(IDriver::VertexProgram, siIdx,
-				selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
-
-		// Dynamic light diffuse: override for all passes.
-		// setupUniforms() pre-multiplied Light0ColDiff by mat.getDiffuse(), but for
-		// lightmap materials the legacy GL driver uses material diffuse white (or grey
-		// for x2 mode). We override here: pass 0 gets the actual light diffuse (not
-		// multiplied by material diffuse), pass 1+ gets zero (light added only once).
-		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		if (!m_VPUsesObjectUBO)
 		{
-			if (!_LightEnable[i]) continue;
-			uint ldc = m_DriverVertexProgram->getUniformIndex(
-				CProgramIndex::TName(CProgramIndex::Light0ColDiff + i));
-			if (ldc != ~0u)
+			int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
+			if (siIdx != -1)
+				setUniform4f(IDriver::VertexProgram, siIdx,
+					selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
+		}
+
+		if (!m_VPUsesLightTableUBO)
+		{
+			// Non-table path: override individual light color uniforms
+			// setupUniforms() pre-multiplied Light0ColDiff by mat.getDiffuse(), but for
+			// lightmap materials the legacy GL driver uses material diffuse white (or grey
+			// for x2 mode). We override here: pass 0 gets the actual light diffuse (not
+			// multiplied by material diffuse), pass 1+ gets zero (light added only once).
+			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			{
-				if (pass == 0)
+				if (!_LightEnable[i]) continue;
+				uint ldc = m_DriverVertexProgram->getUniformIndex(
+					CProgramIndex::TName(CProgramIndex::Light0ColDiff + i));
+				if (ldc != ~0u)
 				{
-					NLMISC::CRGBAF diffuse = NLMISC::CRGBAF(_UserLight[i].getDiffuse());
-					setUniform4f(IDriver::VertexProgram, ldc, diffuse.R, diffuse.G, diffuse.B, 0.0f);
+					if (pass == 0)
+					{
+						NLMISC::CRGBAF diffuse = NLMISC::CRGBAF(_UserLight[i].getDiffuse());
+						setUniform4f(IDriver::VertexProgram, ldc, diffuse.R, diffuse.G, diffuse.B, 0.0f);
+					}
+					else
+					{
+						setUniform4f(IDriver::VertexProgram, ldc, 0.0f, 0.0f, 0.0f, 0.0f);
+					}
 				}
-				else
+			}
+
+			// Zero light specular — lightmap materials get no specular contribution
+			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			{
+				if (!_LightEnable[i]) continue;
+				uint lsc = m_DriverVertexProgram->getUniformIndex(
+					CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
+				if (lsc != ~0u)
+					setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
+			}
+		}
+		else if (!m_VPUsesObjectUBO)
+		{
+			// Table path without object UBO: light factors are individual uniforms
+			if (!m_VPUsesMaterialUBO)
+			{
+				// Override individual material uniforms: white diffuse, zero specular
+				int mdIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialDiffuse));
+				if (mdIdx != -1)
+					setUniform4f(IDriver::VertexProgram, mdIdx, 1.0f, 1.0f, 1.0f, 1.0f);
+				int msIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialSpecular));
+				if (msIdx != -1)
+					setUniform4f(IDriver::VertexProgram, msIdx, 0.0f, 0.0f, 0.0f, 0.0f);
+			}
+			// else: materialUBO → diffuse/specular overridden via UBO pre-override above
+
+			// For pass > 0, zero all light factors (light added only once)
+			if (pass > 0)
+			{
+				for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 				{
-					setUniform4f(IDriver::VertexProgram, ldc, 0.0f, 0.0f, 0.0f, 0.0f);
+					uint lfIdx = m_DriverVertexProgram->getUniformIndex(
+						CProgramIndex::TName(CProgramIndex::NlLightFactor0 + i));
+					if (lfIdx != ~0u)
+						setUniform1f(IDriver::VertexProgram, lfIdx, 0.0f);
 				}
 			}
 		}
-
-		// Zero light specular — lightmap materials get no specular contribution
-		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-		{
-			if (!_LightEnable[i]) continue;
-			uint lsc = m_DriverVertexProgram->getUniformIndex(
-				CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
-			if (lsc != ~0u)
-				setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
-		}
+		// else: table + objectUBO — all overrides handled via UBO pre-override above
 	}
 }
 
@@ -1357,10 +1455,12 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 	if (b1idx != ~0u)
 		setUniform4f(IDriver::PixelProgram, b1idx, 2.f * factor1, -factor1, 0.f, 0.f);
 
-	// Water VP/PP use individual uniforms, not camera UBO.
-	// Reset this flag since setupBuiltinPrograms() is not called for Water materials,
-	// so it may be stale from the previous draw call's mega shader.
+	// Water VP/PP use individual uniforms, not UBOs.
+	// Reset these flags since setupBuiltinPrograms() is not called for Water materials,
+	// so they may be stale from the previous draw call's mega shader.
 	m_VPUsesCameraUBO = false;
+	m_VPUsesObjectUBO = false;
+	m_VPUsesMaterialUBO = false;
 
 	// Auto-set standard uniforms (fogParams, fogColor for FP; modelView for VP)
 	setupUniforms(IDriver::PixelProgram);

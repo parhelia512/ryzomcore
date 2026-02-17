@@ -66,6 +66,46 @@ const char *GLSLCameraHeader =
 	"    vec4  clipPlane5;\n"
 	"};\n";
 
+const char *GLSLObjectHeader =
+	// Per-object UBO: matrices, light indices/factors, and per-draw-call state.
+	// Uploaded every draw call. Binding point set via glUniformBlockBinding in setupInitialUniforms.
+	"layout(std140) uniform NlModel {\n"
+	"    mat4  modelViewProjection;\n"
+	"    mat4  modelView;\n"
+	"    mat3  normalMatrix;\n"
+	"    ivec4 nlLightIndices01;\n"
+	"    ivec4 nlLightIndices45;\n"
+	"    vec4  nlLightFactors01;\n"
+	"    vec4  nlLightFactors45;\n"
+	"    vec4  selfIllumination;\n"
+	"    ivec4 nlTexGenMode;\n"
+	"    int   nlLighting;\n"
+	"    int   nlVertexColorLighted;\n"
+	"    int   nlVertexFormat;\n"
+	"    int   _modelPad0;\n"
+	"};\n";
+
+const char *GLSLMaterialHeader =
+	// Per-material UBO: material colors, alpha test, shader type, texenv modes.
+	// Uploaded when material changes. Binding point set via glUniformBlockBinding in setupInitialUniforms.
+	"layout(std140) uniform NlMaterial {\n"
+	"    vec4  materialColor;\n"
+	"    vec4  materialDiffuse;\n"
+	"    vec4  materialSpecular;\n"
+	"    float materialShininess;\n"
+	"    float alphaRef;\n"
+	"    int   nlShader;\n"
+	"    int   nlTextureActive;\n"
+	"    int   nlAlphaTest;\n"
+	"    uint  nlTexEnvMode0;\n"
+	"    uint  nlTexEnvMode1;\n"
+	"    uint  nlTexEnvMode2;\n"
+	"    uint  nlTexEnvMode3;\n"
+	"    int   _matPad0;\n"
+	"    int   _matPad1;\n"
+	"    int   _matPad2;\n"
+	"};\n";
+
 // Draft UBO infrastructure arrays — indices match the _BINDING defines
 static const char *s_UniformBufferBindDefine[] = {
 	"0", // NL_BUILTIN_CAMERA_BINDING
