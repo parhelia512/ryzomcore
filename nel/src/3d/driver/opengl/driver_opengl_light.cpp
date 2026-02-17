@@ -246,6 +246,7 @@ void	CDriverGL::setLights(
 		if (tableIndex < 0 || tableIndex >= (sint16)_LightTable.size())
 		{
 			enableLightInternal(uint8(i), false);
+			_UserLightEnable[i] = false;
 			continue;
 		}
 
@@ -293,6 +294,11 @@ void	CDriverGL::setLights(
 				rawLight.getQuadraticAttenuation());
 		}
 
+		// Track user state for setupLightMapDynamicLighting restore
+		if (i == 0)
+			_UserLight0 = modLight;
+		_UserLightEnable[i] = true;
+
 		setLightInternal(uint8(i), modLight);
 		enableLightInternal(uint8(i), true);
 	}
@@ -300,8 +306,11 @@ void	CDriverGL::setLights(
 	// Disable remaining lights
 	for (uint i = count; i < _MaxDriverLight; ++i)
 	{
+		_UserLightEnable[i] = false;
 		enableLightInternal(uint8(i), false);
 	}
+
+	_LightMapDynamicLightDirty = true;
 }
 
 

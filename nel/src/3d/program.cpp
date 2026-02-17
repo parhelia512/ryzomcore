@@ -360,7 +360,29 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"samplerCube0",
 	"samplerCube1",
 	"samplerCube2",
-	"samplerCube3"
+	"samplerCube3",
+
+	// Light table per-object uniforms
+	"nlLightIndex0",
+	"nlLightIndex1",
+	"nlLightIndex2",
+	"nlLightIndex3",
+	"nlLightIndex4",
+	"nlLightIndex5",
+	"nlLightIndex6",
+	"nlLightIndex7",
+	"nlLightFactor0",
+	"nlLightFactor1",
+	"nlLightFactor2",
+	"nlLightFactor3",
+	"nlLightFactor4",
+	"nlLightFactor5",
+	"nlLightFactor6",
+	"nlLightFactor7",
+	"nlMaterialDiffuse",
+	"nlMaterialSpecular",
+	"nlMaterialShininess",
+	"pzbCameraPos"
 };
 
 void IProgram::buildInfo(CSource *source)

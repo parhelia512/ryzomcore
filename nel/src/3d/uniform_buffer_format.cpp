@@ -108,12 +108,66 @@ sint CUniformBufferFormat::push(const std::string &name, TType type, sint count)
 	entry.Type = type;
 	entry.Offset = alignOffset;
 	entry.Count = count;
+	entry.StructIndex = -1;
+	entry.StructSize = 0;
 #if (HAVE_X86_64)
 	m_Hash = NLMISC::wangHash64(m_Hash ^ ((uint64)type | ((uint64)count << 32)));
 #else
 	m_Hash = NLMISC::wangHash(m_Hash ^ (uint32)type);
 	m_Hash = NLMISC::wangHash(m_Hash ^ (uint32)count);
 #endif
+	return alignOffset;
+}
+
+sint CUniformBufferFormat::pushStruct(const std::string &name, const std::string &structName,
+	const CUniformBufferFormat &structFormat, sint count)
+{
+	nlassert(count > 0);
+
+	// Find or add struct definition
+	sint structIndex = -1;
+	for (sint i = 0; i < (sint)m_StructNames.size(); ++i)
+	{
+		if (m_StructNames[i] == structName)
+		{
+			structIndex = i;
+			break;
+		}
+	}
+	if (structIndex < 0)
+	{
+		structIndex = (sint)m_StructNames.size();
+		m_StructNames.push_back(structName);
+		m_StructFormats.push_back(structFormat);
+	}
+
+	// std140: struct alignment is always rounded up to 16
+	sint baseAlign = 16;
+	sint structSize = structFormat.size(); // Already 16-byte aligned
+
+	sint baseOffset = m_Entries.size()
+		? m_Entries.back().Offset + m_Entries.back().size()
+		: 0;
+	sint alignOffset = baseOffset;
+	alignOffset += (baseAlign - 1);
+	alignOffset &= ~(baseAlign - 1);
+
+	m_Entries.resize(m_Entries.size() + 1);
+	CEntry &entry = m_Entries.back();
+	entry.Name = NLMISC::CStringMapper::map(name);
+	entry.Type = Float; // Placeholder, unused for struct entries
+	entry.Offset = alignOffset;
+	entry.Count = count;
+	entry.StructIndex = structIndex;
+	entry.StructSize = structSize;
+
+#if (HAVE_X86_64)
+	m_Hash = NLMISC::wangHash64(m_Hash ^ ((uint64)structFormat.hash() | ((uint64)count << 32)));
+#else
+	m_Hash = NLMISC::wangHash(m_Hash ^ (uint32)structFormat.hash());
+	m_Hash = NLMISC::wangHash(m_Hash ^ (uint32)count);
+#endif
+
 	return alignOffset;
 }
 
@@ -148,6 +202,31 @@ void testUniformBufferFormat(CUniformBufferFormat &ubf)
 	nlassert(offset == 208);
 	offset = ubf.push("o", CUniformBufferFormat::FloatVec3);
 	nlassert(offset == 304);
+
+	// Struct array test
+	// Build a struct format: position(vec3), direction(vec3), diffuse(vec4), specular(vec4)
+	// Layout: position at 0 (size 12), direction at 16 (vec3 align=16), diffuse at 32, specular at 48
+	// Struct size = (48+16+15)&~15 = 64
+	CUniformBufferFormat lightFmt;
+	sint soffset;
+	soffset = lightFmt.push("position", CUniformBufferFormat::FloatVec3);
+	nlassert(soffset == 0);
+	soffset = lightFmt.push("direction", CUniformBufferFormat::FloatVec3);
+	nlassert(soffset == 16);
+	soffset = lightFmt.push("diffuse", CUniformBufferFormat::FloatVec4);
+	nlassert(soffset == 32);
+	soffset = lightFmt.push("specular", CUniformBufferFormat::FloatVec4);
+	nlassert(soffset == 48);
+	nlassert(lightFmt.size() == 64);
+
+	// After "o" (offset 304, vec3 size 12), next free = 316, aligned to 16 = 320
+	// Array of 2 structs, each stride 64, total = 128
+	offset = ubf.pushStruct("lights", "LightInfo", lightFmt, 2);
+	nlassert(offset == 320);
+
+	// After struct array: next free = 320 + 128 = 448, float aligns to 4 = 448
+	offset = ubf.push("p", CUniformBufferFormat::Float);
+	nlassert(offset == 448);
 }
 
 } /* namespace NL3D */

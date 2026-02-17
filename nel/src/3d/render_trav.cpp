@@ -99,6 +99,7 @@ CRenderTrav::CRenderTrav()
 	// based lighting where all lights must be accessible from the shader.
 	_LightTableMode= true;
 	_LightTableSize= 0;
+	_MaxLightTableSize= (uint)~0;
 
 	_LayersRenderingOrder= true;
 	_FirstWaterModel = NULL;
@@ -244,22 +245,78 @@ void		CRenderTrav::traverse(UScene::TRenderPart renderPart, bool newRender, bool
 		// Render the opaque materials
 		_CurrentPassOpaque = true;
 		OrderOpaqueList.begin();
-		while( OrderOpaqueList.get() != NULL )
+		if(_LightTableMode && _LightTableSize > 0)
 		{
-			CTransform	*tr= OrderOpaqueList.get();
-			#ifdef NL_DEBUG_RENDER_TRAV
-				CTransformShape *trShape = dynamic_cast<CTransformShape *>(tr);
-				if (trShape)
+			// Batched traversal: pre-fill the light table, then render.
+			// When the table is full, render the batch, flush, and continue.
+			while(OrderOpaqueList.get() != NULL)
+			{
+				// Phase 1: collect lights for this batch
+				COrderingTable<CTransform>::CIterator batchStart = OrderOpaqueList.iterator();
+				uint batchCount = 0;
+				while(OrderOpaqueList.get() != NULL)
 				{
-					const std::string *shapeName = Scene->getShapeBank()->getShapeNameFromShapePtr(trShape->Shape);
-					if (shapeName)
+					CTransform *tr = OrderOpaqueList.get();
+					const CLightContribution *lc = NULL;
+					if(tr->isLightable())
 					{
-						nlwarning("Displaying %s", shapeName->c_str());
+						CSkeletonModel *ancestor = tr->getAncestorSkeletonModel();
+						if(ancestor)
+							lc = &ancestor->getLightContribution();
+						else
+							lc = &tr->getLightContribution();
 					}
+					if(!collectObjectLights(lc))
+						break;
+					batchCount++;
+					OrderOpaqueList.next();
 				}
-			#endif
-			tr->traverseRender();
-			OrderOpaqueList.next();
+				COrderingTable<CTransform>::CIterator batchEnd = OrderOpaqueList.iterator();
+
+				// Phase 2: render the batch
+				OrderOpaqueList.setIterator(batchStart);
+				for(uint i = 0; i < batchCount; i++)
+				{
+					#ifdef NL_DEBUG_RENDER_TRAV
+						CTransformShape *trShape = dynamic_cast<CTransformShape *>(OrderOpaqueList.get());
+						if (trShape)
+						{
+							const std::string *shapeName = Scene->getShapeBank()->getShapeNameFromShapePtr(trShape->Shape);
+							if (shapeName)
+							{
+								nlwarning("Displaying %s", shapeName->c_str());
+							}
+						}
+					#endif
+					OrderOpaqueList.get()->traverseRender();
+					OrderOpaqueList.next();
+				}
+
+				// If more objects remain, flush for next batch
+				OrderOpaqueList.setIterator(batchEnd);
+				if(OrderOpaqueList.get() != NULL)
+					flushLightTable();
+			}
+		}
+		else
+		{
+			// Non-table mode: single-pass render
+			while(OrderOpaqueList.get() != NULL)
+			{
+				#ifdef NL_DEBUG_RENDER_TRAV
+					CTransformShape *trShape = dynamic_cast<CTransformShape *>(OrderOpaqueList.get());
+					if (trShape)
+					{
+						const std::string *shapeName = Scene->getShapeBank()->getShapeNameFromShapePtr(trShape->Shape);
+						if (shapeName)
+						{
+							nlwarning("Displaying %s", shapeName->c_str());
+						}
+					}
+				#endif
+				OrderOpaqueList.get()->traverseRender();
+				OrderOpaqueList.next();
+			}
 		}
 
 		/* Render MeshBlock Manager.
@@ -620,6 +677,7 @@ void		CRenderTrav::resetLightSetup()
 				// Init: entering table mode for this frame
 				_LightTablePointLights.clear();
 				_LightTableSize= 1;
+				_MaxLightTableSize= Driver->getMaxLightTableSize();
 
 				// Upload sun as entry 0
 				CLight sunLight;
@@ -812,6 +870,70 @@ void		CRenderTrav::changeLightSetup(CLightContribution	*lightContribution, bool 
 }
 
 // ***************************************************************************
+void		CRenderTrav::flushLightTable()
+{
+	// Reset all tracked point lights' table indices
+	for(uint i = 0; i < _LightTablePointLights.size(); ++i)
+	{
+		_LightTablePointLights[i]->setTableIndex(-1);
+	}
+	_LightTablePointLights.clear();
+
+	// Reset table size to 1 (sun stays at index 0)
+	_LightTableSize = 1;
+	Driver->setLightTableSize(1);
+
+	// Clear light contribution cache so next object gets full setup
+	_CacheLightContribution = NULL;
+}
+
+// ***************************************************************************
+bool		CRenderTrav::collectObjectLights(const CLightContribution *lightContribution)
+{
+	if(!lightContribution)
+		return true;
+
+	// Count how many new table slots this object needs
+	uint newLightsNeeded = 0;
+	uint plId = 0;
+	while(lightContribution->PointLight[plId] != NULL)
+	{
+		if(lightContribution->PointLight[plId]->getTableIndex() < 0)
+			newLightsNeeded++;
+		plId++;
+		if(plId >= NL3D_MAX_LIGHT_CONTRIBUTION)
+			break;
+	}
+
+	if(_LightTableSize + newLightsNeeded > _MaxLightTableSize)
+		return false;
+
+	// Register new lights in the table
+	plId = 0;
+	while(lightContribution->PointLight[plId] != NULL)
+	{
+		CPointLight *pl = lightContribution->PointLight[plId];
+		if(pl->getTableIndex() < 0)
+		{
+			sint16 newIdx = (sint16)_LightTableSize;
+			pl->setTableIndex(newIdx);
+			_LightTablePointLights.push_back(pl);
+
+			CLight rawLight;
+			pl->setupDriverLightRaw(rawLight);
+			_LightTableSize = (uint)(newIdx + 1);
+			Driver->setLightTableSize(_LightTableSize);
+			Driver->setLightTableEntry((uint)newIdx, rawLight);
+		}
+		plId++;
+		if(plId >= NL3D_MAX_LIGHT_CONTRIBUTION)
+			break;
+	}
+
+	return true;
+}
+
+// ***************************************************************************
 void		CRenderTrav::changeLightSetupTable(CLightContribution *lightContribution, bool useLocalAttenuation)
 {
 	// Cache check: same CLightContribution* + attenuation mode => skip
@@ -822,6 +944,25 @@ void		CRenderTrav::changeLightSetupTable(CLightContribution *lightContribution, 
 
 	if(lightContribution)
 	{
+		// Check if this object's new lights would overflow the table.
+		// Count how many lights need fresh table slots.
+		{
+			uint newLightsNeeded = 0;
+			uint plId = 0;
+			while(lightContribution->PointLight[plId] != NULL)
+			{
+				if(lightContribution->PointLight[plId]->getTableIndex() < 0)
+					newLightsNeeded++;
+				plId++;
+				if(plId >= NL3D_MAX_LIGHT_CONTRIBUTION)
+					break;
+			}
+			if(_LightTableSize + newLightsNeeded > _MaxLightTableSize)
+			{
+				flushLightTable();
+			}
+		}
+
 		// Build parallel arrays of table indices and factors
 		sint16 tableIndices[NL3D_MAX_LIGHT_CONTRIBUTION + 1];
 		uint8 lightFactors[NL3D_MAX_LIGHT_CONTRIBUTION + 1];

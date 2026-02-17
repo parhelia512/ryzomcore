@@ -131,8 +131,8 @@ void wind_tree_vp(
   }
   #endif
 
-  oCol1 = spec;
-  oCol0 = litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw;
+  oCol1 = saturate(spec);
+  oCol0 = saturate(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw);
 
 #else // Non-specular
 
@@ -158,7 +158,7 @@ void wind_tree_vp(
   }
   #endif
 
-  oCol0 = litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw;
+  oCol0 = saturate(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw);
 
 #endif // USE_SPECULAR
 

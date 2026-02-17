@@ -74,7 +74,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -99,6 +99,23 @@ struct CProgramFeatures
 	/// VP output varyings as CVertexBuffer vertex format flags.
 	/// When a user VP is active, the builtin PP uses this to declare matching inputs.
 	uint16 VPVertexFormat;
+
+	/// Whether this VP outputs a separate specular color varying (for post-texture addition).
+	bool OutputsSpecularColor;
+
+	// UBO flags (todo: enum)
+	// These are set on both user and builtin programs (todo)
+	/// Whether this VP reads lights from a UBO light table + per-object indices/factors.
+	bool UsesLightTableUBO;
+
+	/// Whether this program reads camera/fog/clip state from a UBO (binding 0).
+	bool UsesCameraUBO;
+
+	/// Whether this program reads per-object state (matrices, light indices, etc.) from a UBO (binding 2).
+	bool UsesObjectUBO;
+
+	/// Whether this program reads material properties from a UBO (binding 3).
+	bool UsesMaterialUBO;
 };
 
 // Stucture used to cache the indices of builtin parameters which are used by the drivers
@@ -391,6 +408,28 @@ struct CProgramIndex
 		SamplerCube1,
 		SamplerCube2,
 		SamplerCube3,
+
+		// Light table per-object uniforms
+		NlLightIndex0,
+		NlLightIndex1,
+		NlLightIndex2,
+		NlLightIndex3,
+		NlLightIndex4,
+		NlLightIndex5,
+		NlLightIndex6,
+		NlLightIndex7,
+		NlLightFactor0,
+		NlLightFactor1,
+		NlLightFactor2,
+		NlLightFactor3,
+		NlLightFactor4,
+		NlLightFactor5,
+		NlLightFactor6,
+		NlLightFactor7,
+		NlMaterialDiffuse,
+		NlMaterialSpecular,
+		NlMaterialShininess,
+		PzbCameraPos,
 
 		NUM_UNIFORMS
 	};

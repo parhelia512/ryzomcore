@@ -222,6 +222,9 @@ extern PFNGLDELETEVERTEXARRAYSPROC						nglDeleteVertexArrays;
 extern PFNGLBINDVERTEXARRAYPROC							nglBindVertexArray;
 
 extern PFNGLBINDBUFFERPROC								nglBindBuffer;
+extern PFNGLBINDBUFFERBASEPROC							nglBindBufferBase;
+extern PFNGLGETUNIFORMBLOCKINDEXPROC					nglGetUniformBlockIndex;
+extern PFNGLUNIFORMBLOCKBINDINGPROC						nglUniformBlockBinding;
 extern PFNGLDELETEBUFFERSPROC							nglDeleteBuffers;
 extern PFNGLGENBUFFERSPROC								nglGenBuffers;
 extern PFNGLISBUFFERPROC								nglIsBuffer;

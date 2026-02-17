@@ -324,6 +324,19 @@ CDriverGL3::CDriverGL3()
 	_LightMapDynamicLightEnabled = false;
 	_LightMapDynamicLightDirty= false;
 	_LightTableMode= false;
+	_LightTableUBOId = 0;
+	_LightTableDirty = false;
+	_UserLightUBODirty = true;
+	_LightTableUBOCapacity = 0;
+	_CameraUBOId = 0;
+	_CameraUBODirty = true;
+	_CameraUBOCapacity = 0;
+	_LightTableObjCount = 0;
+	for (uint i = 0; i < MaxLight; ++i)
+	{
+		_LightTableObjIndices[i] = -1;
+		_LightTableObjFactors[i] = 0.0f;
+	}
 
 	_CurrentMaterialSupportedShader= CMaterial::Normal;
 
@@ -343,6 +356,19 @@ CDriverGL3::CDriverGL3()
 	m_VPBuiltinTouched = true;
 
 	m_UseMegaShaders = true;
+	m_UseMegaLightTableUBO = true;  // implied by m_UseMegaObjectUBO
+	m_UseMegaCameraUBO = true;      // implied by m_UseMegaObjectUBO
+	m_UseMegaObjectUBO = true;
+	m_UseMegaMaterialUBO = true;
+	m_VPSpecularOutput = true;
+	m_VPUsesLightTableUBO = false;
+	m_VPUsesCameraUBO = false;
+	_ObjectUBOId = 0;
+	_ObjectUBOCapacity = 0;
+	m_VPUsesObjectUBO = false;
+	m_VPUsesMaterialUBO = false;
+	_OverrideMaterialUBOId = 0;
+	memset(&_LightMapUBOOverride, 0, sizeof(_LightMapUBOOverride));
 }
 
 // ***************************************************************************
@@ -473,6 +499,12 @@ bool CDriverGL3::setupDisplay()
 	if (!initProgramPipeline())
 		nlerror("Failed to create Pipeline Object");
 
+	// Create UBOs
+	nglGenBuffers(1, &_LightTableUBOId);
+	nglGenBuffers(1, &_CameraUBOId);
+	nglGenBuffers(1, &_ObjectUBOId);
+	nglGenBuffers(1, &_OverrideMaterialUBOId);
+
 	if (m_UseMegaShaders)
 	{
 		if (!initMegaVertexPrograms())
@@ -480,8 +512,8 @@ bool CDriverGL3::setupDisplay()
 		else if (!initMegaPixelPrograms())
 			nlwarning("GL3: Failed to init mega pixel programs, falling back to per-material shaders");
 		else
-			nlinfo("GL3: Mega shaders initialized (4 VP + 4 PP variants)");
-		if (!m_MegaVP[0][0] || !m_MegaPP[0][0])
+			nlinfo("GL3: Mega shaders initialized (64 VP + 64 PP variants)");
+		if (!m_MegaVP[0][0][0][0][0][0] || !m_MegaPP[0][0][0][0][0][0])
 			m_UseMegaShaders = false; // Fallback
 	}
 
@@ -796,6 +828,28 @@ bool CDriverGL3::release()
 	for (std::unordered_set<CPPBuiltin>::iterator it(m_PPBuiltinCache.begin()), end(m_PPBuiltinCache.end()); it != end; ++it)
 		delete it->PixelProgram;
 	m_PPBuiltinCache.clear();
+
+	// Delete UBOs
+	if (_LightTableUBOId)
+	{
+		nglDeleteBuffers(1, &_LightTableUBOId);
+		_LightTableUBOId = 0;
+	}
+	if (_CameraUBOId)
+	{
+		nglDeleteBuffers(1, &_CameraUBOId);
+		_CameraUBOId = 0;
+	}
+	if (_ObjectUBOId)
+	{
+		nglDeleteBuffers(1, &_ObjectUBOId);
+		_ObjectUBOId = 0;
+	}
+	if (_OverrideMaterialUBOId)
+	{
+		nglDeleteBuffers(1, &_OverrideMaterialUBOId);
+		_OverrideMaterialUBOId = 0;
+	}
 
 	// Call IDriver::release() before, to destroy textures, shaders and VBs...
 	IDriver::release();
@@ -1148,6 +1202,7 @@ void CDriverGL3::setupFog(float start, float end, CRGBA color)
 
 	_FogStart = start;
 	_FogEnd = end;
+	_CameraUBODirty = true;
 }
 
 // ***************************************************************************
@@ -1182,6 +1237,7 @@ void CDriverGL3::setupFogMode(TFogMode mode, float density)
 	H_AUTO_OGL(CDriverGL3_setupFogMode)
 	_FogMode = mode;
 	_FogDensity = density;
+	_CameraUBODirty = true;
 }
 
 // ***************************************************************************
@@ -2014,6 +2070,10 @@ CProgramDrvInfosGL3::CProgramDrvInfosGL3(CDriverGL3 *drv, ItGPUPrgDrvInfoPtrList
 IProgramDrvInfos(drv, it)
 {
 	programId = 0;
+	lightTableBlockIndex = GL_INVALID_INDEX;
+	cameraBlockIndex = GL_INVALID_INDEX;
+	objectBlockIndex = GL_INVALID_INDEX;
+	materialBlockIndex = GL_INVALID_INDEX;
 }
 
 CProgramDrvInfosGL3::~CProgramDrvInfosGL3()

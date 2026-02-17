@@ -370,7 +370,10 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	if (!lighting)
 		ss << "uniform vec4 materialColor;" << std::endl; // Verify
 
+	bool specularVertex = lighting || (desc.VertexFormat & g_VertexFlags[SecondaryColor]);
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
+	if (specularVertex)
+		ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
 	ss << std::endl;
 
 	if (lighting)
@@ -395,7 +398,6 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "ecPos = ecPos4;" << std::endl;
 	ss << std::endl;
 
-	bool specularVertex = lighting || (desc.VertexFormat & g_VertexFlags[SecondaryColor]);
 	ss << "vec4 diffuseVertex;" << std::endl;
 	if (specularVertex) ss << "vec4 specularVertex;" << std::endl;
 	ss << std::endl;
@@ -449,15 +451,13 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		// When lighting && !VertexColorLighted: vprimaryColor is ignored (matDiffuse pre-multiplied on CPU)
 	}
 	
-	// Add diffuse and specular color
+	// Diffuse (clamp before texture), specular passed separately (added post-texture in PP)
 	ss << "vertexColor = diffuseVertex;" << std::endl;
-	if (specularVertex)
-		ss << "vertexColor.rgb = vertexColor.rgb + (specularVertex.rgb * specularVertex.a);" << std::endl; // Verify
 	if (lighting)
-		ss << "vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl; // Note: Alpha of self illumination is ignored
-
-	// Clamp vertex color to [0,1] to match OpenGL fixed-function / ARB VP behavior
+		ss << "vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl;
 	ss << "vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
+	if (specularVertex)
+		ss << "specularColor = clamp(vec4(specularVertex.rgb * specularVertex.a, 0.0), 0.0, 1.0);" << std::endl;
 	ss << std::endl;
 
 	for (int i = Weight; i < NumOffsets; i++)

@@ -246,7 +246,15 @@ public:
 	// PP builtin
 	CPPBuiltin	PPBuiltin;
 
-	CMaterialDrvInfosGL3(IDriver *drv, ItMatDrvInfoPtrList it) : IMaterialDrvInfos(drv, it) {}
+	// Material UBO (per-material GL buffer for NlMaterial block).
+	// Dirty sources: CMaterial._Touched flags (color, lighting, alphaRef) in setupMaterial(),
+	// and PPBuiltin.MaterialUBOTouched (shader, flags, textureActive, texEnvMode) in PP setup.
+	// Lightmap multipass bypasses this cache entirely via _OverrideMaterialUBOId.
+	GLuint	MaterialUBOId;          // 0 = not created
+	bool	MaterialUBODirty;       // Needs re-upload
+
+	CMaterialDrvInfosGL3(IDriver *drv, ItMatDrvInfoPtrList it) : IMaterialDrvInfos(drv, it), MaterialUBOId(0), MaterialUBODirty(true) {}
+	~CMaterialDrvInfosGL3();
 };
 
 
@@ -612,6 +620,7 @@ public:
 
 	virtual void			setLightMapDynamicLight (bool enable, const CLight& light);
 
+	virtual uint			getMaxLightTableSize() const;
 	virtual void			enableLightTableMode(bool enable);
 	virtual void			setLightTableSize(uint count);
 	virtual void			setLightTableEntry(uint index, const CLight &light);
@@ -949,6 +958,24 @@ private:
 	// Light table
 	bool						_LightTableMode;
 	std::vector<CLight>			_LightTable;
+
+	// Light UBO (shared by light table mode and non-table fallback)
+	GLuint						_LightTableUBOId;
+	bool						_LightTableDirty; // Light table entries changed
+	bool						_UserLightUBODirty; // _UserLight[] changed (for non-table UBO mode)
+	sint						_LightTableUBOCapacity; // Current GPU buffer capacity (entries)
+	void						uploadLightTableUBO();
+
+	// Per-object light table selection (set by setLights, used by setupUniforms)
+	sint16						_LightTableObjIndices[MaxLight];
+	float						_LightTableObjFactors[MaxLight];
+	uint						_LightTableObjCount;
+
+	// Camera/global state UBO (viewMatrix, fog, clipPlanes, pzbCameraPos)
+	GLuint						_CameraUBOId;
+	bool						_CameraUBODirty;
+	sint						_CameraUBOCapacity; // Current GPU buffer capacity (bytes)
+	void						uploadCameraUBO();
 
 	// Clip planes (in eye space, pre-transformed for shader)
 	enum { MaxClipPlanes = 6 };
@@ -1353,10 +1380,45 @@ private:
 	CVPBuiltin m_VPBuiltinCurrent;
 	bool m_VPBuiltinTouched;
 
-	// Megashader support: m_MegaVP[fog][clip], m_MegaPP[fog][cube]
-	bool m_UseMegaShaders;
-	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2];
-	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2];
+	// Megashader support: m_MegaVP[fog][clip][table][cameraUBO][objectUBO][materialUBO]
+	//                     m_MegaPP[fog][cube][specular][cameraUBO][objectUBO][materialUBO]
+	bool m_UseMegaShaders;          // Select mega VP/PP variants (false = per-material compiled shaders)
+	bool m_UseMegaLightTableUBO;    // Select mega VP/PP variants with light table UBO
+	bool m_UseMegaCameraUBO;        // Select mega VP/PP variants with camera state UBO
+	bool m_UseMegaObjectUBO;        // Select mega VP/PP variants with per-object UBO (implies table+camera)
+	bool m_UseMegaMaterialUBO;      // Select mega VP/PP variants with per-material UBO
+	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2][2][2];
+	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2];
+
+	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
+	bool m_VPSpecularOutput;
+
+	// Whether the current VP uses UBO-based light table
+	bool m_VPUsesLightTableUBO;
+
+	// Whether the current VP/PP reads camera/fog/clip state from UBO
+	bool m_VPUsesCameraUBO;
+
+	// Per-Object UBO (runtime state of currently bound program)
+	GLuint  _ObjectUBOId;           // Global GL buffer
+	sint    _ObjectUBOCapacity;     // Current GPU buffer capacity (bytes)
+	bool    m_VPUsesObjectUBO;      // Current VP reads from NlModel UBO
+
+	// Material UBO (runtime state of currently bound program)
+	bool    m_VPUsesMaterialUBO;    // Current VP/PP reads from NlMaterial UBO
+	GLuint  _OverrideMaterialUBOId; // Global buffer for per-pass material overrides (lightmap)
+	void    uploadObjectUBO();
+	void    uploadMaterialUBO();
+
+	// Lightmap UBO override (set before setupBuiltinPrograms for lightmap passes)
+	struct CLightMapUBOOverride
+	{
+		bool  Active;
+		float SelfIllumination[4];
+		bool  ZeroLightFactors;       // Zero all light factors (pass > 0)
+		float MaterialDiffuse[4];
+		float MaterialSpecular[4];
+	} _LightMapUBOOverride;
 
 	// EMBM support
 	void	initEMBM();
@@ -1422,11 +1484,25 @@ public:
 	CProgramDrvInfosGL3(CDriverGL3 *drv, ItGPUPrgDrvInfoPtrList it);
 	~CProgramDrvInfosGL3();
 	uint getUniformIndex(const char *name) const;
-	GLuint getProgramId() const{ return programId; }
+	GLuint getProgramId() const { return programId; }
 	void setProgramId(GLuint id) { programId = id; }
+
+	// Cached UBO block indices (resolved once at compile time, GL_INVALID_INDEX if not present)
+	GLuint getLightTableBlockIndex() const { return lightTableBlockIndex; }
+	void setLightTableBlockIndex(GLuint idx) { lightTableBlockIndex = idx; }
+	GLuint getCameraBlockIndex() const { return cameraBlockIndex; }
+	void setCameraBlockIndex(GLuint idx) { cameraBlockIndex = idx; }
+	GLuint getObjectBlockIndex() const { return objectBlockIndex; }
+	void setObjectBlockIndex(GLuint idx) { objectBlockIndex = idx; }
+	GLuint getMaterialBlockIndex() const { return materialBlockIndex; }
+	void setMaterialBlockIndex(GLuint idx) { materialBlockIndex = idx; }
 
 private:
 	GLuint programId;
+	GLuint lightTableBlockIndex;
+	GLuint cameraBlockIndex;
+	GLuint objectBlockIndex;
+	GLuint materialBlockIndex;
 };
 
 /*

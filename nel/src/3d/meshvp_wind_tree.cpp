@@ -65,6 +65,9 @@ static const char* WindTreeVPCodeGLSL_Body =
 	"layout (location = 8) in vec4 vtexCoord0;\n"
 	"out gl_PerVertex { vec4 gl_Position; };\n"
 	"layout(location = 3) smooth out vec4 vertexColor;\n"
+	"#ifdef USE_SPECULAR\n"
+	"layout(location = 4) smooth out vec4 specularColor;\n"
+	"#endif\n"
 	"layout(location = 8) smooth out vec4 texCoord0;\n"
 	"layout(location = 0) smooth out vec4 ecPos;\n"
 	"uniform mat4 modelViewProjection;\n"
@@ -175,7 +178,8 @@ static const char* WindTreeVPCodeGLSL_Body =
 	"    specAccum += specPow * specular3.xyz;\n"
 	"  }\n"
 	"  #endif\n"
-	"  vertexColor = litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw + vec4(specAccum, 0.0);\n"
+	"  vertexColor = clamp(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw, 0.0, 1.0);\n"
+	"  specularColor = clamp(vec4(specAccum, 0.0), 0.0, 1.0);\n"
 	"#else\n"
 	"  litColor += max(dot(N, dirOrPos0), 0.0) * diffuse0;\n"
 	"  #if NUM_POINT_LIGHTS >= 1\n"
@@ -187,7 +191,7 @@ static const char* WindTreeVPCodeGLSL_Body =
 	"  #if NUM_POINT_LIGHTS >= 3\n"
 	"  litColor += max(dot(N, normalize(dirOrPos3 - pos.xyz)), 0.0) * diffuse3;\n"
 	"  #endif\n"
-	"  vertexColor = litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw;\n"
+	"  vertexColor = clamp(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw, 0.0, 1.0);\n"
 	"#endif\n"
 	"  gl_Position = modelViewProjection * pos;\n"
 	"  texCoord0 = vtexCoord0;\n"
@@ -279,6 +283,7 @@ CVertexProgramWindTree::CVertexProgramWindTree(uint numPls, bool specular, bool 
 		if (normalize) defines += "#define USE_NORMALIZE\n";
 
 		CSource *source = new CSource();
+		source->Features.OutputsSpecularColor = specular;
 		source->DisplayName = NLMISC::toString("glsl330v/MeshVPWindTree/%i/%s/%s", numPls, specular ? "spec" : "nospec", normalize ? "normalize" : "nonormalize");
 		source->Profile = CVertexProgram::glsl330v;
 		source->setSource(std::string(WindTreeVPCodeGLSL_Header) + defines + WindTreeVPCodeGLSL_Body);

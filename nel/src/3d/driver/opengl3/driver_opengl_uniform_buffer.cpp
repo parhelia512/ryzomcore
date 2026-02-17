@@ -25,36 +25,110 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
-const char *GLSLHeaderUniformBuffer =
-	"#define NL_BUILTIN_CAMERA_BINDING " NL_MACRO_TO_STR(NL_BUILTIN_CAMERA_BIND) "\n"
-	"#define NL_BUILTIN_MODEL_BINDING " NL_MACRO_TO_STR(NL_BUILTIN_MODEL_BIND) "\n"
-	"#define NL_BUILTIN_MATERIAL_BINDING " NL_MACRO_TO_STR(NL_BUILTIN_MATERIAL_BIND) "\n"
-	"#define NL_USER_ENV_BINDING " NL_MACRO_TO_STR(NL_USER_ENV_BIND) "\n"
-	"#define NL_USER_VERTEX_PROGRAM_BINDING " NL_MACRO_TO_STR(NL_USER_VERTEX_PROGRAM_BIND) "\n"
-	"#define NL_USER_GEOMETRY_PROGRAM_BINDING " NL_MACRO_TO_STR(NL_USER_GEOMETRY_PROGRAM_BIND) "\n"
-	"#define NL_USER_PIXEL_PROGRAM_BINDING " NL_MACRO_TO_STR(NL_USER_PIXEL_PROGRAM_BIND) "\n"
-	"#define NL_USER_MATERIAL_BINDING " NL_MACRO_TO_STR(NL_USER_MATERIAL_BIND) "\n";
+const char *GLSLLightTableHeader =
+	// Light table UBO: shared across all objects, uploaded once when lights change.
+	// User VPs can reference nlLights[] directly when UsesLightTableUBO is set.
+	// Binding point is set from the CPU via glUniformBlockBinding in setupInitialUniforms.
+	"struct NlLightInfo {\n"
+	"    vec3  dirOrPos;\n"
+	"    int   mode;\n"        // 0=directional, 1=point, 2=spot
+	"    vec4  diffuse;\n"
+	"    vec4  specular;\n"
+	"    float constAttn;\n"
+	"    float linAttn;\n"
+	"    float quadAttn;\n"
+	"    float spotExp;\n"
+	"    vec3  spotDir;\n"
+	"    float spotCutoff;\n"  // cos(cutoff angle)
+	"    vec4  ambient;\n"
+	"};\n"
+	"layout(std140) uniform NlLightTable {\n"
+	"    NlLightInfo nlLights[128];\n"
+	"};\n";
 
+const char *GLSLCameraHeader =
+	// Camera/global state UBO: shared across all objects, uploaded once per frame.
+	// Contains view matrix, fog params, PZB camera pos, clip planes, and control masks.
+	// Binding point is set from the CPU via glUniformBlockBinding in setupInitialUniforms.
+	"layout(std140) uniform NlCamera {\n"
+	"    mat4  viewMatrix;\n"
+	"    vec4  fogColor;\n"
+	"    vec3  pzbCameraPos;\n"
+	"    float fogDensity;\n"
+	"    vec2  fogParams;\n"
+	"    int   nlFogMode;\n"
+	"    int   nlClipPlaneMask;\n"
+	"    vec4  clipPlane0;\n"
+	"    vec4  clipPlane1;\n"
+	"    vec4  clipPlane2;\n"
+	"    vec4  clipPlane3;\n"
+	"    vec4  clipPlane4;\n"
+	"    vec4  clipPlane5;\n"
+	"};\n";
+
+const char *GLSLObjectHeader =
+	// Per-object UBO: matrices, light indices/factors, and per-draw-call state.
+	// Uploaded every draw call. Binding point set via glUniformBlockBinding in setupInitialUniforms.
+	"layout(std140) uniform NlModel {\n"
+	"    mat4  modelViewProjection;\n"
+	"    mat4  modelView;\n"
+	"    mat3  normalMatrix;\n"
+	"    ivec4 nlLightIndices01;\n"
+	"    ivec4 nlLightIndices45;\n"
+	"    vec4  nlLightFactors01;\n"
+	"    vec4  nlLightFactors45;\n"
+	"    vec4  selfIllumination;\n"
+	"    ivec4 nlTexGenMode;\n"
+	"    int   nlLighting;\n"
+	"    int   nlVertexColorLighted;\n"
+	"    int   nlVertexFormat;\n"
+	"    int   _modelPad0;\n"
+	"};\n";
+
+const char *GLSLMaterialHeader =
+	// Per-material UBO: material colors, alpha test, shader type, texenv modes.
+	// Uploaded when material changes. Binding point set via glUniformBlockBinding in setupInitialUniforms.
+	"layout(std140) uniform NlMaterial {\n"
+	"    vec4  materialColor;\n"
+	"    vec4  materialDiffuse;\n"
+	"    vec4  materialSpecular;\n"
+	"    float materialShininess;\n"
+	"    float alphaRef;\n"
+	"    int   nlShader;\n"
+	"    int   nlTextureActive;\n"
+	"    int   nlAlphaTest;\n"
+	"    uint  nlTexEnvMode0;\n"
+	"    uint  nlTexEnvMode1;\n"
+	"    uint  nlTexEnvMode2;\n"
+	"    uint  nlTexEnvMode3;\n"
+	"    int   _matPad0;\n"
+	"    int   _matPad1;\n"
+	"    int   _matPad2;\n"
+	"};\n";
+
+// Draft UBO infrastructure arrays — indices match the _BINDING defines
 static const char *s_UniformBufferBindDefine[] = {
-	"NL_BUILTIN_CAMERA_BINDING",
-	"NL_BUILTIN_MODEL_BINDING",
-	"NL_BUILTIN_MATERIAL_BINDING",
-	"NL_USER_ENV_BINDING",
-	"NL_USER_VERTEX_PROGRAM_BINDING",
-	"NL_USER_GEOMETRY_PROGRAM_BINDING",
-	"NL_USER_PIXEL_PROGRAM_BINDING",
-	"NL_USER_MATERIAL_BINDING",
+	"0", // NL_BUILTIN_CAMERA_BINDING
+	"1", // NL_BUILTIN_LIGHT_TABLE_BINDING
+	"2", // NL_BUILTIN_MODEL_BINDING (draft)
+	"3", // NL_BUILTIN_MATERIAL_BINDING (draft)
+	"4", // NL_USER_ENV_BINDING (draft)
+	"5", // NL_USER_VERTEX_PROGRAM_BINDING (draft)
+	"6", // NL_USER_GEOMETRY_PROGRAM_BINDING (draft)
+	"7", // NL_USER_PIXEL_PROGRAM_BINDING (draft)
+	"8", // NL_USER_MATERIAL_BINDING (draft)
 };
 
 static const char *s_UniformBufferName[] = {
 	"BuiltinCamera",
-	"BuiltinModel",
-	"BuiltinMaterial",
-	"UserEnv",
-	"UserLocal", // Yes, there can only be one per stage here, as these are bound to the stage
-	"UserLocal",
-	"UserLocal",
-	"UserMaterial",
+	"NlLightTable",
+	"BuiltinModel",       // draft
+	"BuiltinMaterial",     // draft
+	"UserEnv",             // draft
+	"UserLocal",           // draft
+	"UserLocal",           // draft
+	"UserLocal",           // draft
+	"UserMaterial",        // draft
 };
 
 static const char *s_TypeKeyword[] = {
@@ -87,12 +161,33 @@ static const char *s_TypeKeyword[] = {
 
 void generateUniformBufferGLSL(std::stringstream &ss, const CUniformBufferFormat &ubf, sint binding)
 {
+	// Emit struct definitions
+	for (sint i = 0; i < ubf.structCount(); ++i)
+	{
+		ss << "struct " << ubf.getStructName(i) << "\n";
+		ss << "{\n";
+		const CUniformBufferFormat &sf = ubf.getStructFormat(i);
+		for (sint j = 0; j < sf.count(); ++j)
+		{
+			const CUniformBufferFormat::CEntry &field = sf.get(j);
+			ss << "\t" << s_TypeKeyword[field.Type] << " " << NLMISC::CStringMapper::unmap(field.Name);
+			if (field.Count != 1)
+				ss << "[" << field.Count << "]";
+			ss << ";\n";
+		}
+		ss << "};\n";
+	}
+
 	ss << "layout(std140, binding = " << s_UniformBufferBindDefine[binding] << ") uniform " << s_UniformBufferName[binding] << "\n";
 	ss << "{\n";
 	for (sint i = 0; i < ubf.count(); ++i)
 	{
 		const CUniformBufferFormat::CEntry &entry = ubf.get(i);
-		ss << "\t" << s_TypeKeyword[entry.Type] << " " << NLMISC::CStringMapper::unmap(entry.Name);
+		if (entry.StructIndex >= 0)
+			ss << "\t" << ubf.getStructName(entry.StructIndex);
+		else
+			ss << "\t" << s_TypeKeyword[entry.Type];
+		ss << " " << NLMISC::CStringMapper::unmap(entry.Name);
 		if (entry.Count != 1)
 			ss << "[" << entry.Count << "]";
 		ss << ";\n";

@@ -28,20 +28,26 @@ namespace NLDRIVERGL3 {
 
 // NOTE: It is completely safe to reorder these indices.
 // When changing, update:
-//     - GLSLHeaderUniformBuffer
+//     - GLSLBuiltinHeader
 //     - s_UniformBufferBindDefine
-//     - s_UniformBufferBindName
+//     - s_UniformBufferName
 // Always use the defines.
 #define NL_BUILTIN_CAMERA_BINDING 0 // Builtin uniform buffer bound by driver, set by camera transformation
-#define NL_BUILTIN_MODEL_BINDING 1 // Builtin uniform buffer bound by driver, set by model transformation
-#define NL_BUILTIN_MATERIAL_BINDING 2 // Builtin uniform buffer bound by material
-#define NL_USER_ENV_BINDING 3 // User-specified uniform buffer bound by user
-#define NL_USER_VERTEX_PROGRAM_BINDING 4 // User-specified uniform buffer bound by vertex program
-#define NL_USER_GEOMETRY_PROGRAM_BINDING 5 // User-specified uniform buffer bound by geometry program
-#define NL_USER_PIXEL_PROGRAM_BINDING 6 // User-specified uniform buffer bound by pixel program
-#define NL_USER_MATERIAL_BINDING 7 // User-specified uniform buffer bound by material
+#define NL_BUILTIN_LIGHT_TABLE_BINDING 1 // Builtin uniform buffer for light table (shared across objects)
+#define NL_BUILTIN_MODEL_BINDING 2 // (draft) Builtin uniform buffer bound by driver, set by model transformation
+#define NL_BUILTIN_MATERIAL_BINDING 3 // (draft) Builtin uniform buffer bound by material
+#define NL_USER_ENV_BINDING 4 // (draft) User-specified uniform buffer bound by user
+#define NL_USER_VERTEX_PROGRAM_BINDING 5 // (draft) User-specified uniform buffer bound by vertex program
+#define NL_USER_GEOMETRY_PROGRAM_BINDING 6 // (draft) User-specified uniform buffer bound by geometry program
+#define NL_USER_PIXEL_PROGRAM_BINDING 7 // (draft) User-specified uniform buffer bound by pixel program
+#define NL_USER_MATERIAL_BINDING 8 // (draft) User-specified uniform buffer bound by material
 
-extern const char *GLSLHeaderUniformBuffer;
+// Driver-side GLSL headers prepended to shaders (after #version and preprocessor lines).
+// Each header is inserted independently based on CProgramFeatures flags.
+extern const char *GLSLLightTableHeader; // NlLightTable UBO block (UsesLightTableUBO)
+extern const char *GLSLCameraHeader;     // NlCamera UBO block (UsesCameraUBO)
+extern const char *GLSLObjectHeader;     // NlModel UBO block (UsesObjectUBO)
+extern const char *GLSLMaterialHeader;   // NlMaterial UBO block (UsesMaterialUBO)
 
 void generateUniformBufferGLSL(std::stringstream &ss, const CUniformBufferFormat &ubf, sint binding);
 

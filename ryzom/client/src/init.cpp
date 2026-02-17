@@ -23,6 +23,9 @@
 
 #include "stdpch.h"
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 //////////////
 // INCLUDES //
@@ -1045,14 +1048,20 @@ void prelogInit()
 
 		switch(ClientCfg.Driver3D)
 		{
-#ifdef NL_OS_WINDOWS
 			case CClientConfig::DrvAuto:
+#if INTPTR_MAX == INT64_MAX && defined(NL_OPENGL3_AVAILABLE)
+				driver = UDriver::OpenGl3;
+#elif defined(NL_OS_WINDOWS) && defined(NL_DIRECT3D_AVAILABLE)
+				driver = UDriver::Direct3d;
+#else
+				driver = UDriver::OpenGl;
+#endif
+			break;
+#ifdef NL_OS_WINDOWS
 			case CClientConfig::Direct3D:
 				driver = UDriver::Direct3d;
 			break;
-#else
-			case CClientConfig::DrvAuto:
-#endif // NL_OS_WINDOWS
+#endif
 			case CClientConfig::OpenGL:
 				driver = UDriver::OpenGl;
 			break;
