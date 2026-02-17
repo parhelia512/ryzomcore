@@ -701,7 +701,26 @@ bool CDriverGL3::setupMegaPixelProgram()
 		matDrv->PPBuiltin.MaterialUBOTouched = false;
 	}
 
-	int fogOrPpl = (m_VPBuiltinCurrent.Fog || _NumPerPixelLights > 0) ? 1 : 0;
+	// Activate PPL only if the paired VP supports it
+	bool pplActive = false;
+	if (_NumPerPixelLights > 0)
+	{
+		if (m_UserVertexProgram)
+		{
+			// User VP with object UBO: supports PPL dynamically
+			if (m_UserVertexProgram->features().UsesObjectUBO)
+				pplActive = true;
+			// User VP without UBO: only if it statically outputs world-space position
+			else if (m_UserVertexProgram->features().OutputsWorldSpacePosition)
+				pplActive = true;
+		}
+		else
+		{
+			// Mega VP always supports PPL
+			pplActive = true;
+		}
+	}
+	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive) ? 1 : 0;
 	// Cube variant: any cubemap in the material's sampler modes
 	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
 	int specular = m_VPSpecularOutput ? 1 : 0;

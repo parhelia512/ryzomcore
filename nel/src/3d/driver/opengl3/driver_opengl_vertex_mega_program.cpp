@@ -541,6 +541,7 @@ bool CDriverGL3::setupMegaVertexProgram()
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
 		m_VPWorldSpacePositionOutput = m_UserVertexProgram->features().OutputsWorldSpacePosition;
+		m_VPNormalOutput = false;
 		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO;
 		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO;
 		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO;
@@ -550,6 +551,13 @@ bool CDriverGL3::setupMegaVertexProgram()
 		{
 			m_ProgramUsesLightTableUBO[VertexProgram] = true;
 			m_ProgramUsesCameraUBO[VertexProgram] = true;
+		}
+		// If PPL requested and user VP has object UBO, force world-space outputs
+		// (UBO programs support PPL dynamically via nlWorldSpacePosition/Normal uniforms)
+		if (_NumPerPixelLights > 0 && m_ProgramUsesObjectUBO[VertexProgram])
+		{
+			m_VPWorldSpacePositionOutput = true;
+			m_VPNormalOutput = true;
 		}
 		return true;
 	}
@@ -566,8 +574,27 @@ bool CDriverGL3::setupMegaVertexProgram()
 	if (m_UserPixelProgram)
 		m_VPWorldSpacePositionOutput = m_UserPixelProgram->features().InputsWorldSpacePosition;
 
-	// Force world-space when PPL active (PP needs world-space normal and position)
+	// Activate PPL only if the paired PP supports it
+	bool pplActive = false;
 	if (_NumPerPixelLights > 0)
+	{
+		if (m_UserPixelProgram)
+		{
+			// User PP with object UBO: supports PPL dynamically
+			if (m_UserPixelProgram->features().UsesObjectUBO)
+				pplActive = true;
+			// User PP without UBO: only if it statically requests world-space inputs
+			else if (m_UserPixelProgram->features().InputsWorldSpacePosition
+			      && m_UserPixelProgram->features().InputsWorldSpaceNormal)
+				pplActive = true;
+		}
+		else
+		{
+			// Mega PP always supports PPL
+			pplActive = true;
+		}
+	}
+	if (pplActive)
 	{
 		m_VPWorldSpacePositionOutput = true;
 		m_VPNormalOutput = true;
@@ -585,7 +612,7 @@ bool CDriverGL3::setupMegaVertexProgram()
 		m_ProgramUsesCameraUBO[VertexProgram] = true;
 	}
 
-	int fogOrPpl = (m_VPBuiltinCurrent.Fog || _NumPerPixelLights > 0) ? 1 : 0;
+	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive) ? 1 : 0;
 	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
 	int tableUBO = m_ProgramUsesLightTableUBO[VertexProgram] ? 1 : 0;
 	int cameraUBO = m_ProgramUsesCameraUBO[VertexProgram] ? 1 : 0;
