@@ -72,6 +72,9 @@ bool CDriverD3D::compilePixelProgram(CPixelProgram *program)
 	// Program setuped ?
 	if (program->m_DrvInfo==NULL)
 	{
+		if (program->m_CompileFailed)
+			return false;
+
 		// Find a supported pixel program profile
 		IProgram::CSource *source = NULL;
 		for (uint i = 0; i < program->getSourceNb(); ++i)
@@ -85,6 +88,7 @@ bool CDriverD3D::compilePixelProgram(CPixelProgram *program)
 		if (!source)
 		{
 			nlwarning("No supported source profile for pixel program");
+			program->m_CompileFailed = true;
 			return false;
 		}
 
@@ -104,6 +108,7 @@ bool CDriverD3D::compilePixelProgram(CPixelProgram *program)
 			{
 				delete drvInfo;
 				program->m_DrvInfo = NULL;
+				program->m_CompileFailed = true;
 				return false;
 			}
 		}
@@ -113,6 +118,7 @@ bool CDriverD3D::compilePixelProgram(CPixelProgram *program)
 			nlwarning ((const char*)pErrorMsgs->GetBufferPointer());
 			delete drvInfo;
 			program->m_DrvInfo = NULL;
+			program->m_CompileFailed = true;
 			return false;
 		}
 

@@ -201,17 +201,23 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 	if (program->m_DrvInfo != NULL)
 		return true;
 
+	if (program->m_CompileFailed)
+		return false;
+
 	IProgram::CSource *src = NULL;
 	for (int i = 0; i < program->getSourceNb(); i++)
 	{
 		src = program->getSource(i);
 		if (src->Profile == IProgram::glsl330v)
 			break;
-		
+
 		src = NULL;
 	}
 	if (src == NULL)
+	{
+		program->m_CompileFailed = true;
 		return false;
+	}
 
 	// Object UBO implies light table UBO and camera UBO — write back to features
 	if (src->Features.UsesObjectUBO)
@@ -240,7 +246,10 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 	unsigned int id = nglCreateShaderProgramv(GL_VERTEX_SHADER, 1, &s);
 
 	if (id == 0)
+	{
+		program->m_CompileFailed = true;
 		return false;
+	}
 
 	GLint ok;
 	nglGetProgramiv(id, GL_LINK_STATUS, &ok);
@@ -248,13 +257,17 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 	{
 		char errorLog[ 1024 ];
 		nglGetProgramInfoLog(id, 1024, NULL, errorLog);
-		nlwarning("GL3: %s", errorLog);
+		nlwarning("GL3: VP compile failed: %s", errorLog);
 		std::vector<std::string> lines;
 		NLMISC::explode(std::string(s), std::string("\n"), lines);
 		for (std::vector<std::string>::size_type i = 0; i < lines.size(); ++i)
 		{
 			nldebug("GL3: %i: %s", i, lines[i].c_str());
 		}
+		program->m_CompileFailed = true;
+#if !FINAL_VERSION
+		nlerror("GL3: Vertex program compilation failed");
+#endif
 		return false;
 	}
 
@@ -324,6 +337,9 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 	if (program->m_DrvInfo != NULL)
 		return true;
 
+	if (program->m_CompileFailed)
+		return false;
+
 	IProgram::CSource *src = NULL;
 
 	for (int i = 0; i < program->getSourceNb(); i++)
@@ -336,7 +352,10 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 	}
 
 	if (src == NULL)
+	{
+		program->m_CompileFailed = true;
 		return false;
+	}
 
 	// Object UBO implies light table UBO and camera UBO — write back to features
 	if (src->Features.UsesObjectUBO)
@@ -364,7 +383,10 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 	}
 	unsigned int id = nglCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &s);
 	if (id == 0)
+	{
+		program->m_CompileFailed = true;
 		return false;
+	}
 
 	GLint ok;
 	nglGetProgramiv(id, GL_LINK_STATUS, &ok);
@@ -372,13 +394,17 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 	{
 		char errorLog[ 1024 ];
 		nglGetProgramInfoLog(id, 1024, NULL, errorLog);
-		nlwarning("GL3: %s", errorLog);
+		nlwarning("GL3: PP compile failed: %s", errorLog);
 		std::vector<std::string> lines;
 		NLMISC::explode(std::string(s), std::string("\n"), lines);
 		for (std::vector<std::string>::size_type i = 0; i < lines.size(); ++i)
 		{
 			nldebug("GL3: %i: %s", i, lines[i].c_str());
 		}
+		program->m_CompileFailed = true;
+#if !FINAL_VERSION
+		nlerror("GL3: Pixel program compilation failed");
+#endif
 		return false;
 	}
 
@@ -1234,7 +1260,7 @@ void CDriverGL3::setupInitialUniforms(IProgram *program)
 			nglUniformBlockBinding(id, materialBlock, NL_BUILTIN_MATERIAL_BINDING);
 
 		// Resolve and bind user UBO blocks (VP/PP) — binding points set at link time
-		CSource *src = program->source();
+		IProgram::CSource *src = program->source();
 		if (src)
 		{
 			static const sint s_UBBindingToGL[] = {

@@ -570,6 +570,9 @@ public:
 	/// The driver information. For the driver implementation only.
 	NLMISC::CRefPtr<IProgramDrvInfos> m_DrvInfo;
 
+	/// Set by the driver when compilation fails. Prevents repeated recompilation attempts.
+	bool m_CompileFailed;
+
 }; /* class IProgram */
 
 } /* namespace NL3D */
