@@ -1247,6 +1247,99 @@ void CDriverGL3::setupUniforms(TProgram program)
 				nglProgramUniform3f(progId, pzbIdx, _PZBCameraPos.x, _PZBCameraPos.y, _PZBCameraPos.z);
 		}
 	}
+	else if (program == PixelProgram && _NumPerPixelLights > 0)
+	{
+		// PP non-table PPL: raw per-light values via pp-prefixed uniforms
+		// (computeLightPP handles direction negate and PZB-relative position internally)
+		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			if (!_LightEnable[i])
+				continue;
+
+			// Raw direction or position
+			uint ld = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::PpLight0DirOrPos + i));
+			if (ld != ~0u)
+			{
+				CVector v = (_LightMode[i] == CLight::DirectionalLight)
+					? _UserLight[i].getDirection()
+					: _UserLight[i].getPosition();
+				nglProgramUniform3f(progId, ld, v.x, v.y, v.z);
+			}
+
+			// Raw diffuse
+			uint ldc = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::PpLight0ColDiff + i));
+			if (ldc != ~0u)
+			{
+				NLMISC::CRGBAF diffuse = NLMISC::CRGBAF(_UserLight[i].getDiffuse());
+				nglProgramUniform4f(progId, ldc, diffuse.R, diffuse.G, diffuse.B, 0.0f);
+			}
+
+			// Raw specular
+			uint lsc = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::PpLight0ColSpec + i));
+			if (lsc != ~0u)
+			{
+				NLMISC::CRGBAF specular = NLMISC::CRGBAF(_UserLight[i].getSpecular());
+				nglProgramUniform4f(progId, lsc, specular.R, specular.G, specular.B, 0.0f);
+			}
+
+			// Attenuation (same raw values)
+			uint lca = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::PpLight0ConstAttn + i));
+			if (lca != ~0u)
+				nglProgramUniform1f(progId, lca, _UserLight[i].getConstantAttenuation());
+			uint lla = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::PpLight0LinAttn + i));
+			if (lla != ~0u)
+				nglProgramUniform1f(progId, lla, _UserLight[i].getLinearAttenuation());
+			uint lqa = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::PpLight0QuadAttn + i));
+			if (lqa != ~0u)
+				nglProgramUniform1f(progId, lqa, _UserLight[i].getQuadraticAttenuation());
+
+			// Spot params
+			if (_LightMode[i] == CLight::SpotLight)
+			{
+				uint lsd = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::PpLight0SpotDir + i));
+				if (lsd != ~0u)
+				{
+					CVector d = _UserLight[i].getDirection();
+					nglProgramUniform3f(progId, lsd, d.x, d.y, d.z);
+				}
+				uint lsc2 = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::PpLight0SpotCutoff + i));
+				if (lsc2 != ~0u)
+					nglProgramUniform1f(progId, lsc2, cosf(_UserLight[i].getCutoff()));
+				uint lse = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::PpLight0SpotExp + i));
+				if (lse != ~0u)
+					nglProgramUniform1f(progId, lse, _UserLight[i].getExponent());
+			}
+		}
+
+		// Material properties (when !materialUBO)
+		if (!m_ProgramUsesMaterialUBO[program])
+		{
+			NLMISC::CRGBAF matDiffuse = mat.isLightedVertexColor()
+				? NLMISC::CRGBAF(1.0f, 1.0f, 1.0f, 1.0f)
+				: NLMISC::CRGBAF(mat.getDiffuse());
+			NLMISC::CRGBAF matSpecular = NLMISC::CRGBAF(mat.getSpecular());
+
+			uint mdIdx = p->getUniformIndex(CProgramIndex::NlMaterialDiffuse);
+			if (mdIdx != ~0u)
+				nglProgramUniform4f(progId, mdIdx, matDiffuse.R, matDiffuse.G, matDiffuse.B, matDiffuse.A);
+
+			uint msIdx = p->getUniformIndex(CProgramIndex::NlMaterialSpecular);
+			if (msIdx != ~0u)
+				nglProgramUniform4f(progId, msIdx, matSpecular.R, matSpecular.G, matSpecular.B, matSpecular.A);
+
+			uint mshIdx = p->getUniformIndex(CProgramIndex::NlMaterialShininess);
+			if (mshIdx != ~0u)
+				nglProgramUniform1f(progId, mshIdx, mat.getShininess());
+		}
+
+		// pzbCameraPos (when !cameraUBO)
+		if (!m_ProgramUsesCameraUBO[program])
+		{
+			uint pzbIdx = p->getUniformIndex(CProgramIndex::PzbCameraPos);
+			if (pzbIdx != ~0u)
+				nglProgramUniform3f(progId, pzbIdx, _PZBCameraPos.x, _PZBCameraPos.y, _PZBCameraPos.z);
+		}
+	}
 	else
 	{
 		// Legacy per-light uniform path

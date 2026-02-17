@@ -453,6 +453,26 @@ struct CProgramIndex
 		NlMaterialShininess,
 		PzbCameraPos,
 
+		// Per-pixel lighting uniforms for pixel programs (raw values, not pre-multiplied)
+		PpLight0DirOrPos, PpLight1DirOrPos, PpLight2DirOrPos, PpLight3DirOrPos,
+		PpLight4DirOrPos, PpLight5DirOrPos, PpLight6DirOrPos, PpLight7DirOrPos,
+		PpLight0ColDiff, PpLight1ColDiff, PpLight2ColDiff, PpLight3ColDiff,
+		PpLight4ColDiff, PpLight5ColDiff, PpLight6ColDiff, PpLight7ColDiff,
+		PpLight0ColSpec, PpLight1ColSpec, PpLight2ColSpec, PpLight3ColSpec,
+		PpLight4ColSpec, PpLight5ColSpec, PpLight6ColSpec, PpLight7ColSpec,
+		PpLight0ConstAttn, PpLight1ConstAttn, PpLight2ConstAttn, PpLight3ConstAttn,
+		PpLight4ConstAttn, PpLight5ConstAttn, PpLight6ConstAttn, PpLight7ConstAttn,
+		PpLight0LinAttn, PpLight1LinAttn, PpLight2LinAttn, PpLight3LinAttn,
+		PpLight4LinAttn, PpLight5LinAttn, PpLight6LinAttn, PpLight7LinAttn,
+		PpLight0QuadAttn, PpLight1QuadAttn, PpLight2QuadAttn, PpLight3QuadAttn,
+		PpLight4QuadAttn, PpLight5QuadAttn, PpLight6QuadAttn, PpLight7QuadAttn,
+		PpLight0SpotDir, PpLight1SpotDir, PpLight2SpotDir, PpLight3SpotDir,
+		PpLight4SpotDir, PpLight5SpotDir, PpLight6SpotDir, PpLight7SpotDir,
+		PpLight0SpotCutoff, PpLight1SpotCutoff, PpLight2SpotCutoff, PpLight3SpotCutoff,
+		PpLight4SpotCutoff, PpLight5SpotCutoff, PpLight6SpotCutoff, PpLight7SpotCutoff,
+		PpLight0SpotExp, PpLight1SpotExp, PpLight2SpotExp, PpLight3SpotExp,
+		PpLight4SpotExp, PpLight5SpotExp, PpLight6SpotExp, PpLight7SpotExp,
+
 		NUM_UNIFORMS
 	};
 	static const char *Names[NUM_UNIFORMS];

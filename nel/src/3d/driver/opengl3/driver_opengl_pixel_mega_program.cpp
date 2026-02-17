@@ -71,7 +71,7 @@ static const char *s_LightFacAccess[8] = {
 	"nlLightFactors45.x", "nlLightFactors45.y", "nlLightFactors45.z", "nlLightFactors45.w"
 };
 
-void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, bool ppl, bool cameraUBO, bool objectUBO, bool materialUBO)
+void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int ppl, bool cameraUBO, bool objectUBO, bool materialUBO)
 {
 	// Object UBO implies camera UBO
 	if (objectUBO) { cameraUBO = true; }
@@ -79,7 +79,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 	std::stringstream ss;
 	ss << "// Megashader Pixel Program";
 	ss << " (fog=" << (int)fog << ", cube=" << (int)cube << ", specular=" << (int)specular
-	   << ", ppl=" << (int)ppl
+	   << ", ppl=" << ppl
 	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
 	   << ", materialUBO=" << (int)materialUBO << ")" << std::endl;
 	ss << std::endl;
@@ -164,8 +164,9 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 		ss << "uniform int nlWorldSpacePosition;" << std::endl;
 
 	// PPL uniforms
-	if (ppl)
+	if (ppl == 1)
 	{
+		// Table PPL path: light data from nlLights[idx] UBO, per-object indices/factors
 		if (!objectUBO)
 		{
 			ss << "uniform int nlNumPerPixelLights;" << std::endl;
@@ -174,6 +175,34 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 				ss << "uniform int nlLightIndex" << i << ";" << std::endl;
 				ss << "uniform float nlLightFactor" << i << ";" << std::endl;
 			}
+		}
+		if (!materialUBO)
+		{
+			ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
+			ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
+			ss << "uniform float nlMaterialShininess;" << std::endl;
+		}
+		if (!cameraUBO)
+			ss << "uniform vec3 pzbCameraPos;" << std::endl;
+	}
+	else if (ppl == 2)
+	{
+		// Non-table PPL path: raw per-light values via pp-prefixed uniforms
+		if (!objectUBO)
+			ss << "uniform int nlNumPerPixelLights;" << std::endl;
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			if (!objectUBO)
+				ss << "uniform int nlLightMode" << i << ";" << std::endl;
+			ss << "uniform vec3 ppLight" << i << "DirOrPos;" << std::endl;
+			ss << "uniform vec4 ppLight" << i << "ColDiff;" << std::endl;
+			ss << "uniform vec4 ppLight" << i << "ColSpec;" << std::endl;
+			ss << "uniform float ppLight" << i << "ConstAttn;" << std::endl;
+			ss << "uniform float ppLight" << i << "LinAttn;" << std::endl;
+			ss << "uniform float ppLight" << i << "QuadAttn;" << std::endl;
+			ss << "uniform vec3 ppLight" << i << "SpotDir;" << std::endl;
+			ss << "uniform float ppLight" << i << "SpotCutoff;" << std::endl;
+			ss << "uniform float ppLight" << i << "SpotExp;" << std::endl;
 		}
 		if (!materialUBO)
 		{
@@ -341,33 +370,53 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 		ss << "    vec3 eyeDir = normalize(-wsPos);" << std::endl;
 		ss << "    vec4 pplDiff = vec4(0.0);" << std::endl;
 
-		// Unrolled PPL light loop
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		if (ppl == 1)
 		{
-			const char *idxAccess = objectUBO ? s_LightIdxAccess[i] : NULL;
-			const char *facAccess = objectUBO ? s_LightFacAccess[i] : NULL;
+			// Table PPL: light data from nlLights[idx] UBO
+			for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			{
+				const char *idxAccess = objectUBO ? s_LightIdxAccess[i] : NULL;
+				const char *facAccess = objectUBO ? s_LightFacAccess[i] : NULL;
 
-			ss << "    if (" << i << " < nlNumPerPixelLights) {" << std::endl;
-			if (objectUBO)
-				ss << "      int idx = " << idxAccess << ";" << std::endl;
-			else
-				ss << "      int idx = nlLightIndex" << i << ";" << std::endl;
-			ss << "      if (idx >= 0) {" << std::endl;
-			ss << "        NlLightInfo li = nlLights[idx];" << std::endl;
-			if (objectUBO)
-				ss << "        float factor = " << facAccess << ";" << std::endl;
-			else
-				ss << "        float factor = nlLightFactor" << i << ";" << std::endl;
-			ss << "        computeLightPP(li.mode, li.dirOrPos," << std::endl;
-			ss << "          li.diffuse * factor * " << matDiffStr << "," << std::endl;
-			ss << "          li.specular * factor * " << matSpecStr << "," << std::endl;
-			ss << "          " << matShinStr << "," << std::endl;
-			ss << "          li.constAttn, li.linAttn, li.quadAttn," << std::endl;
-			ss << "          li.spotDir, li.spotCutoff, li.spotExp," << std::endl;
-			ss << "          wsNormal, wsPos, eyeDir, pzbCameraPos," << std::endl;
-			ss << "          pplDiff, pplSpecAccum);" << std::endl;
-			ss << "      }" << std::endl;
-			ss << "    }" << std::endl;
+				ss << "    if (" << i << " < nlNumPerPixelLights) {" << std::endl;
+				if (objectUBO)
+					ss << "      int idx = " << idxAccess << ";" << std::endl;
+				else
+					ss << "      int idx = nlLightIndex" << i << ";" << std::endl;
+				ss << "      if (idx >= 0) {" << std::endl;
+				ss << "        NlLightInfo li = nlLights[idx];" << std::endl;
+				if (objectUBO)
+					ss << "        float factor = " << facAccess << ";" << std::endl;
+				else
+					ss << "        float factor = nlLightFactor" << i << ";" << std::endl;
+				ss << "        computeLightPP(li.mode, li.dirOrPos," << std::endl;
+				ss << "          li.diffuse * factor * " << matDiffStr << "," << std::endl;
+				ss << "          li.specular * factor * " << matSpecStr << "," << std::endl;
+				ss << "          " << matShinStr << "," << std::endl;
+				ss << "          li.constAttn, li.linAttn, li.quadAttn," << std::endl;
+				ss << "          li.spotDir, li.spotCutoff, li.spotExp," << std::endl;
+				ss << "          wsNormal, wsPos, eyeDir, pzbCameraPos," << std::endl;
+				ss << "          pplDiff, pplSpecAccum);" << std::endl;
+				ss << "      }" << std::endl;
+				ss << "    }" << std::endl;
+			}
+		}
+		else if (ppl == 2)
+		{
+			// Non-table PPL: raw per-light values via pp-prefixed uniforms
+			// No index/factor indirection — nlLightMode{i} gates disabled lights (mode < 0)
+			for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			{
+				ss << "    if (" << i << " < nlNumPerPixelLights)" << std::endl;
+				ss << "      computeLightPP(nlLightMode" << i << ", ppLight" << i << "DirOrPos," << std::endl;
+				ss << "        ppLight" << i << "ColDiff * " << matDiffStr << "," << std::endl;
+				ss << "        ppLight" << i << "ColSpec * " << matSpecStr << "," << std::endl;
+				ss << "        " << matShinStr << "," << std::endl;
+				ss << "        ppLight" << i << "ConstAttn, ppLight" << i << "LinAttn, ppLight" << i << "QuadAttn," << std::endl;
+				ss << "        ppLight" << i << "SpotDir, ppLight" << i << "SpotCutoff, ppLight" << i << "SpotExp," << std::endl;
+				ss << "        wsNormal, wsPos, eyeDir, pzbCameraPos," << std::endl;
+				ss << "        pplDiff, pplSpecAccum);" << std::endl;
+			}
 		}
 
 		ss << "    fragColor.rgb += pplDiff.rgb;" << std::endl;
@@ -564,9 +613,9 @@ bool CDriverGL3::initMegaPixelPrograms()
 		{
 			for (int specular = 0; specular < 2; ++specular)
 			{
-				for (int ppl = 0; ppl < 2; ++ppl)
+				for (int ppl = 0; ppl < 3; ++ppl)
 				{
-					// ppl=1 requires fog=1 (ecPos varying for world-space position)
+					// ppl requires fog (ecPos varying for world-space position)
 					if (ppl && !fog)
 						continue;
 
@@ -580,14 +629,20 @@ bool CDriverGL3::initMegaPixelPrograms()
 								if (objectUBO && !cameraUBO)
 									continue;
 
+								// Non-table PPL (ppl=2) requires individual nlLightMode uniforms,
+								// which aren't in the NlModel UBO. objectUBO implies lightTableUBO
+								// at runtime (→ ppl=1), so this combination is never selected.
+								if (ppl == 2 && objectUBO)
+									continue;
+
 								std::string result;
-								megaPPGenerate(result, fog != 0, cube != 0, specular != 0, ppl != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
+								megaPPGenerate(result, fog != 0, cube != 0, specular != 0, ppl, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
 
 								CPixelProgram *pp = new CPixelProgram();
 								IProgram::CSource *src = new IProgram::CSource();
 								src->Profile = IProgram::glsl330f;
 								src->DisplayName = NLMISC::toString("Mega PP (fog=%d, cube=%d, spec=%d, ppl=%d, cam=%d, obj=%d, mat=%d)", fog, cube, specular, ppl, cameraUBO, objectUBO, materialUBO);
-								src->Features.UsesLightTableUBO = (ppl != 0);
+								src->Features.UsesLightTableUBO = (ppl == 1);
 								src->Features.UsesCameraUBO = (cameraUBO != 0);
 								src->Features.UsesObjectUBO = (objectUBO != 0);
 								src->Features.UsesMaterialUBO = (materialUBO != 0);
@@ -645,8 +700,10 @@ bool CDriverGL3::setupMegaPixelProgram()
 	int objectUBO = m_ProgramUsesObjectUBO[VertexProgram] ? 1 : 0;
 	int materialUBO = m_ProgramUsesMaterialUBO[VertexProgram] ? 1 : 0;
 	// PPL variant: requires fog (ecPos varying). pzbCameraPos comes from camera UBO or individual uniform.
-	// The PP independently uses the light table UBO for PPL; the VP can use table or non-table.
-	int ppl = (_NumPerPixelLights > 0 && fog) ? 1 : 0;
+	// ppl: 0=none, 1=table PPL (light table UBO), 2=non-table PPL (individual pp-prefixed uniforms)
+	int ppl = 0;
+	if (_NumPerPixelLights > 0 && fog)
+		ppl = m_ProgramUsesLightTableUBO[VertexProgram] ? 1 : 2;
 
 	CPixelProgram *pp = m_MegaPP[fog][cube][specular][ppl][cameraUBO][objectUBO][materialUBO];
 	nlassert(pp);
