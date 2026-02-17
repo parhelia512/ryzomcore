@@ -518,38 +518,38 @@ bool CDriverGL3::setupMegaVertexProgram()
 	if (m_UserVertexProgram)
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
-		m_VPUsesLightTableUBO = m_UserVertexProgram->features().UsesLightTableUBO;
-		m_VPUsesCameraUBO = m_UserVertexProgram->features().UsesCameraUBO;
-		m_VPUsesObjectUBO = m_UserVertexProgram->features().UsesObjectUBO;
-		m_VPUsesMaterialUBO = m_UserVertexProgram->features().UsesMaterialUBO;
+		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO;
+		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO;
+		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO;
+		m_ProgramUsesMaterialUBO[VertexProgram] = m_UserVertexProgram->features().UsesMaterialUBO;
 		// Object UBO implies table and camera UBO
-		if (m_VPUsesObjectUBO)
+		if (m_ProgramUsesObjectUBO[VertexProgram])
 		{
-			m_VPUsesLightTableUBO = true;
-			m_VPUsesCameraUBO = true;
+			m_ProgramUsesLightTableUBO[VertexProgram] = true;
+			m_ProgramUsesCameraUBO[VertexProgram] = true;
 		}
 		return true;
 	}
 
 	m_VPSpecularOutput = true; // Mega VP always outputs specularColor
-	m_VPUsesLightTableUBO = m_UseMegaLightTableUBO;
-	m_VPUsesCameraUBO = m_UseMegaCameraUBO;
-	m_VPUsesObjectUBO = m_UseMegaObjectUBO;
-	m_VPUsesMaterialUBO = m_UseMegaMaterialUBO;
+	m_ProgramUsesLightTableUBO[VertexProgram] = m_UseMegaLightTableUBO;
+	m_ProgramUsesCameraUBO[VertexProgram] = m_UseMegaCameraUBO;
+	m_ProgramUsesObjectUBO[VertexProgram] = m_UseMegaObjectUBO;
+	m_ProgramUsesMaterialUBO[VertexProgram] = m_UseMegaMaterialUBO;
 
 	// Object UBO implies table and camera UBO
-	if (m_VPUsesObjectUBO)
+	if (m_ProgramUsesObjectUBO[VertexProgram])
 	{
-		m_VPUsesLightTableUBO = true;
-		m_VPUsesCameraUBO = true;
+		m_ProgramUsesLightTableUBO[VertexProgram] = true;
+		m_ProgramUsesCameraUBO[VertexProgram] = true;
 	}
 
 	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
-	int table = m_VPUsesLightTableUBO ? 1 : 0;
-	int cameraUBO = m_VPUsesCameraUBO ? 1 : 0;
-	int objectUBO = m_VPUsesObjectUBO ? 1 : 0;
-	int materialUBO = m_VPUsesMaterialUBO ? 1 : 0;
+	int table = m_ProgramUsesLightTableUBO[VertexProgram] ? 1 : 0;
+	int cameraUBO = m_ProgramUsesCameraUBO[VertexProgram] ? 1 : 0;
+	int objectUBO = m_ProgramUsesObjectUBO[VertexProgram] ? 1 : 0;
+	int materialUBO = m_ProgramUsesMaterialUBO[VertexProgram] ? 1 : 0;
 
 	CVertexProgram *vp = m_MegaVP[fog][clip][table][cameraUBO][objectUBO][materialUBO];
 	nlassert(vp);
@@ -575,7 +575,7 @@ void CDriverGL3::setupMegaVPUniforms()
 
 	// When object UBO is active, nlLighting/nlTexGenMode/nlVertexColorLighted/nlVertexFormat
 	// are all in the UBO — skip individual uploads
-	if (!m_VPUsesObjectUBO)
+	if (!m_ProgramUsesObjectUBO[VertexProgram])
 	{
 		// Lighting mode
 		idx = p->getUniformIndex(CProgramIndex::NlLighting);
@@ -583,7 +583,7 @@ void CDriverGL3::setupMegaVPUniforms()
 			nglProgramUniform1i(progId, idx, m_VPBuiltinCurrent.Lighting ? 1 : 0);
 
 		// Per-light modes (non-table variant only — table variant reads from UBO)
-		if (!m_VPUsesLightTableUBO)
+		if (!m_ProgramUsesLightTableUBO[VertexProgram])
 		{
 			for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			{
@@ -616,7 +616,7 @@ void CDriverGL3::setupMegaVPUniforms()
 	}
 
 	// Clip plane mask (only in clip variant, skip when camera UBO provides it)
-	if (!m_VPUsesCameraUBO)
+	if (!m_ProgramUsesCameraUBO[VertexProgram])
 	{
 		idx = p->getUniformIndex(CProgramIndex::NlClipPlaneMask);
 		if (idx != ~0u)

@@ -361,12 +361,12 @@ CDriverGL3::CDriverGL3()
 	m_UseMegaObjectUBO = true;
 	m_UseMegaMaterialUBO = true;
 	m_VPSpecularOutput = true;
-	m_VPUsesLightTableUBO = false;
-	m_VPUsesCameraUBO = false;
+	memset(m_ProgramUsesLightTableUBO, 0, sizeof(m_ProgramUsesLightTableUBO));
+	memset(m_ProgramUsesCameraUBO, 0, sizeof(m_ProgramUsesCameraUBO));
+	memset(m_ProgramUsesObjectUBO, 0, sizeof(m_ProgramUsesObjectUBO));
+	memset(m_ProgramUsesMaterialUBO, 0, sizeof(m_ProgramUsesMaterialUBO));
 	_ObjectUBOId = 0;
 	_ObjectUBOCapacity = 0;
-	m_VPUsesObjectUBO = false;
-	m_VPUsesMaterialUBO = false;
 	_OverrideMaterialUBOId = 0;
 	memset(&_LightMapUBOOverride, 0, sizeof(_LightMapUBOOverride));
 }

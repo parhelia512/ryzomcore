@@ -507,9 +507,9 @@ bool CDriverGL3::setupMegaPixelProgram()
 	// Cube variant: any cubemap in the material's sampler modes
 	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
 	int specular = m_VPSpecularOutput ? 1 : 0;
-	int cameraUBO = m_VPUsesCameraUBO ? 1 : 0;
-	int objectUBO = m_VPUsesObjectUBO ? 1 : 0;
-	int materialUBO = m_VPUsesMaterialUBO ? 1 : 0;
+	int cameraUBO = m_ProgramUsesCameraUBO[VertexProgram] ? 1 : 0;
+	int objectUBO = m_ProgramUsesObjectUBO[VertexProgram] ? 1 : 0;
+	int materialUBO = m_ProgramUsesMaterialUBO[VertexProgram] ? 1 : 0;
 
 	CPixelProgram *pp = m_MegaPP[fog][cube][specular][cameraUBO][objectUBO][materialUBO];
 	nlassert(pp);
@@ -537,7 +537,7 @@ void CDriverGL3::setupMegaPPUniforms()
 	uint idx;
 
 	// When material UBO is active, nlShader/nlTextureActive/nlTexEnvMode/nlAlphaTest are in UBO
-	if (!m_VPUsesMaterialUBO)
+	if (!m_ProgramUsesMaterialUBO[PixelProgram])
 	{
 		// Shader type
 		CMaterial::TShader shader = matDrv->PPBuiltin.Shader;
@@ -574,7 +574,7 @@ void CDriverGL3::setupMegaPPUniforms()
 	}
 
 	// Fog mode (skip when camera UBO provides it)
-	if (!m_VPUsesCameraUBO)
+	if (!m_ProgramUsesCameraUBO[PixelProgram])
 	{
 		idx = p->getUniformIndex(CProgramIndex::NlFogMode);
 		if (idx != ~0u)
@@ -582,7 +582,7 @@ void CDriverGL3::setupMegaPPUniforms()
 	}
 
 	// Vertex format (skip when object UBO provides it)
-	if (!m_VPUsesObjectUBO)
+	if (!m_ProgramUsesObjectUBO[PixelProgram])
 	{
 		idx = p->getUniformIndex(CProgramIndex::NlVertexFormat);
 		if (idx != ~0u)

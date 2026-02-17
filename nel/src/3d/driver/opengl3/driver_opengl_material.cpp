@@ -758,7 +758,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		}
 
 		// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up.
-		// Always set unconditionally: m_VPUsesObjectUBO/m_VPUsesMaterialUBO may be stale here
+		// Always set unconditionally: m_ProgramUsesObjectUBO/m_ProgramUsesMaterialUBO may be stale here
 		// (setupMaterial skips setupBuiltinPrograms for lightmap materials), and the override is
 		// harmless when UBOs aren't active (only uploadObjectUBO/uploadMaterialUBO read it).
 		_LightMapUBOOverride.Active = true;
@@ -780,13 +780,13 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		// Override selfIllumination to black and zero specular (no LMC ambient for empty lightmap)
 		if (m_DriverVertexProgram)
 		{
-			if (!m_VPUsesObjectUBO)
+			if (!m_ProgramUsesObjectUBO[VertexProgram])
 			{
 				int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
 				if (siIdx != -1)
 					setUniform4f(IDriver::VertexProgram, siIdx, 0.0f, 0.0f, 0.0f, 0.0f);
 			}
-			if (!m_VPUsesLightTableUBO)
+			if (!m_ProgramUsesLightTableUBO[VertexProgram])
 			{
 				// Non-table path: zero individual light specular uniforms
 				for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
@@ -798,7 +798,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 						setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
 				}
 			}
-			else if (!m_VPUsesMaterialUBO)
+			else if (!m_ProgramUsesMaterialUBO[VertexProgram])
 			{
 				// Table path without material UBO: override individual material uniforms
 				int msIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialSpecular));
@@ -1052,7 +1052,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	if (m_DriverVertexProgram)
 	{
 		// Override selfIllumination with per-pass LMC ambient (possibly x2 scaled)
-		if (!m_VPUsesObjectUBO)
+		if (!m_ProgramUsesObjectUBO[VertexProgram])
 		{
 			int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
 			if (siIdx != -1)
@@ -1060,7 +1060,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 					selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
 		}
 
-		if (!m_VPUsesLightTableUBO)
+		if (!m_ProgramUsesLightTableUBO[VertexProgram])
 		{
 			// Non-table path: override individual light color uniforms
 			// setupUniforms() pre-multiplied Light0ColDiff by mat.getDiffuse(), but for
@@ -1096,10 +1096,10 @@ void CDriverGL3::setupLightMapPass(uint pass)
 					setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
 			}
 		}
-		else if (!m_VPUsesObjectUBO)
+		else if (!m_ProgramUsesObjectUBO[VertexProgram])
 		{
 			// Table path without object UBO: light factors are individual uniforms
-			if (!m_VPUsesMaterialUBO)
+			if (!m_ProgramUsesMaterialUBO[VertexProgram])
 			{
 				// Override individual material uniforms: white diffuse, zero specular
 				int mdIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialDiffuse));
@@ -1459,9 +1459,12 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 	// Water VP/PP use individual uniforms, not UBOs.
 	// Reset these flags since setupBuiltinPrograms() is not called for Water materials,
 	// so they may be stale from the previous draw call's mega shader.
-	m_VPUsesCameraUBO = false;
-	m_VPUsesObjectUBO = false;
-	m_VPUsesMaterialUBO = false;
+	m_ProgramUsesCameraUBO[VertexProgram] = false;
+	m_ProgramUsesObjectUBO[VertexProgram] = false;
+	m_ProgramUsesMaterialUBO[VertexProgram] = false;
+	m_ProgramUsesCameraUBO[PixelProgram] = false;
+	m_ProgramUsesObjectUBO[PixelProgram] = false;
+	m_ProgramUsesMaterialUBO[PixelProgram] = false;
 
 	// Auto-set standard uniforms (fogParams, fogColor for FP; modelView for VP)
 	setupUniforms(IDriver::PixelProgram);
