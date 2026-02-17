@@ -1440,11 +1440,16 @@ public:
 	CProgramDrvInfosGL3(CDriverGL3 *drv, ItGPUPrgDrvInfoPtrList it);
 	~CProgramDrvInfosGL3();
 	uint getUniformIndex(const char *name) const;
-	GLuint getProgramId() const{ return programId; }
+	GLuint getProgramId() const { return programId; }
 	void setProgramId(GLuint id) { programId = id; }
+
+	// Cached UBO block indices (resolved once at compile time, GL_INVALID_INDEX if not present)
+	GLuint getLightTableBlockIndex() const { return lightTableBlockIndex; }
+	void setLightTableBlockIndex(GLuint idx) { lightTableBlockIndex = idx; }
 
 private:
 	GLuint programId;
+	GLuint lightTableBlockIndex;
 };
 
 /*

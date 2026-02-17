@@ -2037,6 +2037,7 @@ CProgramDrvInfosGL3::CProgramDrvInfosGL3(CDriverGL3 *drv, ItGPUPrgDrvInfoPtrList
 IProgramDrvInfos(drv, it)
 {
 	programId = 0;
+	lightTableBlockIndex = GL_INVALID_INDEX;
 }
 
 CProgramDrvInfosGL3::~CProgramDrvInfosGL3()

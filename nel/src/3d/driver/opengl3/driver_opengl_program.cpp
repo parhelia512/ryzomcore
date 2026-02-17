@@ -20,9 +20,38 @@
 #include "driver_opengl.h"
 #include "driver_opengl_program.h"
 #include "driver_opengl_vertex_buffer.h"
+#include "driver_opengl_uniform_buffer.h"
 
 namespace NL3D {
 namespace NLDRIVERGL3 {
+
+// Insert GLSLBuiltinHeader after leading # preprocessor lines (#version, #extension, etc.)
+static std::string insertBuiltinHeader(const char *source)
+{
+	const char *p = source;
+
+	// If source starts with # or //, scan past all # and // lines
+	if (*p == '#' || *p == '/' || *p == '\n')
+	{
+		for (;;)
+		{
+			// Find end of current line
+			while (*p && *p != '\n')
+				++p;
+			if (*p == '\n')
+				++p;
+			// Stop if next line doesn't start with # or is empty
+			if (*p != '#' && *p != '/' && *p != '\n')
+				break;
+		}
+	}
+
+	std::string result;
+	result.append(source, p - source);
+	result.append(GLSLBuiltinHeader);
+	result.append(p);
+	return result;
+}
 
 const uint16 g_VertexFlags[CVertexBuffer::NumValue] = 
 {
@@ -158,7 +187,8 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 	if (src == NULL)
 		return false;
 
-	const char *s = src->SourcePtr;
+	std::string fullSource = insertBuiltinHeader(src->SourcePtr);
+	const char *s = fullSource.c_str();
 	unsigned int id = nglCreateShaderProgramv(GL_VERTEX_SHADER, 1, &s);
 
 	if (id == 0)
@@ -172,7 +202,7 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 		nglGetProgramInfoLog(id, 1024, NULL, errorLog);
 		nlwarning("GL3: %s", errorLog);
 		std::vector<std::string> lines;
-		NLMISC::explode(std::string(src->SourcePtr), std::string("\n"), lines);
+		NLMISC::explode(fullSource, std::string("\n"), lines);
 		for (std::vector<std::string>::size_type i = 0; i < lines.size(); ++i)
 		{
 			nldebug("GL3: %i: %s", i, lines[i].c_str());
@@ -269,7 +299,8 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 	if (src == NULL)
 		return false;
 
-	const char *s = src->SourcePtr;
+	std::string fullSource = insertBuiltinHeader(src->SourcePtr);
+	const char *s = fullSource.c_str();
 	unsigned int id = nglCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &s);
 	if (id == 0)
 		return false;
@@ -282,7 +313,7 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 		nglGetProgramInfoLog(id, 1024, NULL, errorLog);
 		nlwarning("GL3: %s", errorLog);
 		std::vector<std::string> lines;
-		NLMISC::explode(std::string(src->SourcePtr), std::string("\n"), lines);
+		NLMISC::explode(fullSource, std::string("\n"), lines);
 		for (std::vector<std::string>::size_type i = 0; i < lines.size(); ++i)
 		{
 			nldebug("GL3: %i: %s", i, lines[i].c_str());
@@ -1027,13 +1058,19 @@ void CDriverGL3::setupInitialUniforms(IProgram *program)
 	{
 		CProgramDrvInfosGL3 *drvInfo = static_cast<CProgramDrvInfosGL3 *>(di);
 		GLuint id = drvInfo->getProgramId();
-	
+
 		for (uint i = 0; i < std::min(_Extensions.MaxFragmentTextureImageUnits, (GLint)IDRV_PROGRAM_MAXSAMPLERS); ++i)
 		{
 			uint samplerIdx = program->getUniformIndex((CProgramIndex::TName)(CProgramIndex::Sampler0 + i));
 			if (samplerIdx >= 0)
 				nglProgramUniform1i(id, samplerIdx, i);
 		}
+
+		// Resolve and cache NlLightTable UBO block index, bind to its binding point
+		GLuint lightTableBlock = nglGetUniformBlockIndex(id, "NlLightTable");
+		drvInfo->setLightTableBlockIndex(lightTableBlock);
+		if (lightTableBlock != GL_INVALID_INDEX)
+			nglUniformBlockBinding(id, lightTableBlock, NL_BUILTIN_LIGHT_TABLE_BINDING);
 	}
 }
 

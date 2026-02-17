@@ -25,39 +25,49 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
-const char *GLSLHeaderUniformBuffer =
-	"#define NL_BUILTIN_CAMERA_BINDING " NL_MACRO_TO_STR(NL_BUILTIN_CAMERA_BIND) "\n"
-	"#define NL_BUILTIN_MODEL_BINDING " NL_MACRO_TO_STR(NL_BUILTIN_MODEL_BIND) "\n"
-	"#define NL_BUILTIN_MATERIAL_BINDING " NL_MACRO_TO_STR(NL_BUILTIN_MATERIAL_BIND) "\n"
-	"#define NL_USER_ENV_BINDING " NL_MACRO_TO_STR(NL_USER_ENV_BIND) "\n"
-	"#define NL_USER_VERTEX_PROGRAM_BINDING " NL_MACRO_TO_STR(NL_USER_VERTEX_PROGRAM_BIND) "\n"
-	"#define NL_USER_GEOMETRY_PROGRAM_BINDING " NL_MACRO_TO_STR(NL_USER_GEOMETRY_PROGRAM_BIND) "\n"
-	"#define NL_USER_PIXEL_PROGRAM_BINDING " NL_MACRO_TO_STR(NL_USER_PIXEL_PROGRAM_BIND) "\n"
-	"#define NL_USER_MATERIAL_BINDING " NL_MACRO_TO_STR(NL_USER_MATERIAL_BIND) "\n"
-	"#define NL_BUILTIN_LIGHT_TABLE_BINDING " NL_MACRO_TO_STR(NL_BUILTIN_LIGHT_TABLE_BIND) "\n";
+const char *GLSLBuiltinHeader =
+	// Light table UBO: shared across all objects, uploaded once when lights change.
+	// User VPs can reference nlLights[] directly when UsesLightTableUBO is set.
+	// Binding point is set from the CPU via glUniformBlockBinding in setupInitialUniforms.
+	"struct NlLightInfo {\n"
+	"    vec3  dirOrPos;\n"
+	"    int   mode;\n"        // 0=directional, 1=point, 2=spot
+	"    vec4  diffuse;\n"
+	"    vec4  specular;\n"
+	"    float constAttn;\n"
+	"    float linAttn;\n"
+	"    float quadAttn;\n"
+	"    float spotExp;\n"
+	"    vec3  spotDir;\n"
+	"    float spotCutoff;\n"  // cos(cutoff angle)
+	"};\n"
+	"layout(std140) uniform NlLightTable {\n"
+	"    NlLightInfo nlLights[128];\n"
+	"};\n";
 
+// Draft UBO infrastructure arrays — indices match the _BINDING defines
 static const char *s_UniformBufferBindDefine[] = {
-	"NL_BUILTIN_CAMERA_BINDING",
-	"NL_BUILTIN_MODEL_BINDING",
-	"NL_BUILTIN_MATERIAL_BINDING",
-	"NL_USER_ENV_BINDING",
-	"NL_USER_VERTEX_PROGRAM_BINDING",
-	"NL_USER_GEOMETRY_PROGRAM_BINDING",
-	"NL_USER_PIXEL_PROGRAM_BINDING",
-	"NL_USER_MATERIAL_BINDING",
-	"NL_BUILTIN_LIGHT_TABLE_BINDING",
+	"0", // NL_BUILTIN_CAMERA_BINDING
+	"1", // NL_BUILTIN_LIGHT_TABLE_BINDING
+	"2", // NL_BUILTIN_MODEL_BINDING (draft)
+	"3", // NL_BUILTIN_MATERIAL_BINDING (draft)
+	"4", // NL_USER_ENV_BINDING (draft)
+	"5", // NL_USER_VERTEX_PROGRAM_BINDING (draft)
+	"6", // NL_USER_GEOMETRY_PROGRAM_BINDING (draft)
+	"7", // NL_USER_PIXEL_PROGRAM_BINDING (draft)
+	"8", // NL_USER_MATERIAL_BINDING (draft)
 };
 
 static const char *s_UniformBufferName[] = {
 	"BuiltinCamera",
-	"BuiltinModel",
-	"BuiltinMaterial",
-	"UserEnv",
-	"UserLocal", // Yes, there can only be one per stage here, as these are bound to the stage
-	"UserLocal",
-	"UserLocal",
-	"UserMaterial",
 	"NlLightTable",
+	"BuiltinModel",       // draft
+	"BuiltinMaterial",     // draft
+	"UserEnv",             // draft
+	"UserLocal",           // draft
+	"UserLocal",           // draft
+	"UserLocal",           // draft
+	"UserMaterial",        // draft
 };
 
 static const char *s_TypeKeyword[] = {

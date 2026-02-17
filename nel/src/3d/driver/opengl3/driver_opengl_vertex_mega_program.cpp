@@ -62,7 +62,7 @@ namespace NLDRIVERGL3 {
 
 namespace /* anonymous */ {
 
-#define NL_MAX_LIGHT_TABLE_SIZE 128
+
 
 void megaVPGenerate(std::string &result, bool fog, bool clip, bool table)
 {
@@ -92,24 +92,8 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table)
 
 	if (table)
 	{
-		// Light table UBO
-		ss << "struct NlLightInfo {" << std::endl;
-		ss << "  vec3  dirOrPos;" << std::endl;
-		ss << "  int   mode;" << std::endl;
-		ss << "  vec4  diffuse;" << std::endl;
-		ss << "  vec4  specular;" << std::endl;
-		ss << "  float constAttn;" << std::endl;
-		ss << "  float linAttn;" << std::endl;
-		ss << "  float quadAttn;" << std::endl;
-		ss << "  float spotExp;" << std::endl;
-		ss << "  vec3  spotDir;" << std::endl;
-		ss << "  float spotCutoff;" << std::endl;
-		ss << "};" << std::endl;
-		ss << std::endl;
-		ss << "layout(std140, binding = " << NL_BUILTIN_LIGHT_TABLE_BINDING << ") uniform NlLightTable {" << std::endl;
-		ss << "  NlLightInfo nlLights[" << NL_MAX_LIGHT_TABLE_SIZE << "];" << std::endl;
-		ss << "};" << std::endl;
-		ss << std::endl;
+		// NlLightInfo struct and NlLightTable UBO block are provided by GLSLBuiltinHeader
+		// (prepended automatically by compileVertexProgram).
 
 		// Per-object light table uniforms
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
