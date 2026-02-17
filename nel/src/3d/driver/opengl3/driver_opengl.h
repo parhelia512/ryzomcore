@@ -245,7 +245,10 @@ public:
 	// PP builtin
 	CPPBuiltin	PPBuiltin;
 
-	// Material UBO (per-material GL buffer for NlMaterial block)
+	// Material UBO (per-material GL buffer for NlMaterial block).
+	// Dirty sources: CMaterial._Touched flags (color, lighting, alphaRef) in setupMaterial(),
+	// and PPBuiltin.MaterialUBOTouched (shader, flags, textureActive, texEnvMode) in PP setup.
+	// Lightmap multipass bypasses this cache entirely via _OverrideMaterialUBOId.
 	GLuint	MaterialUBOId;          // 0 = not created
 	bool	MaterialUBODirty;       // Needs re-upload
 

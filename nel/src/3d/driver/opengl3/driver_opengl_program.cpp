@@ -800,7 +800,9 @@ bool CDriverGL3::setupBuiltinPixelProgram()
 	matDrv->PPBuiltin.checkDriverMaterialStateTouched(this, mat);
 	matDrv->PPBuiltin.checkMaterialStateTouched(mat);
 
-	// Propagate PP state changes to material UBO dirty flag
+	// Propagate material-UBO-relevant PP state changes (Shader, Flags, TextureActive,
+	// TexEnvMode) to MaterialUBODirty. Driver-only state changes (VertexFormat, Fog,
+	// FogMode, SpecularSeparate) are excluded to avoid unnecessary UBO re-uploads.
 	if (matDrv->PPBuiltin.MaterialUBOTouched)
 		matDrv->MaterialUBODirty = true;
 

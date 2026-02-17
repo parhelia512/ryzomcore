@@ -759,7 +759,10 @@ void CDriverGL3::uploadMaterialUBO()
 	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
 	if (!matDrv) return;
 
-	// When lightmap override is active, upload to global override buffer (not per-material cache)
+	// Lightmap multipass: upload to global override buffer, not per-material cache.
+	// This avoids corrupting the per-material MaterialUBOId with per-pass overrides
+	// (materialDiffuse/Specular change per pass). TextureActive also changes per
+	// lightmap pass (via checkDriverMaterialStateTouched) but is read from PPBuiltin.
 	if (_LightMapUBOOverride.Active)
 	{
 		CMaterialUBOData data;
@@ -802,7 +805,9 @@ void CDriverGL3::uploadMaterialUBO()
 		return;
 	}
 
-	// Check if dirty
+	// Per-material cache: skip re-pack if nothing changed since last upload.
+	// MaterialUBODirty is set by setupMaterial() (CMaterial property changes) and
+	// by PP setup (PPBuiltin.MaterialUBOTouched for shader/flags/textureActive/texEnvMode).
 	if (!matDrv->MaterialUBODirty && matDrv->MaterialUBOId)
 	{
 		// Just bind the existing buffer

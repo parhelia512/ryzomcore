@@ -54,26 +54,38 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right);
 static const uint64 Sampler2D = 0;
 static const uint64 SamplerCube = 1;
 
-/// Builtin pixel program description
+/// Builtin pixel program description.
+/// Per-material struct cached on CMaterialDrvInfosGL3.
+/// Tracks both driver state (VertexFormat, Fog, FogMode, SpecularSeparate) and
+/// material-derived state (Shader, Flags, TextureActive, TexEnvMode, TexSamplerMode).
+/// Non-mega path: all fields determine which compiled PP variant to use.
+/// Mega path: only TexSamplerMode selects the cube split; Shader/Flags/TextureActive/TexEnvMode
+/// are read by uploadMaterialUBO() to pack the NlMaterial UBO.
 struct CPPBuiltin
 {
 	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false) { }
 
+	// Driver state (per-draw-call, not in material UBO)
 	uint16 VertexFormat;
 	bool Fog;
 	uint8 FogMode;
 	bool SpecularSeparate; // Whether VP outputs specularColor varying
 
+	// Material-derived state (packed into material UBO when active)
 	CMaterial::TShader Shader;
-	uint32 Flags;
-	uint32 TextureActive;
-	uint64 TexSamplerMode;
-	uint32 TexEnvMode[IDRV_MAT_MAXTEXTURES]; // Normal, UserColor
+	uint32 Flags;                               // Masked to IDRV_MAT_ALPHA_TEST
+	uint32 TextureActive;                       // Bitmask of active texture stages
+	uint64 TexSamplerMode;                      // 2D vs cube per stage (not in material UBO, selects mega PP cube split)
+	uint32 TexEnvMode[IDRV_MAT_MAXTEXTURES];   // Packed TexEnv per stage (Normal, UserColor shaders)
 
 	NLMISC::CRefPtr<CPixelProgram> PixelProgram;
 
+	// Touched: any field changed, triggers PP recompilation (non-mega) or uniform re-upload (mega).
 	bool Touched;
-	bool MaterialUBOTouched; // Only set when fields in material UBO change (Shader, Flags, TextureActive, TexEnvMode)
+	// MaterialUBOTouched: only set when material-UBO-relevant fields change
+	// (Shader, Flags, TextureActive, TexEnvMode). Avoids spurious material UBO
+	// re-uploads when only driver state (fog, vertex format, etc.) changes.
+	bool MaterialUBOTouched;
 
 	void checkDriverStateTouched(CDriverGL3 *driver);
 	void checkDriverMaterialStateTouched(CDriverGL3 *driver, CMaterial &mat);

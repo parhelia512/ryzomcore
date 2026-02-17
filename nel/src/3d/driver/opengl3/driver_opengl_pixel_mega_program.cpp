@@ -489,12 +489,14 @@ bool CDriverGL3::setupMegaPixelProgram()
 	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
 	nlassert(matDrv);
 
-	// Still need to update touched state for TextureActive etc.
+	// Update PPBuiltin cached state. In the mega path, Touched is not consumed
+	// (no per-material PP compilation), but the check functions update PPBuiltin
+	// fields that uploadMaterialUBO() reads (Shader, TextureActive, TexEnvMode, Flags).
 	matDrv->PPBuiltin.checkDriverStateTouched(this);
 	matDrv->PPBuiltin.checkDriverMaterialStateTouched(this, mat);
 	matDrv->PPBuiltin.checkMaterialStateTouched(mat);
 
-	// Propagate PP state changes to material UBO dirty flag
+	// Propagate material-UBO-relevant changes only (not fog/vertexFormat/specular changes).
 	if (matDrv->PPBuiltin.MaterialUBOTouched)
 	{
 		matDrv->MaterialUBODirty = true;

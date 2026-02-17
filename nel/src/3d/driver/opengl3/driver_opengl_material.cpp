@@ -359,7 +359,10 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 		// Optimize: reset all flags at the end.
 		// mat.clearTouched(0xFFFFFFFF); // FIXME GL3 THIS IS NOW DONE IN GENERATE OF PP DESC, THIS NEED RESTRUCTURING
 
-		// Mark material UBO dirty when relevant fields change
+		// Mark material UBO dirty for CMaterial property changes (color, diffuse, specular,
+		// shininess, alphaRef, texenv). The other half of the material UBO (Shader, Flags,
+		// TextureActive, TexEnvMode) is tracked by PPBuiltin.MaterialUBOTouched, propagated
+		// in setupBuiltinPixelProgram/setupMegaPixelProgram.
 		if (touched & (IDRV_TOUCHED_COLOR | IDRV_TOUCHED_LIGHTING | IDRV_TOUCHED_DEFMAT | IDRV_TOUCHED_ALPHA_TEST_THRE | IDRV_TOUCHED_TEXENV))
 			pShader->MaterialUBODirty = true;
 	}
