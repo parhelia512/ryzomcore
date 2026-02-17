@@ -58,12 +58,20 @@ static std::string insertBuiltinHeaders(const char *source, bool lightTable, boo
 	if (material)
 		result.append(GLSLMaterialHeader);
 
-	// User UBO declarations
+	// User UBO declarations — map key is TUBBinding enum (0=VP, 1=PP),
+	// translate to GL binding points for GLSL layout(binding = N)
 	if (!userUBOs.empty())
 	{
+		static const sint s_UBBindingToGLSL[] = {
+			NL_USER_VERTEX_PROGRAM_BINDING,  // UBBindingVertexProgram
+			NL_USER_PIXEL_PROGRAM_BINDING,   // UBBindingPixelProgram
+		};
 		std::stringstream ss;
 		for (std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> >::const_iterator it = userUBOs.begin(); it != userUBOs.end(); ++it)
-			generateUniformBufferGLSL(ss, *it->second, it->first);
+		{
+			nlassert(it->first >= 0 && it->first < UBBindingCount);
+			generateUniformBufferGLSL(ss, *it->second, s_UBBindingToGLSL[it->first]);
+		}
 		result.append(ss.str());
 	}
 
