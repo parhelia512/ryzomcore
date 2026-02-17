@@ -107,6 +107,9 @@ struct CProgramFeatures
 	/// Whether this VP outputs world-space position at location 0 (instead of eye-space ecPos).
 	/// When set, the builtin PP computes fog from radial world-space distance.
 	/// When false, location 0 carries eye-space position and fog uses planar depth.
+	/// Also used for PPL activation: when the builtin PP is paired with a user VP
+	/// that does not use UsesObjectUBO, per-pixel lighting is only activated if this
+	/// flag is set (indicating the VP outputs the world-space data PPL needs).
 	bool OutputsWorldSpacePosition;
 
 	/// Whether this PP requires a world-space normal varying at location 2 from the VP.
@@ -114,15 +117,18 @@ struct CProgramFeatures
 	/// When false, the VP still outputs the normal varying (object-space) if the VB
 	/// has normals — user PPs may consume it directly. The builtin PP only supports
 	/// world-space normals as input; object-space normals are only used by user PPs.
+	/// Also used for PPL activation: see InputsWorldSpacePosition.
 	bool InputsWorldSpaceNormal;
 
 	/// Whether this PP requires world-space position at location 0 from the VP.
 	/// When set, the builtin VP outputs PZB-relative world-space position.
 	/// When false, the VP still outputs eye-space ecPos at location 0 when fog is enabled.
+	/// Also used for PPL activation: when the builtin VP is paired with a user PP
+	/// that does not use UsesObjectUBO, per-pixel lighting is only activated if both
+	/// InputsWorldSpacePosition and InputsWorldSpaceNormal are set.
 	bool InputsWorldSpacePosition;
 
-	// UBO flags (todo: enum)
-	// These are set on both user and builtin programs (todo)
+	// UBO flags
 	/// Whether this VP reads lights from a UBO light table + per-object indices/factors.
 	bool UsesLightTableUBO;
 
@@ -130,6 +136,10 @@ struct CProgramFeatures
 	bool UsesCameraUBO;
 
 	/// Whether this program reads per-object state (matrices, light indices, etc.) from a UBO (binding 2).
+	/// Programs with UsesObjectUBO are assumed to support per-pixel lighting dynamically
+	/// at runtime via the nlWorldSpacePosition, nlWorldSpaceNormal, and nlNumPerPixelLights
+	/// uniforms in the NlModel UBO block. The driver will activate PPL for such programs
+	/// whenever lights request it, without requiring the static world-space feature flags.
 	bool UsesObjectUBO;
 
 	/// Whether this program reads material properties from a UBO (binding 3).
