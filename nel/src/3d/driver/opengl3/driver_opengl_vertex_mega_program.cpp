@@ -401,6 +401,7 @@ bool CDriverGL3::initMegaVertexPrograms()
 				IProgram::CSource *src = new IProgram::CSource();
 				src->Profile = IProgram::glsl330v;
 				src->DisplayName = NLMISC::toString("Mega VP (fog=%d, clip=%d, table=%d)", fog, clip, table);
+				src->Features.UsesLightTableUBO = (table != 0);
 				src->setSource(result);
 				vp->addSource(src);
 

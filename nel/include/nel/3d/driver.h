@@ -1111,6 +1111,10 @@ public:
 	  */
 	// @{
 
+	/// Return the maximum number of entries the light table can hold.
+	/// Drivers without a fixed limit (legacy, no UBO) return UINT_MAX.
+	virtual uint getMaxLightTableSize() const { return (uint)~0; }
+
 	/// Enable or disable light table mode. When disabled, legacy setLight()/enableLight() resumes.
 	virtual void enableLightTableMode(bool enable) = 0;
 

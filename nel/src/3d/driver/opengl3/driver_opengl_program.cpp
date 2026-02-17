@@ -187,8 +187,17 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 	if (src == NULL)
 		return false;
 
-	std::string fullSource = insertBuiltinHeader(src->SourcePtr);
-	const char *s = fullSource.c_str();
+	std::string fullSource;
+	const char *s;
+	if (src->Features.UsesLightTableUBO)
+	{
+		fullSource = insertBuiltinHeader(src->SourcePtr);
+		s = fullSource.c_str();
+	}
+	else
+	{
+		s = src->SourcePtr;
+	}
 	unsigned int id = nglCreateShaderProgramv(GL_VERTEX_SHADER, 1, &s);
 
 	if (id == 0)
@@ -202,7 +211,7 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 		nglGetProgramInfoLog(id, 1024, NULL, errorLog);
 		nlwarning("GL3: %s", errorLog);
 		std::vector<std::string> lines;
-		NLMISC::explode(fullSource, std::string("\n"), lines);
+		NLMISC::explode(std::string(s), std::string("\n"), lines);
 		for (std::vector<std::string>::size_type i = 0; i < lines.size(); ++i)
 		{
 			nldebug("GL3: %i: %s", i, lines[i].c_str());
@@ -299,8 +308,7 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 	if (src == NULL)
 		return false;
 
-	std::string fullSource = insertBuiltinHeader(src->SourcePtr);
-	const char *s = fullSource.c_str();
+	const char *s = src->SourcePtr;
 	unsigned int id = nglCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &s);
 	if (id == 0)
 		return false;
@@ -313,7 +321,7 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 		nglGetProgramInfoLog(id, 1024, NULL, errorLog);
 		nlwarning("GL3: %s", errorLog);
 		std::vector<std::string> lines;
-		NLMISC::explode(fullSource, std::string("\n"), lines);
+		NLMISC::explode(std::string(s), std::string("\n"), lines);
 		for (std::vector<std::string>::size_type i = 0; i < lines.size(); ++i)
 		{
 			nldebug("GL3: %i: %s", i, lines[i].c_str());

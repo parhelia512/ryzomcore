@@ -152,6 +152,13 @@ void	CDriverGL3::enableLightInternal(uint8 num, bool enable)
 
 
 // ***************************************************************************
+uint	CDriverGL3::getMaxLightTableSize() const
+{
+	// Must match nlLights[] array size in GLSLBuiltinHeader
+	return 128;
+}
+
+// ***************************************************************************
 void	CDriverGL3::enableLightTableMode(bool enable)
 {
 	H_AUTO_OGL(CDriverGL3_enableLightTableMode)

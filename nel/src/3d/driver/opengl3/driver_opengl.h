@@ -611,6 +611,7 @@ public:
 
 	virtual void			setLightMapDynamicLight (bool enable, const CLight& light);
 
+	virtual uint			getMaxLightTableSize() const;
 	virtual void			enableLightTableMode(bool enable);
 	virtual void			setLightTableSize(uint count);
 	virtual void			setLightTableEntry(uint index, const CLight &light);

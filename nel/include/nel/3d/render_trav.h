@@ -268,8 +268,13 @@ public:
 	bool					_LightTableMode;
 	std::vector<CPointLight*>	_LightTablePointLights; // For resetting _TableIndex at frame end
 	uint					_LightTableSize;          // Current table size in driver
+	uint					_MaxLightTableSize;       // Queried from driver via getMaxLightTableSize()
 
 	void		changeLightSetupTable(CLightContribution *lightContribution, bool useLocalAttenuation);
+	void		flushLightTable();
+	/// Pre-register an object's lights in the table without rendering.
+	/// Returns false if the lights don't fit (batch is full).
+	bool		collectObjectLights(const CLightContribution *lightContribution);
 
 	// Max VP Light setup Infos.
 	enum	{MaxVPLight = CVertexProgramLighted::MaxLight};

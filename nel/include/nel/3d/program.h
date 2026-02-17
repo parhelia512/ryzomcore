@@ -103,6 +103,8 @@ struct CProgramFeatures
 	/// Whether this VP outputs a separate specular color varying (for post-texture addition).
 	bool OutputsSpecularColor;
 
+	// UBO flags (todo: enum)
+	// These are set on both user and builtin programs (todo)
 	/// Whether this VP reads lights from a UBO light table + per-object indices/factors.
 	bool UsesLightTableUBO;
 };
