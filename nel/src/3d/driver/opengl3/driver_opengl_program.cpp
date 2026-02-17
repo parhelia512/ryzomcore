@@ -1026,6 +1026,41 @@ void CDriverGL3::setupUniforms(TProgram program)
 		uint alphaRefIdx = p->getUniformIndex(CProgramIndex::AlphaRef);
 		if (alphaRefIdx != ~0)
 			nglProgramUniform1f(progId, alphaRefIdx, mat.getAlphaTestThreshold());
+
+		// Shader type, texture active, TexEnv modes, alpha test (PP megashader control)
+		CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+		if (matDrv)
+		{
+			uint shIdx = p->getUniformIndex(CProgramIndex::NlShader);
+			if (shIdx != ~0u)
+			{
+				int shaderInt = 0;
+				switch (matDrv->PPBuiltin.Shader)
+				{
+				case CMaterial::Normal:    shaderInt = 0; break;
+				case CMaterial::UserColor: shaderInt = 1; break;
+				case CMaterial::Specular:  shaderInt = 2; break;
+				case CMaterial::LightMap:  shaderInt = 3; break;
+				default:                   shaderInt = 0; break;
+				}
+				nglProgramUniform1i(progId, shIdx, shaderInt);
+			}
+
+			uint taIdx = p->getUniformIndex(CProgramIndex::NlTextureActive);
+			if (taIdx != ~0u)
+				nglProgramUniform1i(progId, taIdx, (sint32)matDrv->PPBuiltin.TextureActive);
+
+			for (uint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+			{
+				uint teIdx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlTexEnvMode0 + i));
+				if (teIdx != ~0u)
+					nglProgramUniform1ui(progId, teIdx, matDrv->PPBuiltin.TexEnvMode[i]);
+			}
+
+			uint atIdx = p->getUniformIndex(CProgramIndex::NlAlphaTest);
+			if (atIdx != ~0u)
+				nglProgramUniform1i(progId, atIdx, (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0);
+		}
 	}
 
 	if (!m_ProgramUsesObjectUBO[program])
@@ -1045,6 +1080,86 @@ void CDriverGL3::setupUniforms(TProgram program)
 		{
 			nglProgramUniform4f(progId, selfIlluminationId, selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
 		}
+
+		// World-space output flags
+		uint wsnIdx = p->getUniformIndex(CProgramIndex::NlWorldSpaceNormal);
+		if (wsnIdx != ~0u)
+			nglProgramUniform1i(progId, wsnIdx, m_VPNormalOutput ? 1 : 0);
+
+		uint wspIdx = p->getUniformIndex(CProgramIndex::NlWorldSpacePosition);
+		if (wspIdx != ~0u)
+			nglProgramUniform1i(progId, wspIdx, m_VPWorldSpacePositionOutput ? 1 : 0);
+
+		// Per-pixel lighting count
+		uint pplIdx = p->getUniformIndex(CProgramIndex::NlNumPerPixelLights);
+		if (pplIdx != ~0u)
+			nglProgramUniform1i(progId, pplIdx, (sint32)_NumPerPixelLights);
+
+		// Lighting mode
+		uint nlIdx = p->getUniformIndex(CProgramIndex::NlLighting);
+		if (nlIdx != ~0u)
+			nglProgramUniform1i(progId, nlIdx, m_VPBuiltinCurrent.Lighting ? 1 : 0);
+
+		// Per-light modes (non-table variant — table reads from UBO)
+		if (!m_ProgramUsesLightTableUBO[program])
+		{
+			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			{
+				uint lmIdx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightMode0 + i));
+				if (lmIdx != ~0u)
+				{
+					sint mode = _LightEnable[i] ? _LightMode[i] : -1;
+					nglProgramUniform1i(progId, lmIdx, mode);
+				}
+			}
+		}
+
+		// TexGen modes
+		for (uint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		{
+			uint tgIdx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlTexGenMode0 + i));
+			if (tgIdx != ~0u)
+				nglProgramUniform1i(progId, tgIdx, m_VPBuiltinCurrent.TexGenMode[i]);
+		}
+
+		// Vertex color lighted
+		uint vclIdx = p->getUniformIndex(CProgramIndex::NlVertexColorLighted);
+		if (vclIdx != ~0u)
+			nglProgramUniform1i(progId, vclIdx, m_VPBuiltinCurrent.VertexColorLighted ? 1 : 0);
+
+		// NlVertexFormat: VP and PP have different sources for this uniform.
+		// VP uses m_VPBuiltinCurrent.VertexFormat (vertex buffer format).
+		// PP uses matDrv->PPBuiltin.VertexFormat (includes texgen-driven texcoord flags).
+		{
+			uint vfIdx = p->getUniformIndex(CProgramIndex::NlVertexFormat);
+			if (vfIdx != ~0u)
+			{
+				sint32 vertexFormat;
+				if (program == VertexProgram)
+				{
+					vertexFormat = (sint32)m_VPBuiltinCurrent.VertexFormat;
+				}
+				else
+				{
+					CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+					vertexFormat = matDrv ? (sint32)matDrv->PPBuiltin.VertexFormat : (sint32)m_VPBuiltinCurrent.VertexFormat;
+				}
+				nglProgramUniform1i(progId, vfIdx, vertexFormat);
+			}
+		}
+	}
+
+	if (!m_ProgramUsesCameraUBO[program])
+	{
+		// Fog mode
+		uint fmIdx = p->getUniformIndex(CProgramIndex::NlFogMode);
+		if (fmIdx != ~0u)
+			nglProgramUniform1i(progId, fmIdx, (int)_FogMode);
+
+		// Clip plane mask
+		uint cpmIdx = p->getUniformIndex(CProgramIndex::NlClipPlaneMask);
+		if (cpmIdx != ~0u)
+			nglProgramUniform1i(progId, cpmIdx, (sint32)m_VPBuiltinCurrent.ClipPlaneMask);
 	}
 
 	if (m_ProgramUsesObjectUBO[program])

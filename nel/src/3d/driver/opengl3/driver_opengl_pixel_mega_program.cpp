@@ -181,6 +181,8 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 			ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
 			ss << "uniform float nlMaterialShininess;" << std::endl;
 		}
+		if (!cameraUBO)
+			ss << "uniform vec3 pzbCameraPos;" << std::endl;
 	}
 	ss << std::endl;
 
@@ -564,15 +566,12 @@ bool CDriverGL3::initMegaPixelPrograms()
 			{
 				for (int ppl = 0; ppl < 2; ++ppl)
 				{
-					// ppl=1 requires fog=1 (ecPos varying) and cameraUBO=1 (pzbCameraPos)
+					// ppl=1 requires fog=1 (ecPos varying for world-space position)
 					if (ppl && !fog)
 						continue;
 
 					for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
 					{
-						if (ppl && !cameraUBO)
-							continue;
-
 						for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
 						{
 							for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
@@ -645,8 +644,9 @@ bool CDriverGL3::setupMegaPixelProgram()
 	int cameraUBO = m_ProgramUsesCameraUBO[VertexProgram] ? 1 : 0;
 	int objectUBO = m_ProgramUsesObjectUBO[VertexProgram] ? 1 : 0;
 	int materialUBO = m_ProgramUsesMaterialUBO[VertexProgram] ? 1 : 0;
-	// PPL variant: requires light table UBO, fog (ecPos varying), and camera UBO (pzbCameraPos)
-	int ppl = (_NumPerPixelLights > 0 && m_ProgramUsesLightTableUBO[VertexProgram] && fog && cameraUBO) ? 1 : 0;
+	// PPL variant: requires fog (ecPos varying). pzbCameraPos comes from camera UBO or individual uniform.
+	// The PP independently uses the light table UBO for PPL; the VP can use table or non-table.
+	int ppl = (_NumPerPixelLights > 0 && fog) ? 1 : 0;
 
 	CPixelProgram *pp = m_MegaPP[fog][cube][specular][ppl][cameraUBO][objectUBO][materialUBO];
 	nlassert(pp);
@@ -660,121 +660,7 @@ bool CDriverGL3::setupMegaPixelProgram()
 
 void CDriverGL3::setupMegaPPUniforms()
 {
-	IProgram *p = m_DriverPixelProgram;
-	if (!p) return;
-	IProgramDrvInfos *di = p->m_DrvInfo;
-	if (!di) return;
-	CProgramDrvInfosGL3 *drvInfo = static_cast<CProgramDrvInfosGL3 *>(di);
-	GLuint progId = drvInfo->getProgramId();
-	if (!progId) return;
-
-	CMaterial &mat = *_CurrentMaterial;
-	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
-
-	uint idx;
-
-	// When material UBO is active, nlShader/nlTextureActive/nlTexEnvMode/nlAlphaTest are in UBO
-	if (!m_ProgramUsesMaterialUBO[PixelProgram])
-	{
-		// Shader type
-		CMaterial::TShader shader = matDrv->PPBuiltin.Shader;
-		int shaderInt = 0;
-		switch (shader)
-		{
-		case CMaterial::Normal:    shaderInt = 0; break;
-		case CMaterial::UserColor: shaderInt = 1; break;
-		case CMaterial::Specular:  shaderInt = 2; break;
-		case CMaterial::LightMap:  shaderInt = 3; break;
-		default:                   shaderInt = 0; break;
-		}
-		idx = p->getUniformIndex(CProgramIndex::NlShader);
-		if (idx != ~0u)
-			nglProgramUniform1i(progId, idx, shaderInt);
-
-		// Texture active bitmask
-		idx = p->getUniformIndex(CProgramIndex::NlTextureActive);
-		if (idx != ~0u)
-			nglProgramUniform1i(progId, idx, (sint32)matDrv->PPBuiltin.TextureActive);
-
-		// TexEnv modes (packed uint32)
-		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-		{
-			idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlTexEnvMode0 + i));
-			if (idx != ~0u)
-				nglProgramUniform1ui(progId, idx, matDrv->PPBuiltin.TexEnvMode[i]);
-		}
-
-		// Alpha test
-		idx = p->getUniformIndex(CProgramIndex::NlAlphaTest);
-		if (idx != ~0u)
-			nglProgramUniform1i(progId, idx, (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0);
-	}
-
-	// Fog mode and camera forward (skip when camera UBO provides them)
-	if (!m_ProgramUsesCameraUBO[PixelProgram])
-	{
-		idx = p->getUniformIndex(CProgramIndex::NlFogMode);
-		if (idx != ~0u)
-			nglProgramUniform1i(progId, idx, (int)_FogMode);
-
-		// Camera forward for world-space fog (second row of view matrix, NeL Y = forward)
-		idx = p->getUniformIndex(CProgramIndex::CameraForward);
-		if (idx != ~0u)
-		{
-			const float *v = _ViewMtx.get();
-			nglProgramUniform3f(progId, idx, v[1], v[5], v[9]);
-		}
-	}
-
-	// Vertex format (skip when object UBO provides it)
-	if (!m_ProgramUsesObjectUBO[PixelProgram])
-	{
-		idx = p->getUniformIndex(CProgramIndex::NlVertexFormat);
-		if (idx != ~0u)
-			nglProgramUniform1i(progId, idx, (sint32)matDrv->PPBuiltin.VertexFormat);
-
-		idx = p->getUniformIndex(CProgramIndex::NlWorldSpacePosition);
-		if (idx != ~0u)
-			nglProgramUniform1i(progId, idx, m_VPWorldSpacePositionOutput ? 1 : 0);
-
-		// PPL: num per-pixel lights and per-object light indices/factors
-		idx = p->getUniformIndex(CProgramIndex::NlNumPerPixelLights);
-		if (idx != ~0u)
-			nglProgramUniform1i(progId, idx, (sint32)_NumPerPixelLights);
-
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-		{
-			idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightIndex0 + i));
-			if (idx != ~0u)
-				nglProgramUniform1i(progId, idx, (sint32)_LightTableObjIndices[i]);
-
-			idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightFactor0 + i));
-			if (idx != ~0u)
-				nglProgramUniform1f(progId, idx, _LightTableObjFactors[i]);
-		}
-	}
-
-	// PPL: material properties (skip when material UBO provides them)
-	if (!m_ProgramUsesMaterialUBO[PixelProgram])
-	{
-		idx = p->getUniformIndex(CProgramIndex::NlMaterialDiffuse);
-		if (idx != ~0u)
-		{
-			NLMISC::CRGBAF d(mat.getDiffuse());
-			nglProgramUniform4f(progId, idx, d.R, d.G, d.B, d.A);
-		}
-
-		idx = p->getUniformIndex(CProgramIndex::NlMaterialSpecular);
-		if (idx != ~0u)
-		{
-			NLMISC::CRGBAF s(mat.getSpecular());
-			nglProgramUniform4f(progId, idx, s.R, s.G, s.B, s.A);
-		}
-
-		idx = p->getUniformIndex(CProgramIndex::NlMaterialShininess);
-		if (idx != ~0u)
-			nglProgramUniform1f(progId, idx, mat.getShininess());
-	}
+	// All mega PP uniforms are uploaded by setupUniforms(PixelProgram).
 }
 
 } // NLDRIVERGL3
