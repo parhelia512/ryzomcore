@@ -857,7 +857,7 @@ bool CDriverGL::swapBuffers()
 	*/
 	if (!_Extensions.ARBVertexBufferObject && _Extensions.NVVertexArrayRange)
 	{
-		static	CVertexBuffer	dummyVB;
+		static	CVertexBuffer	dummyVB; // STATIC GPU RESOURCE: Blocks multiple driver instances
 		static	bool			dummyVBinit= false;
 		if(!dummyVBinit)
 		{

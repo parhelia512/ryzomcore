@@ -294,7 +294,7 @@ private:
 };
 
 
-static NLMISC::CSmartPtr<CVertexProgramTestMeshVP> testMeshVP;
+static NLMISC::CSmartPtr<CVertexProgramTestMeshVP> testMeshVP; // STATIC GPU RESOURCE: Blocks multiple driver instances
 
 
 

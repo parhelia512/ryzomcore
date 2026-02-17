@@ -123,10 +123,10 @@ private:
 	/** The 16 versions: Specular or not (0 or 2), + normalize normal or not (0 or 1).
 	 *	All multiplied by 4, because support from 0 to 3 pointLights activated. (0.., 4.., 8.., 12..)
 	 */
-	static	NLMISC::CSmartPtr<CVertexProgramWindTree> _VertexProgram[NumVp];
+	static	NLMISC::CSmartPtr<CVertexProgramWindTree> _VertexProgram[NumVp]; // STATIC GPU RESOURCE: Blocks multiple driver instances
 
 	/// Single UBO-based VP (all light/specular/normalize folded). GL3-only, falls back to 16 variants if not compiled.
-	static	NLMISC::CSmartPtr<CVertexProgramWindTreeUBO> _VertexProgramUBO;
+	static	NLMISC::CSmartPtr<CVertexProgramWindTreeUBO> _VertexProgramUBO; // STATIC GPU RESOURCE: Blocks multiple driver instances
 
 	NLMISC::CRefPtr<CVertexProgramWindTree> _ActiveVertexProgram;
 	NLMISC::CRefPtr<CVertexProgramWindTreeUBO> _ActiveVertexProgramUBO;
@@ -148,7 +148,7 @@ private:
 	uint		_LastMBRIdVP;
 
 	// User VP UBO for wind + material (UBO path only).
-	static NLMISC::CSmartPtr<CUniformBuffer> _WindTreeUB; // FIXME: This breaks when using multiple drivers
+	static NLMISC::CSmartPtr<CUniformBuffer> _WindTreeUB; // STATIC GPU RESOURCE: Blocks multiple driver instances
 
 	// Cached std140 offsets (layout is const — safe as static)
 	struct CWindTreeUBOOffsets

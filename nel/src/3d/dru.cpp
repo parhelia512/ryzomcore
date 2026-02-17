@@ -300,6 +300,8 @@ IDriver		*CDRU::createD3DDriver()
 #endif // NL_OS_WINDOWS
 
 // ***************************************************************************
+// NOTE: CDRU functions below use function-local static VBs, IBs, and CMaterials.
+// These are STATIC GPU RESOURCES that block multiple driver instances.
 
 void	CDRU::drawBitmap (float x, float y, float width, float height, ITexture& texture, IDriver& driver, CViewport viewport, bool blend)
 {

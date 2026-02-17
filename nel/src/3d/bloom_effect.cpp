@@ -137,7 +137,7 @@ private:
 	CIdx m_Idx;
 };
 
-static NLMISC::CSmartPtr<CVertexProgramTextureOffset> TextureOffsetVertexProgram;
+static NLMISC::CSmartPtr<CVertexProgramTextureOffset> TextureOffsetVertexProgram; // STATIC GPU RESOURCE: Blocks multiple driver instances
 
 
 //-----------------------------------------------------------------------------------------------------------
