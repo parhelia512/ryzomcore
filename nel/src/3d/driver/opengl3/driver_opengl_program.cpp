@@ -26,7 +26,8 @@ namespace NL3D {
 namespace NLDRIVERGL3 {
 
 // Insert builtin UBO headers after leading # preprocessor lines (#version, #extension, etc.)
-static std::string insertBuiltinHeaders(const char *source, bool lightTable, bool camera, bool object, bool material)
+static std::string insertBuiltinHeaders(const char *source, bool lightTable, bool camera, bool object, bool material,
+	const std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> > &userUBOs)
 {
 	const char *p = source;
 
@@ -56,6 +57,16 @@ static std::string insertBuiltinHeaders(const char *source, bool lightTable, boo
 		result.append(GLSLObjectHeader);
 	if (material)
 		result.append(GLSLMaterialHeader);
+
+	// User UBO declarations
+	if (!userUBOs.empty())
+	{
+		std::stringstream ss;
+		for (std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> >::const_iterator it = userUBOs.begin(); it != userUBOs.end(); ++it)
+			generateUniformBufferGLSL(ss, *it->second, it->first);
+		result.append(ss.str());
+	}
+
 	result.append(p);
 	return result;
 }
@@ -203,9 +214,15 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 
 	std::string fullSource;
 	const char *s;
-	if (src->Features.UsesLightTableUBO || src->Features.UsesCameraUBO || src->Features.UsesObjectUBO || src->Features.UsesMaterialUBO)
+	bool hasBuiltinUBO = src->Features.UsesLightTableUBO || src->Features.UsesCameraUBO
+	                   || src->Features.UsesObjectUBO || src->Features.UsesMaterialUBO;
+	bool hasUserUBO = !src->UniformBufferFormats.empty();
+	if (hasBuiltinUBO || hasUserUBO)
 	{
-		fullSource = insertBuiltinHeaders(src->SourcePtr, src->Features.UsesLightTableUBO, src->Features.UsesCameraUBO, src->Features.UsesObjectUBO, src->Features.UsesMaterialUBO);
+		fullSource = insertBuiltinHeaders(src->SourcePtr,
+			src->Features.UsesLightTableUBO, src->Features.UsesCameraUBO,
+			src->Features.UsesObjectUBO, src->Features.UsesMaterialUBO,
+			src->UniformBufferFormats);
 		s = fullSource.c_str();
 	}
 	else
@@ -322,9 +339,15 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 
 	std::string fullSource;
 	const char *s;
-	if (src->Features.UsesLightTableUBO || src->Features.UsesCameraUBO || src->Features.UsesObjectUBO || src->Features.UsesMaterialUBO)
+	bool hasBuiltinUBO = src->Features.UsesLightTableUBO || src->Features.UsesCameraUBO
+	                   || src->Features.UsesObjectUBO || src->Features.UsesMaterialUBO;
+	bool hasUserUBO = !src->UniformBufferFormats.empty();
+	if (hasBuiltinUBO || hasUserUBO)
 	{
-		fullSource = insertBuiltinHeaders(src->SourcePtr, src->Features.UsesLightTableUBO, src->Features.UsesCameraUBO, src->Features.UsesObjectUBO, src->Features.UsesMaterialUBO);
+		fullSource = insertBuiltinHeaders(src->SourcePtr,
+			src->Features.UsesLightTableUBO, src->Features.UsesCameraUBO,
+			src->Features.UsesObjectUBO, src->Features.UsesMaterialUBO,
+			src->UniformBufferFormats);
 		s = fullSource.c_str();
 	}
 	else

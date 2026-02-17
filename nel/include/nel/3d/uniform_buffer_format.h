@@ -30,18 +30,19 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define NL_UNIFORM_BUFFER_FORMAT_H
 
 #include <nel/misc/types_nl.h>
+#include <nel/misc/smart_ptr.h>
 #include <nel/misc/string_mapper.h>
 
 namespace NL3D {
 
-/* 
+/*
 **** IMPORTANT ********************
 **** IF YOU MODIFY THE STRUCTURE OF THIS CLASS, PLEASE INCREMENT IDriver::InterfaceVersion TO INVALIDATE OLD DRIVER DLL
 ***********************************
 */
 
 // Uniform buffer format generation following glsl std140 rules
-class CUniformBufferFormat
+class CUniformBufferFormat : public NLMISC::CRefCount
 {
 public:
 	CUniformBufferFormat() : m_Hash(0) { }

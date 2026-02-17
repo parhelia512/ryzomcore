@@ -32,6 +32,7 @@
 #include <nel/misc/smart_ptr.h>
 
 // Project includes
+#include <nel/3d/uniform_buffer_format.h>
 
 namespace NL3D {
 
@@ -518,6 +519,10 @@ public:
 
 		/// CVertexProgramInfo/CPixelProgramInfo/... NeL features
 		CProgramFeatures Features;
+
+		/// User UBO formats: binding point -> format.
+		/// The driver generates GLSL block declarations from these during compilation.
+		std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> > UniformBufferFormats;
 
 		/// Map with known parameter indices, used for assembly programs
 		std::map<std::string, uint> ParamIndices;
