@@ -39,6 +39,7 @@
 #include "nel/3d/material.h"
 #include "nel/misc/mutex.h"
 #include "nel/3d/primitive_profile.h"
+#include "nel/3d/uniform_buffer.h"
 
 #include <vector>
 #include <list>
@@ -175,6 +176,7 @@ protected:
 	TVBDrvInfoPtrList					_VBDrvInfos;
 	TIBDrvInfoPtrList					_IBDrvInfos;
 	TGPUPrgDrvInfoPtrList				_GPUPrgDrvInfos;
+	TUBDrvInfoPtrList					_UBDrvInfos;
 
 	TPolygonMode			_PolygonMode;
 
@@ -1282,6 +1284,10 @@ public:
 	virtual void			setUniformFog(TProgram program, uint index) = 0;
     // Set feature parameters
 	virtual bool			isUniformProgramState() = 0;
+
+	/// Bind a user uniform buffer to a binding point. Creates GPU buffer on first use,
+	/// uploads if dirty. Pass NULL to unbind.
+	virtual bool			bindUniformBuffer(TUBBinding binding, CUniformBuffer *ub) { return false; }
 	// @}
 
 
@@ -1507,6 +1513,7 @@ protected:
 	friend	class			IMaterialDrvInfos;
 	friend	class			IProgramDrvInfos;
 	friend	class			IProgramParamsDrvInfos;
+	friend	class			IUBDrvInfos;
 
 	/// remove ptr from the lists in the driver.
 	void					removeVBDrvInfoPtr(ItVBDrvInfoPtrList vbDrvInfoIt);
@@ -1515,6 +1522,7 @@ protected:
 	void					removeTextureDrvSharePtr(ItTexDrvSharePtrList texDrvShareIt);
 	void					removeMatDrvInfoPtr(ItMatDrvInfoPtrList shaderIt);
 	void					removeGPUPrgDrvInfoPtr(ItGPUPrgDrvInfoPtrList gpuPrgDrvInfoIt);
+	void					removeUBDrvInfoPtr(ItUBDrvInfoPtrList ubDrvInfoIt);
 
 private:
 	bool					_StaticMemoryToVRAM;

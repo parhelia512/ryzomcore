@@ -45,6 +45,8 @@ namespace NL3D {
 class CUniformBufferFormat : public NLMISC::CRefCount
 {
 public:
+	std::string Name; // GLSL uniform block name (e.g. "WindTree")
+
 	CUniformBufferFormat() : m_Hash(0) { }
 
 	// When changing, update

@@ -20,6 +20,7 @@
 #include <nel/misc/types_nl.h>
 
 #include <nel/3d/uniform_buffer_format.h>
+#include <nel/3d/uniform_buffer.h>
 
 #define NL3D_GL3_UNIFORM_BUFFER_DEBUG 1
 
@@ -27,20 +28,14 @@ namespace NL3D {
 namespace NLDRIVERGL3 {
 
 // NOTE: It is completely safe to reorder these indices.
-// When changing, update:
-//     - GLSLBuiltinHeader
-//     - s_UniformBufferBindDefine
-//     - s_UniformBufferName
+// When changing, update GLSLBuiltinHeader blocks.
 // Always use the defines.
-#define NL_BUILTIN_CAMERA_BINDING 0 // Builtin uniform buffer bound by driver, set by camera transformation
-#define NL_BUILTIN_LIGHT_TABLE_BINDING 1 // Builtin uniform buffer for light table (shared across objects)
-#define NL_BUILTIN_MODEL_BINDING 2 // (draft) Builtin uniform buffer bound by driver, set by model transformation
-#define NL_BUILTIN_MATERIAL_BINDING 3 // (draft) Builtin uniform buffer bound by material
-#define NL_USER_ENV_BINDING 4 // (draft) User-specified uniform buffer bound by user
-#define NL_USER_VERTEX_PROGRAM_BINDING 5 // (draft) User-specified uniform buffer bound by vertex program
-#define NL_USER_GEOMETRY_PROGRAM_BINDING 6 // (draft) User-specified uniform buffer bound by geometry program
-#define NL_USER_PIXEL_PROGRAM_BINDING 7 // (draft) User-specified uniform buffer bound by pixel program
-#define NL_USER_MATERIAL_BINDING 8 // (draft) User-specified uniform buffer bound by material
+#define NL_BUILTIN_CAMERA_BINDING 0        // Builtin: camera/fog/clip state
+#define NL_BUILTIN_LIGHT_TABLE_BINDING 1   // Builtin: shared light table
+#define NL_BUILTIN_MODEL_BINDING 2         // Builtin: per-object matrices/lighting
+#define NL_BUILTIN_MATERIAL_BINDING 3      // Builtin: per-material properties
+#define NL_USER_VERTEX_PROGRAM_BINDING 4   // User VP UBO
+#define NL_USER_PIXEL_PROGRAM_BINDING 5    // User PP UBO
 
 // Driver-side GLSL headers prepended to shaders (after #version and preprocessor lines).
 // Each header is inserted independently based on CProgramFeatures flags.
@@ -50,6 +45,21 @@ extern const char *GLSLObjectHeader;     // NlModel UBO block (UsesObjectUBO)
 extern const char *GLSLMaterialHeader;   // NlMaterial UBO block (UsesMaterialUBO)
 
 void generateUniformBufferGLSL(std::stringstream &ss, const CUniformBufferFormat &ubf, sint binding);
+
+class CUBDrvInfosGL3 : public IUBDrvInfos
+{
+public:
+	CUBDrvInfosGL3(IDriver *drv, ItUBDrvInfoPtrList it, CUniformBuffer *ub);
+	virtual ~CUBDrvInfosGL3();
+
+	GLuint getBufferId() const { return _BufferId; }
+	sint getCapacity() const { return _Capacity; }
+	void setCapacity(sint cap) { _Capacity = cap; }
+
+private:
+	GLuint _BufferId;
+	sint _Capacity;
+};
 
 } // NLDRIVERGL3
 } // NL3D
