@@ -757,20 +757,20 @@ void CDriverGL3::setupLightMapPass(uint pass)
 			activateTexture(stage, NULL);
 		}
 
-		// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up
-		if (m_VPUsesObjectUBO || m_VPUsesMaterialUBO)
-		{
-			_LightMapUBOOverride.Active = true;
-			memset(_LightMapUBOOverride.SelfIllumination, 0, sizeof(_LightMapUBOOverride.SelfIllumination));
-			_LightMapUBOOverride.ZeroLightFactors = false;
-			// White diffuse (material diffuse not applied to dynamic light)
-			_LightMapUBOOverride.MaterialDiffuse[0] = 1.0f;
-			_LightMapUBOOverride.MaterialDiffuse[1] = 1.0f;
-			_LightMapUBOOverride.MaterialDiffuse[2] = 1.0f;
-			_LightMapUBOOverride.MaterialDiffuse[3] = 1.0f;
-			// Zero specular (lightmaps have no specular)
-			memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
-		}
+		// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up.
+		// Always set unconditionally: m_VPUsesObjectUBO/m_VPUsesMaterialUBO may be stale here
+		// (setupMaterial skips setupBuiltinPrograms for lightmap materials), and the override is
+		// harmless when UBOs aren't active (only uploadObjectUBO/uploadMaterialUBO read it).
+		_LightMapUBOOverride.Active = true;
+		memset(_LightMapUBOOverride.SelfIllumination, 0, sizeof(_LightMapUBOOverride.SelfIllumination));
+		_LightMapUBOOverride.ZeroLightFactors = false;
+		// White diffuse (material diffuse not applied to dynamic light)
+		_LightMapUBOOverride.MaterialDiffuse[0] = 1.0f;
+		_LightMapUBOOverride.MaterialDiffuse[1] = 1.0f;
+		_LightMapUBOOverride.MaterialDiffuse[2] = 1.0f;
+		_LightMapUBOOverride.MaterialDiffuse[3] = 1.0f;
+		// Zero specular (lightmaps have no specular)
+		memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
 
 		// Setup the programs now
 		setupBuiltinPrograms();
@@ -1013,23 +1013,21 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		_CameraUBODirty = true;
 	}
 
-	// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up
-	if (m_VPUsesObjectUBO || m_VPUsesMaterialUBO)
-	{
-		_LightMapUBOOverride.Active = true;
-		_LightMapUBOOverride.SelfIllumination[0] = selfIllumination.R;
-		_LightMapUBOOverride.SelfIllumination[1] = selfIllumination.G;
-		_LightMapUBOOverride.SelfIllumination[2] = selfIllumination.B;
-		_LightMapUBOOverride.SelfIllumination[3] = 0.0f;
-		_LightMapUBOOverride.ZeroLightFactors = (pass > 0);
-		// White diffuse (material diffuse not applied to dynamic light for lightmaps)
-		_LightMapUBOOverride.MaterialDiffuse[0] = 1.0f;
-		_LightMapUBOOverride.MaterialDiffuse[1] = 1.0f;
-		_LightMapUBOOverride.MaterialDiffuse[2] = 1.0f;
-		_LightMapUBOOverride.MaterialDiffuse[3] = 1.0f;
-		// Zero specular (lightmaps have no specular contribution)
-		memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
-	}
+	// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up.
+	// Always set unconditionally (see _NLightMaps==0 path above for rationale).
+	_LightMapUBOOverride.Active = true;
+	_LightMapUBOOverride.SelfIllumination[0] = selfIllumination.R;
+	_LightMapUBOOverride.SelfIllumination[1] = selfIllumination.G;
+	_LightMapUBOOverride.SelfIllumination[2] = selfIllumination.B;
+	_LightMapUBOOverride.SelfIllumination[3] = 0.0f;
+	_LightMapUBOOverride.ZeroLightFactors = (pass > 0);
+	// White diffuse (material diffuse not applied to dynamic light for lightmaps)
+	_LightMapUBOOverride.MaterialDiffuse[0] = 1.0f;
+	_LightMapUBOOverride.MaterialDiffuse[1] = 1.0f;
+	_LightMapUBOOverride.MaterialDiffuse[2] = 1.0f;
+	_LightMapUBOOverride.MaterialDiffuse[3] = 1.0f;
+	// Zero specular (lightmaps have no specular contribution)
+	memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
 
 	// Setup the programs now
 	setupBuiltinPrograms();
