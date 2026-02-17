@@ -333,6 +333,7 @@ CDriverGL3::CDriverGL3()
 	_CameraUBODirty = true;
 	_CameraUBOCapacity = 0;
 	_LightTableObjCount = 0;
+	_NumPerPixelLights = 0;
 	for (uint i = 0; i < MaxLight; ++i)
 	{
 		_LightTableObjIndices[i] = -1;

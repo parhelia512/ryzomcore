@@ -1037,7 +1037,7 @@ void		CRenderTrav::changeLightSetupTable(CLightContribution *lightContribution, 
 		perObjectAmbient.A = 255;
 
 		// Send to driver
-		Driver->setLights(tableIndices, lightFactors, numLights, perObjectAmbient);
+		Driver->setLights(tableIndices, lightFactors, numLights, 0, perObjectAmbient);
 
 		// Update _NumLightEnabled for VP light setup
 		_NumLightEnabled = plId + 1;
@@ -1049,7 +1049,7 @@ void		CRenderTrav::changeLightSetupTable(CLightContribution *lightContribution, 
 	else
 	{
 		// NULL lightContribution: disable all
-		Driver->setLights(NULL, NULL, 0, CRGBA::Black);
+		Driver->setLights(NULL, NULL, 0, 0, CRGBA::Black);
 
 		_CacheLightContribution = NULL;
 		_NumLightEnabled = 0;

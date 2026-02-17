@@ -191,6 +191,7 @@ void	CDriverGL3::setLights(
 	const sint16 *tableIndices,
 	const uint8 *factors,
 	uint numLights,
+	uint numPerPixelLights,
 	NLMISC::CRGBA ambient)
 {
 	H_AUTO_OGL(CDriverGL3_setLights)
@@ -206,6 +207,7 @@ void	CDriverGL3::setLights(
 	// Process each light (up to MaxLight)
 	uint count = std::min(numLights, (uint)MaxLight);
 	_LightTableObjCount = count;
+	_NumPerPixelLights = std::min(numPerPixelLights, count);
 	for (uint i = 0; i < count; ++i)
 	{
 		sint16 tableIndex = tableIndices[i];
@@ -658,7 +660,8 @@ struct CObjectUBOData
 	sint32 vertexFormat;           // 4
 	sint32 worldSpaceNormal;       // 4
 	sint32 worldSpacePosition;     // 4
-	sint32 _pad[3];                // 12 (pad to 16-byte std140 alignment)
+	sint32 numPerPixelLights;      // 4
+	sint32 _pad[2];                // 8 (pad to 16-byte std140 alignment)
 };                                 // 304
 static_assert(sizeof(CObjectUBOData) == 304, "Object UBO layout mismatch");
 
@@ -751,9 +754,9 @@ void CDriverGL3::uploadObjectUBO()
 	data.vertexFormat = (sint32)m_VPBuiltinCurrent.VertexFormat;
 	data.worldSpaceNormal = m_VPNormalOutput ? 1 : 0;
 	data.worldSpacePosition = m_VPWorldSpacePositionOutput ? 1 : 0;
+	data.numPerPixelLights = (sint32)_NumPerPixelLights;
 	data._pad[0] = 0;
 	data._pad[1] = 0;
-	data._pad[2] = 0;
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CObjectUBOData);

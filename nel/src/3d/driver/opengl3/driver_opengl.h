@@ -630,6 +630,7 @@ public:
 		const sint16 *tableIndices,
 		const uint8 *factors,
 		uint numLights,
+		uint numPerPixelLights,
 		NLMISC::CRGBA ambient);
 
 	virtual void			setAmbientColor (CRGBA color);
@@ -974,6 +975,7 @@ private:
 	sint16						_LightTableObjIndices[MaxLight];
 	float						_LightTableObjFactors[MaxLight];
 	uint						_LightTableObjCount;
+	uint						_NumPerPixelLights; // First N lights evaluated per-pixel in PP (0 = all VP)
 
 	// Camera/global state UBO (viewMatrix, fog, clipPlanes, pzbCameraPos)
 	GLuint						_CameraUBOId;
@@ -1389,14 +1391,14 @@ private:
 	bool m_VPBuiltinTouched;
 
 	// Megashader support: m_MegaVP[fog][clip][table][cameraUBO][objectUBO][materialUBO]
-	//                     m_MegaPP[fog][cube][specular][cameraUBO][objectUBO][materialUBO]
+	//                     m_MegaPP[fog][cube][specular][ppl][cameraUBO][objectUBO][materialUBO]
 	bool m_UseMegaShaders;          // Select mega VP/PP variants (false = per-material compiled shaders)
 	bool m_UseMegaLightTableUBO;    // Select mega VP/PP variants with light table UBO
 	bool m_UseMegaCameraUBO;        // Select mega VP/PP variants with camera state UBO
 	bool m_UseMegaObjectUBO;        // Select mega VP/PP variants with per-object UBO (implies table+camera)
 	bool m_UseMegaMaterialUBO;      // Select mega VP/PP variants with per-material UBO
 	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2][2][2];
-	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2];
+	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2][2];
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;

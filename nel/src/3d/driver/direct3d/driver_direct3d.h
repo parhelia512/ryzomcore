@@ -1065,6 +1065,7 @@ public:
 		const sint16 *tableIndices,
 		const uint8 *factors,
 		uint numLights,
+		uint numPerPixelLights,
 		NLMISC::CRGBA ambient);
 
 	virtual void			setAmbientColor (CRGBA color);

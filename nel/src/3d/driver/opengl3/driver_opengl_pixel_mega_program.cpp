@@ -61,7 +61,17 @@ namespace /* anonymous */ {
 
 #define MEGA_PP_MAX_SAMPLERS 8
 
-void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, bool cameraUBO, bool objectUBO, bool materialUBO)
+// Packed accessors for light indices/factors in object UBO (used by PPL path)
+static const char *s_LightIdxAccess[8] = {
+	"nlLightIndices01.x", "nlLightIndices01.y", "nlLightIndices01.z", "nlLightIndices01.w",
+	"nlLightIndices45.x", "nlLightIndices45.y", "nlLightIndices45.z", "nlLightIndices45.w"
+};
+static const char *s_LightFacAccess[8] = {
+	"nlLightFactors01.x", "nlLightFactors01.y", "nlLightFactors01.z", "nlLightFactors01.w",
+	"nlLightFactors45.x", "nlLightFactors45.y", "nlLightFactors45.z", "nlLightFactors45.w"
+};
+
+void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, bool ppl, bool cameraUBO, bool objectUBO, bool materialUBO)
 {
 	// Object UBO implies camera UBO
 	if (objectUBO) { cameraUBO = true; }
@@ -69,6 +79,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 	std::stringstream ss;
 	ss << "// Megashader Pixel Program";
 	ss << " (fog=" << (int)fog << ", cube=" << (int)cube << ", specular=" << (int)specular
+	   << ", ppl=" << (int)ppl
 	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
 	   << ", materialUBO=" << (int)materialUBO << ")" << std::endl;
 	ss << std::endl;
@@ -151,6 +162,26 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 		ss << "uniform int nlFogMode;" << std::endl;
 	if (fog && !objectUBO)
 		ss << "uniform int nlWorldSpacePosition;" << std::endl;
+
+	// PPL uniforms
+	if (ppl)
+	{
+		if (!objectUBO)
+		{
+			ss << "uniform int nlNumPerPixelLights;" << std::endl;
+			for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			{
+				ss << "uniform int nlLightIndex" << i << ";" << std::endl;
+				ss << "uniform float nlLightFactor" << i << ";" << std::endl;
+			}
+		}
+		if (!materialUBO)
+		{
+			ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
+			ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
+			ss << "uniform float nlMaterialShininess;" << std::endl;
+		}
+	}
 	ss << std::endl;
 
 	// Vertex format flag constants for texcoord availability
@@ -255,10 +286,92 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 		ss << std::endl;
 	}
 
+	// Per-pixel lighting function (world-space Blinn-Phong)
+	if (ppl)
+	{
+		ss << "void computeLightPP(int lightMode, vec3 dirOrPos, vec4 colDiff, vec4 colSpec," << std::endl;
+		ss << "                    float shininess, float constAttn, float linAttn, float quadAttn," << std::endl;
+		ss << "                    vec3 spotDir, float spotCutoff, float spotExp," << std::endl;
+		ss << "                    vec3 wsNormal, vec3 wsPos, vec3 eyeDir, vec3 pzbCamPos," << std::endl;
+		ss << "                    inout vec4 pplDiffuse, inout vec4 pplSpecular)" << std::endl;
+		ss << "{" << std::endl;
+		ss << "  if (lightMode < 0) return;" << std::endl;
+		ss << "  vec3 lightDir;" << std::endl;
+		ss << "  float attnFactor = 1.0;" << std::endl;
+		ss << "  if (lightMode == " << (int)CLight::DirectionalLight << ") {" << std::endl;
+		ss << "    lightDir = normalize(-dirOrPos);" << std::endl;
+		ss << "  } else {" << std::endl;
+		ss << "    vec3 lightPosRel = dirOrPos - pzbCamPos;" << std::endl;
+		ss << "    vec3 lightVec = lightPosRel - wsPos;" << std::endl;
+		ss << "    float d = length(lightVec);" << std::endl;
+		ss << "    lightDir = lightVec / d;" << std::endl;
+		ss << "    attnFactor = 1.0 / (constAttn + linAttn * d + quadAttn * d * d);" << std::endl;
+		ss << "    if (lightMode == " << (int)CLight::SpotLight << ") {" << std::endl;
+		ss << "      float sd = dot(-lightDir, normalize(spotDir));" << std::endl;
+		ss << "      attnFactor *= (sd >= spotCutoff) ? pow(sd, spotExp) : 0.0;" << std::endl;
+		ss << "    }" << std::endl;
+		ss << "  }" << std::endl;
+		ss << "  float diff = max(0.0, dot(lightDir, wsNormal));" << std::endl;
+		ss << "  pplDiffuse += diff * attnFactor * colDiff;" << std::endl;
+		ss << "  vec3 h = normalize(lightDir + eyeDir);" << std::endl;
+		ss << "  float spec = pow(max(0.0, dot(wsNormal, h)), shininess);" << std::endl;
+		ss << "  pplSpecular += spec * attnFactor * colSpec;" << std::endl;
+		ss << "}" << std::endl;
+		ss << std::endl;
+	}
+
 	// --- main ---
 	ss << "void main(void) {" << std::endl;
 	ss << "  fragColor = vertexColor;" << std::endl;
 	ss << std::endl;
+
+	// Per-pixel lighting accumulation
+	if (ppl)
+	{
+		const char *matDiffStr = materialUBO ? "materialDiffuse" : "nlMaterialDiffuse";
+		const char *matSpecStr = materialUBO ? "materialSpecular" : "nlMaterialSpecular";
+		const char *matShinStr = materialUBO ? "materialShininess" : "nlMaterialShininess";
+
+		ss << "  vec4 pplSpecAccum = vec4(0.0);" << std::endl;
+		ss << "  if (nlNumPerPixelLights > 0) {" << std::endl;
+		ss << "    vec3 wsPos = ecPos.xyz / ecPos.w;" << std::endl;
+		ss << "    vec3 wsNormal = normalize(normal.xyz);" << std::endl;
+		ss << "    vec3 eyeDir = normalize(-wsPos);" << std::endl;
+		ss << "    vec4 pplDiff = vec4(0.0);" << std::endl;
+
+		// Unrolled PPL light loop
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			const char *idxAccess = objectUBO ? s_LightIdxAccess[i] : NULL;
+			const char *facAccess = objectUBO ? s_LightFacAccess[i] : NULL;
+
+			ss << "    if (" << i << " < nlNumPerPixelLights) {" << std::endl;
+			if (objectUBO)
+				ss << "      int idx = " << idxAccess << ";" << std::endl;
+			else
+				ss << "      int idx = nlLightIndex" << i << ";" << std::endl;
+			ss << "      if (idx >= 0) {" << std::endl;
+			ss << "        NlLightInfo li = nlLights[idx];" << std::endl;
+			if (objectUBO)
+				ss << "        float factor = " << facAccess << ";" << std::endl;
+			else
+				ss << "        float factor = nlLightFactor" << i << ";" << std::endl;
+			ss << "        computeLightPP(li.mode, li.dirOrPos," << std::endl;
+			ss << "          li.diffuse * factor * " << matDiffStr << "," << std::endl;
+			ss << "          li.specular * factor * " << matSpecStr << "," << std::endl;
+			ss << "          " << matShinStr << "," << std::endl;
+			ss << "          li.constAttn, li.linAttn, li.quadAttn," << std::endl;
+			ss << "          li.spotDir, li.spotCutoff, li.spotExp," << std::endl;
+			ss << "          wsNormal, wsPos, eyeDir, pzbCameraPos," << std::endl;
+			ss << "          pplDiff, pplSpecAccum);" << std::endl;
+			ss << "      }" << std::endl;
+			ss << "    }" << std::endl;
+		}
+
+		ss << "    fragColor.rgb += pplDiff.rgb;" << std::endl;
+		ss << "  }" << std::endl;
+		ss << std::endl;
+	}
 
 	// Pre-sample all active textures
 	for (int i = 0; i < MEGA_PP_MAX_SAMPLERS; ++i)
@@ -422,6 +535,8 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 	// Add specular post-texture (matches legacy GL_COLOR_SUM / GL_SEPARATE_SPECULAR_COLOR)
 	if (specular)
 		ss << "  fragColor.rgb += specularColor.rgb;" << std::endl;
+	if (ppl)
+		ss << "  fragColor.rgb += pplSpecAccum.rgb;" << std::endl;
 	ss << std::endl;
 
 	// Alpha test
@@ -447,39 +562,50 @@ bool CDriverGL3::initMegaPixelPrograms()
 		{
 			for (int specular = 0; specular < 2; ++specular)
 			{
-				for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
+				for (int ppl = 0; ppl < 2; ++ppl)
 				{
-					for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
+					// ppl=1 requires fog=1 (ecPos varying) and cameraUBO=1 (pzbCameraPos)
+					if (ppl && !fog)
+						continue;
+
+					for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
 					{
-						for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
+						if (ppl && !cameraUBO)
+							continue;
+
+						for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
 						{
-							// objectUBO implies cameraUBO
-							if (objectUBO && !cameraUBO)
-								continue;
-
-							std::string result;
-							megaPPGenerate(result, fog != 0, cube != 0, specular != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
-
-							CPixelProgram *pp = new CPixelProgram();
-							IProgram::CSource *src = new IProgram::CSource();
-							src->Profile = IProgram::glsl330f;
-							src->DisplayName = NLMISC::toString("Mega PP (fog=%d, cube=%d, spec=%d, cam=%d, obj=%d, mat=%d)", fog, cube, specular, cameraUBO, objectUBO, materialUBO);
-							src->Features.UsesCameraUBO = (cameraUBO != 0);
-							src->Features.UsesObjectUBO = (objectUBO != 0);
-							src->Features.UsesMaterialUBO = (materialUBO != 0);
-							src->setSource(result);
-							pp->addSource(src);
-
-							nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
-
-							if (!compilePixelProgram(pp))
+							for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
 							{
-								nlwarning("GL3: Mega PP compilation failed (%s)", src->DisplayName.c_str());
-								delete pp;
-								return false;
-							}
+								// objectUBO implies cameraUBO
+								if (objectUBO && !cameraUBO)
+									continue;
 
-							m_MegaPP[fog][cube][specular][cameraUBO][objectUBO][materialUBO] = pp;
+								std::string result;
+								megaPPGenerate(result, fog != 0, cube != 0, specular != 0, ppl != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
+
+								CPixelProgram *pp = new CPixelProgram();
+								IProgram::CSource *src = new IProgram::CSource();
+								src->Profile = IProgram::glsl330f;
+								src->DisplayName = NLMISC::toString("Mega PP (fog=%d, cube=%d, spec=%d, ppl=%d, cam=%d, obj=%d, mat=%d)", fog, cube, specular, ppl, cameraUBO, objectUBO, materialUBO);
+								src->Features.UsesLightTableUBO = (ppl != 0);
+								src->Features.UsesCameraUBO = (cameraUBO != 0);
+								src->Features.UsesObjectUBO = (objectUBO != 0);
+								src->Features.UsesMaterialUBO = (materialUBO != 0);
+								src->setSource(result);
+								pp->addSource(src);
+
+								nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+								if (!compilePixelProgram(pp))
+								{
+									nlwarning("GL3: Mega PP compilation failed (%s)", src->DisplayName.c_str());
+									delete pp;
+									return false;
+								}
+
+								m_MegaPP[fog][cube][specular][ppl][cameraUBO][objectUBO][materialUBO] = pp;
+							}
 						}
 					}
 				}
@@ -519,8 +645,10 @@ bool CDriverGL3::setupMegaPixelProgram()
 	int cameraUBO = m_ProgramUsesCameraUBO[VertexProgram] ? 1 : 0;
 	int objectUBO = m_ProgramUsesObjectUBO[VertexProgram] ? 1 : 0;
 	int materialUBO = m_ProgramUsesMaterialUBO[VertexProgram] ? 1 : 0;
+	// PPL variant: requires light table UBO, fog (ecPos varying), and camera UBO (pzbCameraPos)
+	int ppl = (_NumPerPixelLights > 0 && m_ProgramUsesLightTableUBO[VertexProgram] && fog && cameraUBO) ? 1 : 0;
 
-	CPixelProgram *pp = m_MegaPP[fog][cube][specular][cameraUBO][objectUBO][materialUBO];
+	CPixelProgram *pp = m_MegaPP[fog][cube][specular][ppl][cameraUBO][objectUBO][materialUBO];
 	nlassert(pp);
 
 	if (!activePixelProgram(pp, true))
@@ -608,6 +736,44 @@ void CDriverGL3::setupMegaPPUniforms()
 		idx = p->getUniformIndex(CProgramIndex::NlWorldSpacePosition);
 		if (idx != ~0u)
 			nglProgramUniform1i(progId, idx, m_VPWorldSpacePositionOutput ? 1 : 0);
+
+		// PPL: num per-pixel lights and per-object light indices/factors
+		idx = p->getUniformIndex(CProgramIndex::NlNumPerPixelLights);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, (sint32)_NumPerPixelLights);
+
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightIndex0 + i));
+			if (idx != ~0u)
+				nglProgramUniform1i(progId, idx, (sint32)_LightTableObjIndices[i]);
+
+			idx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightFactor0 + i));
+			if (idx != ~0u)
+				nglProgramUniform1f(progId, idx, _LightTableObjFactors[i]);
+		}
+	}
+
+	// PPL: material properties (skip when material UBO provides them)
+	if (!m_ProgramUsesMaterialUBO[PixelProgram])
+	{
+		idx = p->getUniformIndex(CProgramIndex::NlMaterialDiffuse);
+		if (idx != ~0u)
+		{
+			NLMISC::CRGBAF d(mat.getDiffuse());
+			nglProgramUniform4f(progId, idx, d.R, d.G, d.B, d.A);
+		}
+
+		idx = p->getUniformIndex(CProgramIndex::NlMaterialSpecular);
+		if (idx != ~0u)
+		{
+			NLMISC::CRGBAF s(mat.getSpecular());
+			nglProgramUniform4f(progId, idx, s.R, s.G, s.B, s.A);
+		}
+
+		idx = p->getUniformIndex(CProgramIndex::NlMaterialShininess);
+		if (idx != ~0u)
+			nglProgramUniform1f(progId, idx, mat.getShininess());
 	}
 }
 

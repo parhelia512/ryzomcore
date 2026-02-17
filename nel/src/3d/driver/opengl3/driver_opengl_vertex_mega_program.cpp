@@ -199,6 +199,7 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 		ss << "uniform int nlWorldSpaceNormal;" << std::endl;
 		if (fog)
 			ss << "uniform int nlWorldSpacePosition;" << std::endl;
+		ss << "uniform int nlNumPerPixelLights;" << std::endl;
 	}
 	ss << std::endl;
 
@@ -332,14 +333,14 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 		const char *matSpecStr = materialUBO ? "materialSpecular" : "nlMaterialSpecular";
 		const char *matShinStr = materialUBO ? "materialShininess" : "nlMaterialShininess";
 
-		// Unrolled light table lookups
+		// Unrolled light table lookups (skip first nlNumPerPixelLights — evaluated in PP)
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
 			// Light index/factor accessor: packed from UBO or individual uniforms
 			const char *idxAccess = objectUBO ? s_LightIdxAccess[i] : NULL;
 			const char *facAccess = objectUBO ? s_LightFacAccess[i] : NULL;
 
-			ss << "    {" << std::endl;
+			ss << "    if (" << i << " >= nlNumPerPixelLights) {" << std::endl;
 			if (objectUBO)
 				ss << "      int idx = " << idxAccess << ";" << std::endl;
 			else
@@ -368,9 +369,10 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 	}
 	else
 	{
-		// Unrolled 8-light calls with individual uniforms
+		// Unrolled 8-light calls with individual uniforms (skip first nlNumPerPixelLights)
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
+			ss << "    if (" << i << " >= nlNumPerPixelLights)" << std::endl;
 			ss << "    computeLight(nlLightMode" << i
 				<< ", light" << i << "DirOrPos"
 				<< ", light" << i << "ColDiff"
@@ -564,6 +566,13 @@ bool CDriverGL3::setupMegaVertexProgram()
 	if (m_UserPixelProgram)
 		m_VPWorldSpacePositionOutput = m_UserPixelProgram->features().InputsWorldSpacePosition;
 
+	// Force world-space when PPL active (PP needs world-space normal and position)
+	if (_NumPerPixelLights > 0)
+	{
+		m_VPWorldSpacePositionOutput = true;
+		m_VPNormalOutput = true;
+	}
+
 	m_ProgramUsesLightTableUBO[VertexProgram] = m_UseMegaLightTableUBO;
 	m_ProgramUsesCameraUBO[VertexProgram] = m_UseMegaCameraUBO;
 	m_ProgramUsesObjectUBO[VertexProgram] = m_UseMegaObjectUBO;
@@ -665,6 +674,10 @@ void CDriverGL3::setupMegaVPUniforms()
 		idx = p->getUniformIndex(CProgramIndex::NlWorldSpacePosition);
 		if (idx != ~0u)
 			nglProgramUniform1i(progId, idx, m_VPWorldSpacePositionOutput ? 1 : 0);
+
+		idx = p->getUniformIndex(CProgramIndex::NlNumPerPixelLights);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, (sint32)_NumPerPixelLights);
 	}
 }
 

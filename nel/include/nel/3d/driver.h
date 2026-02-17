@@ -1136,15 +1136,17 @@ public:
 	virtual void setLightTableEntry(uint index, const CLight &light) = 0;
 
 	/** Set the active lights for the current object from the light table.
-	  * \param tableIndices  Array of indices into the light table. Slot 0 is the sun.
-	  * \param factors       Parallel array of influence factors (0-255) per light.
-	  * \param numLights     Number of entries in tableIndices/factors.
-	  * \param ambient       Per-object ambient color, written to slot 0's ambient.
+	  * \param tableIndices       Array of indices into the light table. Slot 0 is the sun.
+	  * \param factors            Parallel array of influence factors (0-255) per light.
+	  * \param numLights          Number of entries in tableIndices/factors.
+	  * \param numPerPixelLights  First N lights evaluated per-pixel in PP (0 = all VP).
+	  * \param ambient            Per-object ambient color, written to slot 0's ambient.
 	  */
 	virtual void setLights(
 		const sint16 *tableIndices,
 		const uint8 *factors,
 		uint numLights,
+		uint numPerPixelLights,
 		NLMISC::CRGBA ambient) = 0;
 
 	// @}
