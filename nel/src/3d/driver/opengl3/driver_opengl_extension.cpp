@@ -67,6 +67,9 @@ void (*nglGetProcAddress(const char *procName))()
 // ***************************************************************************
 // The exported function names
 
+namespace NL3D {
+namespace NLDRIVERGL3 {
+
 // Core 3.30
 PFNGLGETSTRINGIPROC								nglGetStringi;
 
@@ -295,9 +298,6 @@ NEL_PFNGLXGETSWAPINTERVALMESAPROC				nglXGetSwapIntervalMESA;
 // ***************************************************************************
 // ***************************************************************************
 
-
-namespace	NL3D {
-namespace NLDRIVERGL3 {
 
 #define CHECK_EXT(ext_str) \
 	if (strstr(glext, ext_str)==NULL) { nlwarning("3D: OpengGL extension '%s' was not found", ext_str); return false; } else { nldebug("3D: OpengGL Extension '%s' found", ext_str); }

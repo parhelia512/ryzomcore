@@ -164,6 +164,9 @@ bool registerGlExtensions(CGlExtensions &ext);
 	NB: we do it for all (EXT, NV, ARB extension) even it should be useful only for ARB ones.
 */
 
+namespace NL3D {
+namespace NLDRIVERGL3 {
+
 // Core 3.30
 extern PFNGLGETSTRINGIPROC								nglGetStringi;
 
@@ -389,6 +392,9 @@ extern NEL_PFNGLXSWAPINTERVALMESAPROC			nglXSwapIntervalMESA;
 extern NEL_PFNGLXGETSWAPINTERVALMESAPROC		nglXGetSwapIntervalMESA;
 
 #endif
+
+} // NLDRIVERGL3
+} // NL3D
 
 
 
