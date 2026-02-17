@@ -358,6 +358,7 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"nlTexEnvMode3",
 	"nlAlphaTest",
 	"nlFogMode",
+	"nlWorldSpaceNormal",
 	"samplerCube0",
 	"samplerCube1",
 	"samplerCube2",

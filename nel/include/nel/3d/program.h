@@ -75,7 +75,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), OutputsWorldSpaceNormal(false), InputsWorldSpaceNormal(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -103,6 +103,12 @@ struct CProgramFeatures
 
 	/// Whether this VP outputs a separate specular color varying (for post-texture addition).
 	bool OutputsSpecularColor;
+
+	/// Whether this VP outputs a world-space normal varying at location 2.
+	bool OutputsWorldSpaceNormal;
+
+	/// Whether this PP requires a world-space normal varying at location 2 from the VP.
+	bool InputsWorldSpaceNormal;
 
 	// UBO flags (todo: enum)
 	// These are set on both user and builtin programs (todo)
@@ -405,6 +411,7 @@ struct CProgramIndex
 		NlTexEnvMode3,
 		NlAlphaTest,
 		NlFogMode,
+		NlWorldSpaceNormal,
 		SamplerCube0,
 		SamplerCube1,
 		SamplerCube2,

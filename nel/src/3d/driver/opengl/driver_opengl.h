@@ -646,6 +646,7 @@ public:
 	// @}
 
 	virtual bool			supportPerPixelLighting(bool specular) const;
+	virtual bool			supportWorldSpaceNormal() const { return false; }
 
 
 	/// \name Misc

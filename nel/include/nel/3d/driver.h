@@ -493,8 +493,11 @@ public:
 	virtual void			endMaterialMultiPass() = 0;
 	// @}
 
-	// Does the driver support the per-pixel lighting shader ?
+	// Does the driver support the per-pixel lighting shader ? (legacy fixed-function technique)
 	virtual bool supportPerPixelLighting(bool specular) const = 0;
+
+	/// Does the driver support outputting a world-space normal varying from builtin VP to PP?
+	virtual bool supportWorldSpaceNormal() const = 0;
 	// @}
 
 

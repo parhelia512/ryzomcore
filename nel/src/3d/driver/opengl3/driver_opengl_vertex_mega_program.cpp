@@ -194,6 +194,8 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 	}
 	if (clip && !cameraUBO)
 		ss << "uniform int nlClipPlaneMask;" << std::endl;
+	if (!objectUBO)
+		ss << "uniform int nlWorldSpaceNormal;" << std::endl;
 	ss << std::endl;
 
 	// Vertex format flag constants (matching g_VertexFlags / CVertexBuffer flags)
@@ -274,13 +276,22 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 		ss << "  ecPos = ecPos4;" << std::endl;
 	ss << std::endl;
 
-	// Pass through all varyings (always normalize normals)
+	// Pass through all varyings (always normalize normals, output world-space normal)
 	for (int i = Weight; i < NumOffsets; ++i)
 	{
 		if (i == PrimaryColor || i == SecondaryColor)
 			continue;
 		if (i == Normal)
-			ss << "  " << g_AttribNames[i] << " = vec4(normalize(v" << g_AttribNames[i] << ".xyz), 0.0);" << std::endl;
+		{
+			ss << "  if ((nlVertexFormat & NL_VP_NORMAL_FLAG) != 0) {" << std::endl;
+			ss << "    if (nlWorldSpaceNormal != 0)" << std::endl;
+			// World-space normal: eye-space via normalMatrix, then undo view rotation
+			ss << "      " << g_AttribNames[i] << " = vec4(transpose(mat3(viewMatrix)) * normalize(normalMatrix * (v" << g_AttribNames[i] << ".xyz / v" << g_AttribNames[i] << ".w)), 0.0);" << std::endl;
+			ss << "    else" << std::endl;
+			ss << "      " << g_AttribNames[i] << " = vec4(normalize(v" << g_AttribNames[i] << ".xyz), 0.0);" << std::endl;
+			ss << "  } else" << std::endl;
+			ss << "    " << g_AttribNames[i] << " = vec4(0.0, 0.0, 0.0, 0.0);" << std::endl;
+		}
 		else
 			ss << "  " << g_AttribNames[i] << " = v" << g_AttribNames[i] << ";" << std::endl;
 	}
@@ -518,6 +529,7 @@ bool CDriverGL3::setupMegaVertexProgram()
 	if (m_UserVertexProgram)
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
+		m_VPNormalOutput = m_UserVertexProgram->features().OutputsWorldSpaceNormal;
 		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO;
 		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO;
 		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO;
@@ -532,6 +544,11 @@ bool CDriverGL3::setupMegaVertexProgram()
 	}
 
 	m_VPSpecularOutput = true; // Mega VP always outputs specularColor
+
+	// Mega VP outputs world-space normal when requested by PP
+	m_VPNormalOutput = false;
+	if (m_UserPixelProgram)
+		m_VPNormalOutput = m_UserPixelProgram->features().InputsWorldSpaceNormal;
 	m_ProgramUsesLightTableUBO[VertexProgram] = m_UseMegaLightTableUBO;
 	m_ProgramUsesCameraUBO[VertexProgram] = m_UseMegaCameraUBO;
 	m_ProgramUsesObjectUBO[VertexProgram] = m_UseMegaObjectUBO;
@@ -621,6 +638,14 @@ void CDriverGL3::setupMegaVPUniforms()
 		idx = p->getUniformIndex(CProgramIndex::NlClipPlaneMask);
 		if (idx != ~0u)
 			nglProgramUniform1i(progId, idx, (sint32)m_VPBuiltinCurrent.ClipPlaneMask);
+	}
+
+	// World-space normal flag (skip when object UBO provides it)
+	if (!m_ProgramUsesObjectUBO[VertexProgram])
+	{
+		idx = p->getUniformIndex(CProgramIndex::NlWorldSpaceNormal);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, m_VPNormalOutput ? 1 : 0);
 	}
 }
 

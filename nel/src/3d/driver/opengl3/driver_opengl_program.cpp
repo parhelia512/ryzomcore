@@ -821,6 +821,7 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 	if (m_UserVertexProgram)
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
+		m_VPNormalOutput = m_UserVertexProgram->features().OutputsWorldSpaceNormal;
 		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO;
 		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO;
 		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO;
@@ -834,6 +835,12 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 		return true;
 	}
 
+	// Check if PP needs world-space normal varying
+	bool needNormal = false;
+	if (m_UserPixelProgram)
+		needNormal = m_UserPixelProgram->features().InputsWorldSpaceNormal;
+	setWorldSpaceNormalVP(needNormal);
+
 	if (m_VPBuiltinTouched)
 	{
 		generateBuiltinVertexProgram();
@@ -843,6 +850,8 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 
 	m_VPSpecularOutput = m_VPBuiltinCurrent.Lighting
 		|| (m_VPBuiltinCurrent.VertexFormat & g_VertexFlags[SecondaryColor]);
+	m_VPNormalOutput = m_VPBuiltinCurrent.WorldSpaceNormal
+		&& (m_VPBuiltinCurrent.VertexFormat & g_VertexFlags[Normal]);
 	m_ProgramUsesLightTableUBO[VertexProgram] = false; // Builtin non-mega VP does not use UBOs
 	m_ProgramUsesCameraUBO[VertexProgram] = false;
 	m_ProgramUsesObjectUBO[VertexProgram] = false;

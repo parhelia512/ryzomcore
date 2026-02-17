@@ -410,6 +410,7 @@ public:
 	void					touchVertexFormatVP();
 	void					setTexGenModeVP(uint stage, sint mode);
 	void					touchClipPlaneVP(uint index, bool enable);
+	void					setWorldSpaceNormalVP(bool enable);
 
 	void					generateBuiltinPixelProgram(CMaterial &mat);
 
@@ -665,6 +666,7 @@ public:
 	// @}
 
 	virtual bool			supportPerPixelLighting(bool specular) const;
+	virtual bool			supportWorldSpaceNormal() const;
 
 
 	/// \name Misc
@@ -1397,6 +1399,9 @@ private:
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;
+
+	// Whether the currently active VP outputs world-space normal at VaryingLocationNormal
+	bool m_VPNormalOutput;
 
 	// Per-program UBO usage flags (indexed by IDriver::TProgram)
 	static const uint NumTProgram = 3;

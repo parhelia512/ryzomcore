@@ -1099,6 +1099,7 @@ public:
 	virtual bool			isEMBMSupportedAtStage(uint stage) const;
 	virtual void			setEMBMMatrix(const uint stage, const float mat[4]);
 	virtual bool			supportPerPixelLighting(bool /* specular */) const {return false;};
+	virtual bool			supportWorldSpaceNormal() const { return false; }
 
 	// index offset support
 	virtual bool			supportIndexOffset() const { return true; /* always supported with D3D driver */ }

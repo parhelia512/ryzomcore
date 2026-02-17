@@ -82,7 +82,7 @@ const char *GLSLObjectHeader =
 	"    int   nlLighting;\n"
 	"    int   nlVertexColorLighted;\n"
 	"    int   nlVertexFormat;\n"
-	"    int   _modelPad0;\n"
+	"    int   nlWorldSpaceNormal;\n"
 	"};\n";
 
 const char *GLSLMaterialHeader =

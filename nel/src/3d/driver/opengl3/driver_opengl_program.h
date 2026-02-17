@@ -33,7 +33,7 @@ static sint TexGenEyeLinear = 3; // GL_EYE_LINEAR
 /// Builtin vertex program description
 struct CVPBuiltin
 {
-	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), ClipPlaneMask(0) { }
+	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), WorldSpaceNormal(false), ClipPlaneMask(0) { }
 
 	uint16 VertexFormat;
 	bool Lighting;
@@ -43,6 +43,7 @@ struct CVPBuiltin
 	bool Fog;
 	bool VertexColorLighted;
 	bool Normalize; // Force-normalize normals (for MRM geomorphing, scaled models)
+	bool WorldSpaceNormal; // Output world-space normal at VaryingLocationNormal
 	uint8 ClipPlaneMask; // Bitmask of enabled clip planes (0-5)
 
 	NLMISC::CRefPtr<CVertexProgram> VertexProgram;
@@ -120,6 +121,7 @@ enum TAttribOffset
 // VB-sourced varyings use their TAttribOffset index as the location.
 // ecPos and vertexColor reuse slots that are never occupied by VB varyings.
 static const int VaryingLocationEcPos = Position; // = 0, Position is never output as a varying
+static const int VaryingLocationNormal = Normal; // = 2, world-space normal (when WorldSpaceNormal is set)
 static const int VaryingLocationVertexColor = PrimaryColor; // = 3, PrimaryColor is always skipped
 static const int VaryingLocationSpecularColor = SecondaryColor; // = 4, SecondaryColor is always skipped
 

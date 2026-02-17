@@ -656,7 +656,7 @@ struct CObjectUBOData
 	sint32 lighting;               // 4
 	sint32 vertexColorLighted;     // 4
 	sint32 vertexFormat;           // 4
-	sint32 _pad0;                  // 4
+	sint32 worldSpaceNormal;       // 4
 };                                 // 288
 static_assert(sizeof(CObjectUBOData) == 288, "Object UBO layout mismatch");
 
@@ -747,7 +747,7 @@ void CDriverGL3::uploadObjectUBO()
 	data.lighting = m_VPBuiltinCurrent.Lighting ? 1 : 0;
 	data.vertexColorLighted = m_VPBuiltinCurrent.VertexColorLighted ? 1 : 0;
 	data.vertexFormat = (sint32)m_VPBuiltinCurrent.VertexFormat;
-	data._pad0 = 0;
+	data.worldSpaceNormal = m_VPNormalOutput ? 1 : 0;
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CObjectUBOData);

@@ -51,6 +51,8 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 		return right.VertexColorLighted;
 	if (left.Normalize != right.Normalize)
 		return right.Normalize;
+	if (left.WorldSpaceNormal != right.WorldSpaceNormal)
+		return right.WorldSpaceNormal;
 	if (left.ClipPlaneMask != right.ClipPlaneMask)
 		return left.ClipPlaneMask < right.ClipPlaneMask;
 
@@ -78,6 +80,8 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 		return false;
 	if (left.Normalize != right.Normalize)
 		return false;
+	if (left.WorldSpaceNormal != right.WorldSpaceNormal)
+		return false;
 	if (left.ClipPlaneMask != right.ClipPlaneMask)
 		return false;
 
@@ -93,7 +97,7 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 {
 	uint32 h;
 
-	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0) | ((uint32)v.ClipPlaneMask << 20) | (v.Normalize ? (1 << 26) : 0));
+	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0) | ((uint32)v.ClipPlaneMask << 20) | (v.Normalize ? (1 << 26) : 0) | (v.WorldSpaceNormal ? (1 << 27) : 0));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			h = NLMISC::wangHash(h ^ v.LightMode[i]);
@@ -353,15 +357,16 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	if (lighting)
 		ss << "uniform vec4 selfIllumination;" << std::endl;
 
+	bool normalVarying = desc.WorldSpaceNormal && hasFlag(desc.VertexFormat, g_VertexFlags[Normal]);
 	bool needEcPos = desc.Fog || lighting || needEyeLinear || needReflection || needClipPlanes;
+	bool needNormalMatrix = lighting || needReflection || normalVarying;
 	if (needEcPos)
 		ss << "uniform mat4 modelView;" << std::endl;
-	if (lighting)
+	if (lighting || normalVarying)
 		ss << "uniform mat4 viewMatrix;" << std::endl;
 	if (needEcPos)
 		ss << "vec4 ecPos4;" << std::endl;
-	// normalMatrix needed for lighting and reflection texgen
-	if (needReflection && !lighting)
+	if (needNormalMatrix && !lighting) // lighting block declares it separately (with light uniforms)
 		ss << "uniform mat3 normalMatrix;" << std::endl;
 	if (desc.Fog)
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
@@ -467,7 +472,15 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 			// Skip texcoord passthrough when texgen overrides that stage
 			if (i >= TexCoord0 && i <= TexCoord7 && desc.TexGenMode[i - TexCoord0] >= 0)
 				continue;
-			if (i == Normal && desc.Normalize)
+			if (i == Normal && normalVarying)
+			{
+				// World-space normal: eye-space via normalMatrix, then undo view rotation
+				ss << "{" << std::endl;
+				ss << "vec3 eyeN = normalize(normalMatrix * (v" << g_AttribNames[Normal] << ".xyz / v" << g_AttribNames[Normal] << ".w));" << std::endl;
+				ss << g_AttribNames[i] << " = vec4(transpose(mat3(viewMatrix)) * eyeN, 0.0);" << std::endl;
+				ss << "}" << std::endl;
+			}
+			else if (i == Normal && desc.Normalize)
 				ss << g_AttribNames[i] << " = vec4(normalize(v" << g_AttribNames[i] << ".xyz), 0.0);" << std::endl;
 			else
 				ss << g_AttribNames[i] << " = " << "v" << g_AttribNames[i] << ";" << std::endl;
@@ -645,6 +658,16 @@ void CDriverGL3::touchClipPlaneVP(uint index, bool enable)
 	if (m_VPBuiltinCurrent.ClipPlaneMask != mask)
 	{
 		m_VPBuiltinCurrent.ClipPlaneMask = mask;
+		m_VPBuiltinTouched = true;
+	}
+}
+
+void CDriverGL3::setWorldSpaceNormalVP(bool enable)
+{
+	H_AUTO_OGL(CDriverGL3_setWorldSpaceNormalVP)
+	if (m_VPBuiltinCurrent.WorldSpaceNormal != enable)
+	{
+		m_VPBuiltinCurrent.WorldSpaceNormal = enable;
 		m_VPBuiltinTouched = true;
 	}
 }
