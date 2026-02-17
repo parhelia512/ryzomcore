@@ -51,13 +51,13 @@ using namespace NLMISC;
 
 // NSAddressOfSymbol, NSIsSymbolNameDefined, NSLookupAndBindSymbol are deprecated
 #include <dlfcn.h>
-void *nglGetProcAddress(const char *name)
+static void *nglGetProcAddress(const char *name)
 {
 	return dlsym(RTLD_DEFAULT, name);
 }
 
 #elif defined (NL_OS_UNIX)
-void (*nglGetProcAddress(const char *procName))()
+static void (*nglGetProcAddress(const char *procName))()
 {
 	return glXGetProcAddressARB((const GLubyte *)procName);
 }
