@@ -23,6 +23,8 @@
 #include "nel/misc/types_nl.h"
 #include "nel/3d/mesh_vertex_program.h"
 #include "nel/3d/vertex_program.h"
+#include "nel/3d/uniform_buffer.h"
+#include "nel/3d/uniform_buffer_format.h"
 
 
 namespace NL3D {
@@ -144,6 +146,22 @@ private:
 
 	// MBR Cache
 	uint		_LastMBRIdVP;
+
+	// User VP UBO for wind + material (UBO path only).
+	static NLMISC::CSmartPtr<CUniformBuffer> _WindTreeUB; // FIXME: This breaks when using multiple drivers
+
+	// Cached std140 offsets (layout is const — safe as static)
+	struct CWindTreeUBOOffsets
+	{
+		sint WindLevel1;
+		sint WindLevel2;     // base offset; [i] = WindLevel2 + i*16
+		sint WindLevel3;     // base offset; [i] = WindLevel3 + i*16
+		sint MaterialDiffuse;
+		sint MaterialSpecular;
+		sint MaterialShininess;
+	};
+	static CWindTreeUBOOffsets _UBOOffsets;
+	static NLMISC::CSmartPtr<CUniformBufferFormat> _WindTreeUBFormat;
 
 	// Compute a cosinus with an angle given in 0-1 <=> 0-2Pi. Actual values goes from 0 to 2.
 	static float	speedCos(float angle);
