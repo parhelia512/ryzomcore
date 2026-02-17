@@ -324,12 +324,10 @@ CDriverGL3::CDriverGL3()
 	_LightMapDynamicLightEnabled = false;
 	_LightMapDynamicLightDirty= false;
 	_LightTableMode= false;
-	m_UseLightUBO = true; // Default to UBO mode; set false for legacy uniform debugging
 	_LightTableUBOId = 0;
 	_LightTableDirty = false;
 	_UserLightUBODirty = true;
 	_LightTableUBOCapacity = 0;
-	m_UseCameraUBO = true; // Default to UBO mode; set false for legacy uniform debugging
 	_CameraUBOId = 0;
 	_CameraUBODirty = true;
 	_CameraUBOCapacity = 0;
@@ -358,14 +356,16 @@ CDriverGL3::CDriverGL3()
 	m_VPBuiltinTouched = true;
 
 	m_UseMegaShaders = true;
+	m_UseMegaLightTableUBO = true;  // implied by m_UseMegaObjectUBO
+	m_UseMegaCameraUBO = true;      // implied by m_UseMegaObjectUBO
+	m_UseMegaObjectUBO = true;
+	m_UseMegaMaterialUBO = true;
 	m_VPSpecularOutput = true;
 	m_VPUsesLightTableUBO = false;
 	m_VPUsesCameraUBO = false;
-	m_UseObjectUBO = true;
 	_ObjectUBOId = 0;
 	_ObjectUBOCapacity = 0;
 	m_VPUsesObjectUBO = false;
-	m_UseMaterialUBO = true;
 	m_VPUsesMaterialUBO = false;
 	_OverrideMaterialUBOId = 0;
 	memset(&_LightMapUBOOverride, 0, sizeof(_LightMapUBOOverride));

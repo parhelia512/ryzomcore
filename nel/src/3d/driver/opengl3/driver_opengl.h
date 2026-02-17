@@ -956,7 +956,6 @@ private:
 	std::vector<CLight>			_LightTable;
 
 	// Light UBO (shared by light table mode and non-table fallback)
-	bool						m_UseLightUBO; // Driver init switch: true=UBO mode, false=legacy uniforms
 	GLuint						_LightTableUBOId;
 	bool						_LightTableDirty; // Light table entries changed
 	bool						_UserLightUBODirty; // _UserLight[] changed (for non-table UBO mode)
@@ -969,7 +968,6 @@ private:
 	uint						_LightTableObjCount;
 
 	// Camera/global state UBO (viewMatrix, fog, clipPlanes, pzbCameraPos)
-	bool						m_UseCameraUBO; // Debug switch: true=UBO mode, false=legacy uniforms
 	GLuint						_CameraUBOId;
 	bool						_CameraUBODirty;
 	sint						_CameraUBOCapacity; // Current GPU buffer capacity (bytes)
@@ -1380,7 +1378,11 @@ private:
 
 	// Megashader support: m_MegaVP[fog][clip][table][cameraUBO][objectUBO][materialUBO]
 	//                     m_MegaPP[fog][cube][specular][cameraUBO][objectUBO][materialUBO]
-	bool m_UseMegaShaders;
+	bool m_UseMegaShaders;          // Select mega VP/PP variants (false = per-material compiled shaders)
+	bool m_UseMegaLightTableUBO;    // Select mega VP/PP variants with light table UBO
+	bool m_UseMegaCameraUBO;        // Select mega VP/PP variants with camera state UBO
+	bool m_UseMegaObjectUBO;        // Select mega VP/PP variants with per-object UBO (implies table+camera)
+	bool m_UseMegaMaterialUBO;      // Select mega VP/PP variants with per-material UBO
 	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2][2][2];
 	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2];
 
@@ -1393,14 +1395,12 @@ private:
 	// Whether the current VP/PP reads camera/fog/clip state from UBO
 	bool m_VPUsesCameraUBO;
 
-	// Per-Object UBO
-	bool    m_UseObjectUBO;         // Debug switch (default true)
+	// Per-Object UBO (runtime state of currently bound program)
 	GLuint  _ObjectUBOId;           // Global GL buffer
 	sint    _ObjectUBOCapacity;     // Current GPU buffer capacity (bytes)
 	bool    m_VPUsesObjectUBO;      // Current VP reads from NlModel UBO
 
-	// Material UBO
-	bool    m_UseMaterialUBO;       // Debug switch (default true)
+	// Material UBO (runtime state of currently bound program)
 	bool    m_VPUsesMaterialUBO;    // Current VP/PP reads from NlMaterial UBO
 	GLuint  _OverrideMaterialUBOId; // Global buffer for per-pass material overrides (lightmap)
 	void    uploadObjectUBO();

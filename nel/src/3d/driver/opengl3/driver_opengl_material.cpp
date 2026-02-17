@@ -755,7 +755,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		}
 
 		// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up
-		if (m_UseObjectUBO || m_UseMaterialUBO)
+		if (m_VPUsesObjectUBO || m_VPUsesMaterialUBO)
 		{
 			_LightMapUBOOverride.Active = true;
 			memset(_LightMapUBOOverride.SelfIllumination, 0, sizeof(_LightMapUBOOverride.SelfIllumination));
@@ -1011,7 +1011,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	}
 
 	// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up
-	if (m_UseObjectUBO || m_UseMaterialUBO)
+	if (m_VPUsesObjectUBO || m_VPUsesMaterialUBO)
 	{
 		_LightMapUBOOverride.Active = true;
 		_LightMapUBOOverride.SelfIllumination[0] = selfIllumination.R;

@@ -532,10 +532,10 @@ bool CDriverGL3::setupMegaVertexProgram()
 	}
 
 	m_VPSpecularOutput = true; // Mega VP always outputs specularColor
-	m_VPUsesLightTableUBO = m_UseLightUBO; // Mega VP uses UBO when driver switch is on
-	m_VPUsesCameraUBO = m_UseCameraUBO;
-	m_VPUsesObjectUBO = m_UseObjectUBO;
-	m_VPUsesMaterialUBO = m_UseMaterialUBO;
+	m_VPUsesLightTableUBO = m_UseMegaLightTableUBO;
+	m_VPUsesCameraUBO = m_UseMegaCameraUBO;
+	m_VPUsesObjectUBO = m_UseMegaObjectUBO;
+	m_VPUsesMaterialUBO = m_UseMegaMaterialUBO;
 
 	// Object UBO implies table and camera UBO
 	if (m_VPUsesObjectUBO)
