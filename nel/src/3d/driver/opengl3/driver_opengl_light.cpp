@@ -343,7 +343,7 @@ void			CDriverGL3::setupLightMapDynamicLighting(bool enable)
 }
 
 // ***************************************************************************
-// CPU-side struct matching the std140 NlLightInfo layout (80 bytes)
+// CPU-side struct matching the std140 NlLightInfo layout (96 bytes)
 struct CLightTableEntry
 {
 	float dirOrPos[3];     // 0
@@ -356,8 +356,9 @@ struct CLightTableEntry
 	float spotExp;         // 60
 	float spotDir[3];      // 64
 	float spotCutoff;      // 76
-};                         // 80 bytes
-static_assert(sizeof(CLightTableEntry) == 80, "CLightTableEntry must match std140 NlLightInfo layout");
+	float ambient[4];      // 80
+};                         // 96 bytes
+static_assert(sizeof(CLightTableEntry) == 96, "CLightTableEntry must match std140 NlLightInfo layout");
 
 static void packLightToEntry(CLightTableEntry &e, const CLight &light)
 {
@@ -401,6 +402,12 @@ static void packLightToEntry(CLightTableEntry &e, const CLight &light)
 	e.spotDir[1] = spotDir.y;
 	e.spotDir[2] = spotDir.z;
 	e.spotCutoff = cosf(light.getCutoff());
+
+	NLMISC::CRGBAF amb(light.getAmbiant());
+	e.ambient[0] = amb.R;
+	e.ambient[1] = amb.G;
+	e.ambient[2] = amb.B;
+	e.ambient[3] = amb.A;
 }
 
 static void uploadLightUBOData(const CLightTableEntry *entries, sint count, GLuint uboId, sint &uboCapacity)
@@ -447,7 +454,7 @@ void CDriverGL3::uploadLightTableUBO()
 			return;
 		}
 
-		// Cap at max UBO size (128 lights × 80 bytes = 10240, fits in GL 3.3 min 16KB)
+		// Cap at max UBO size (128 lights × 96 bytes = 12288, fits in GL 3.3 min 16KB)
 		const sint maxLights = 128;
 		if (count > maxLights)
 			count = maxLights;

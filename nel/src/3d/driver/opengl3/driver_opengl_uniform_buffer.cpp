@@ -40,6 +40,7 @@ const char *GLSLLightTableHeader =
 	"    float spotExp;\n"
 	"    vec3  spotDir;\n"
 	"    float spotCutoff;\n"  // cos(cutoff angle)
+	"    vec4  ambient;\n"
 	"};\n"
 	"layout(std140) uniform NlLightTable {\n"
 	"    NlLightInfo nlLights[128];\n"
