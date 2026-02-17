@@ -75,7 +75,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), InputsWorldSpaceNormal(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), OutputsWorldSpacePosition(false), InputsWorldSpaceNormal(false), InputsWorldSpacePosition(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -104,12 +104,22 @@ struct CProgramFeatures
 	/// Whether this VP outputs a separate specular color varying (for post-texture addition).
 	bool OutputsSpecularColor;
 
+	/// Whether this VP outputs world-space position at location 0 (instead of eye-space ecPos).
+	/// When set, the builtin PP computes fog from radial world-space distance.
+	/// When false, location 0 carries eye-space position and fog uses planar depth.
+	bool OutputsWorldSpacePosition;
+
 	/// Whether this PP requires a world-space normal varying at location 2 from the VP.
 	/// When set, the builtin VP transforms the normal to world space before output.
 	/// When false, the VP still outputs the normal varying (object-space) if the VB
 	/// has normals — user PPs may consume it directly. The builtin PP only supports
 	/// world-space normals as input; object-space normals are only used by user PPs.
 	bool InputsWorldSpaceNormal;
+
+	/// Whether this PP requires world-space position at location 0 from the VP.
+	/// When set, the builtin VP outputs PZB-relative world-space position.
+	/// When false, the VP still outputs eye-space ecPos at location 0 when fog is enabled.
+	bool InputsWorldSpacePosition;
 
 	// UBO flags (todo: enum)
 	// These are set on both user and builtin programs (todo)
@@ -413,6 +423,8 @@ struct CProgramIndex
 		NlAlphaTest,
 		NlFogMode,
 		NlWorldSpaceNormal,
+		NlWorldSpacePosition,
+		CameraForward,
 		SamplerCube0,
 		SamplerCube1,
 		SamplerCube2,

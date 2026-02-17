@@ -33,7 +33,7 @@ static sint TexGenEyeLinear = 3; // GL_EYE_LINEAR
 /// Builtin vertex program description
 struct CVPBuiltin
 {
-	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), WorldSpaceNormal(false), ClipPlaneMask(0) { }
+	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), WorldSpaceNormal(false), WorldSpacePosition(false), ClipPlaneMask(0) { }
 
 	uint16 VertexFormat;
 	bool Lighting;
@@ -44,6 +44,7 @@ struct CVPBuiltin
 	bool VertexColorLighted;
 	bool Normalize; // Force-normalize normals (for MRM geomorphing, scaled models)
 	bool WorldSpaceNormal; // Output world-space normal at VaryingLocationNormal
+	bool WorldSpacePosition; // Output world-space position at VaryingLocationEcPos (instead of eye-space)
 	uint8 ClipPlaneMask; // Bitmask of enabled clip planes (0-5)
 
 	NLMISC::CRefPtr<CVertexProgram> VertexProgram;
@@ -64,13 +65,14 @@ static const uint64 SamplerCube = 1;
 /// are read by uploadMaterialUBO() to pack the NlMaterial UBO.
 struct CPPBuiltin
 {
-	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false) { }
+	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false), WorldSpacePosition(false) { }
 
 	// Driver state (per-draw-call, not in material UBO)
 	uint16 VertexFormat;
 	bool Fog;
 	uint8 FogMode;
 	bool SpecularSeparate; // Whether VP outputs specularColor varying
+	bool WorldSpacePosition; // Whether VP outputs world-space position (affects fog calculation)
 
 	// Material-derived state (packed into material UBO when active)
 	CMaterial::TShader Shader;

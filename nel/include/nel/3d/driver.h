@@ -496,8 +496,14 @@ public:
 	// Does the driver support the per-pixel lighting shader ? (legacy fixed-function technique)
 	virtual bool supportPerPixelLighting(bool specular) const = 0;
 
-	/// Does the driver support outputting a world-space normal varying from builtin VP to PP?
-	virtual bool supportWorldSpaceNormal() const = 0;
+	/// Does the driver's builtin VP/PP support per-pixel lighting features?
+	/// When true, user shader programs may use the following CProgramFeatures:
+	///   - InputsWorldSpaceNormal:    Request world-space normal at varying location 2.
+	///   - InputsWorldSpacePosition:  Request PZB-relative world-space position at varying location 0.
+	///   - OutputsWorldSpacePosition: Indicate that a user VP outputs world-space position at location 0.
+	/// These enable GLSL per-pixel lighting in user PPs (light direction, attenuation, etc.).
+	/// The builtin PP adapts fog to use world-space distance when position is in world space.
+	virtual bool supportWorldSpacePPL() const = 0;
 	// @}
 
 

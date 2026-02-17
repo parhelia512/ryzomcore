@@ -83,6 +83,7 @@ const char *GLSLObjectHeader =
 	"    int   nlVertexColorLighted;\n"
 	"    int   nlVertexFormat;\n"
 	"    int   nlWorldSpaceNormal;\n"
+	"    int   nlWorldSpacePosition;\n"
 	"};\n";
 
 const char *GLSLMaterialHeader =

@@ -130,6 +130,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 		ss << "uniform vec2 fogParams;" << std::endl;
 		ss << "uniform vec4 fogColor;" << std::endl;
 		ss << "uniform float fogDensity;" << std::endl;
+		ss << "uniform vec3 cameraForward;" << std::endl;
 		ss << std::endl;
 	}
 
@@ -148,6 +149,8 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 		ss << "uniform int nlVertexFormat;" << std::endl;
 	if (fog && !cameraUBO)
 		ss << "uniform int nlFogMode;" << std::endl;
+	if (fog && !objectUBO)
+		ss << "uniform int nlWorldSpacePosition;" << std::endl;
 	ss << std::endl;
 
 	// Vertex format flag constants for texcoord availability
@@ -234,7 +237,13 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, boo
 	if (fog)
 	{
 		ss << "vec4 applyFog(vec4 col) {" << std::endl;
-		ss << "  float z = abs(ecPos.y / ecPos.w);" << std::endl;
+		ss << "  float z;" << std::endl;
+		ss << "  if (nlWorldSpacePosition != 0) {" << std::endl;
+		if (cameraUBO)
+			ss << "    vec3 camFwd = vec3(viewMatrix[0].y, viewMatrix[1].y, viewMatrix[2].y);" << std::endl;
+		ss << "    z = abs(dot(ecPos.xyz, " << (cameraUBO ? "camFwd" : "cameraForward") << "));" << std::endl;
+		ss << "  } else" << std::endl;
+		ss << "    z = abs(ecPos.y / ecPos.w);" << std::endl;
 		ss << "  float fogFactor;" << std::endl;
 		ss << "  if (nlFogMode == 1) fogFactor = clamp(exp(-fogDensity * z), 0.0, 1.0);" << std::endl;
 		ss << "  else if (nlFogMode == 2) fogFactor = clamp(exp(-fogDensity * fogDensity * z * z), 0.0, 1.0);" << std::endl;
@@ -573,12 +582,20 @@ void CDriverGL3::setupMegaPPUniforms()
 			nglProgramUniform1i(progId, idx, (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0);
 	}
 
-	// Fog mode (skip when camera UBO provides it)
+	// Fog mode and camera forward (skip when camera UBO provides them)
 	if (!m_ProgramUsesCameraUBO[PixelProgram])
 	{
 		idx = p->getUniformIndex(CProgramIndex::NlFogMode);
 		if (idx != ~0u)
 			nglProgramUniform1i(progId, idx, (int)_FogMode);
+
+		// Camera forward for world-space fog (second row of view matrix, NeL Y = forward)
+		idx = p->getUniformIndex(CProgramIndex::CameraForward);
+		if (idx != ~0u)
+		{
+			const float *v = _ViewMtx.get();
+			nglProgramUniform3f(progId, idx, v[1], v[5], v[9]);
+		}
 	}
 
 	// Vertex format (skip when object UBO provides it)
@@ -587,6 +604,10 @@ void CDriverGL3::setupMegaPPUniforms()
 		idx = p->getUniformIndex(CProgramIndex::NlVertexFormat);
 		if (idx != ~0u)
 			nglProgramUniform1i(progId, idx, (sint32)matDrv->PPBuiltin.VertexFormat);
+
+		idx = p->getUniformIndex(CProgramIndex::NlWorldSpacePosition);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, m_VPWorldSpacePositionOutput ? 1 : 0);
 	}
 }
 

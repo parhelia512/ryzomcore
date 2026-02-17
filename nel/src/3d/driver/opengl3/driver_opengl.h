@@ -411,6 +411,7 @@ public:
 	void					setTexGenModeVP(uint stage, sint mode);
 	void					touchClipPlaneVP(uint index, bool enable);
 	void					setWorldSpaceNormalVP(bool enable);
+	void					setWorldSpacePositionVP(bool enable);
 
 	void					generateBuiltinPixelProgram(CMaterial &mat);
 
@@ -666,7 +667,7 @@ public:
 	// @}
 
 	virtual bool			supportPerPixelLighting(bool specular) const;
-	virtual bool			supportWorldSpaceNormal() const;
+	virtual bool			supportWorldSpacePPL() const;
 
 
 	/// \name Misc
@@ -1402,6 +1403,9 @@ private:
 
 	// Whether the currently active VP outputs world-space normal at VaryingLocationNormal
 	bool m_VPNormalOutput;
+
+	// Whether the currently active VP outputs world-space position at VaryingLocationEcPos
+	bool m_VPWorldSpacePositionOutput;
 
 	// Per-program UBO usage flags (indexed by IDriver::TProgram)
 	static const uint NumTProgram = 3;

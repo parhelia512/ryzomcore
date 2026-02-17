@@ -363,6 +363,7 @@ CDriverGL3::CDriverGL3()
 	m_UseMegaMaterialUBO = true;
 	m_VPSpecularOutput = true;
 	m_VPNormalOutput = false;
+	m_VPWorldSpacePositionOutput = false;
 	memset(m_ProgramUsesLightTableUBO, 0, sizeof(m_ProgramUsesLightTableUBO));
 	memset(m_ProgramUsesCameraUBO, 0, sizeof(m_ProgramUsesCameraUBO));
 	memset(m_ProgramUsesObjectUBO, 0, sizeof(m_ProgramUsesObjectUBO));
@@ -1365,7 +1366,7 @@ void CDriverGL3::setPerPixelLightingLight(CRGBA diffuse, CRGBA specular, float s
 }
 
 // ***************************************************************************
-bool CDriverGL3::supportWorldSpaceNormal() const
+bool CDriverGL3::supportWorldSpacePPL() const
 {
 	return true;
 }

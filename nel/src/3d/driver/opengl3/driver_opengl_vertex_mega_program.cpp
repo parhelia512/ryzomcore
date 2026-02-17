@@ -195,7 +195,11 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 	if (clip && !cameraUBO)
 		ss << "uniform int nlClipPlaneMask;" << std::endl;
 	if (!objectUBO)
+	{
 		ss << "uniform int nlWorldSpaceNormal;" << std::endl;
+		if (fog)
+			ss << "uniform int nlWorldSpacePosition;" << std::endl;
+	}
 	ss << std::endl;
 
 	// Vertex format flag constants (matching g_VertexFlags / CVertexBuffer flags)
@@ -273,7 +277,12 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 	// Eye-space position (always needed: lighting, texgen, clip, fog)
 	ss << "  vec4 ecPos4 = modelView * vposition;" << std::endl;
 	if (fog)
-		ss << "  ecPos = ecPos4;" << std::endl;
+	{
+		ss << "  if (nlWorldSpacePosition != 0)" << std::endl;
+		ss << "    ecPos = vec4(transpose(mat3(viewMatrix)) * ecPos4.xyz, ecPos4.w);" << std::endl;
+		ss << "  else" << std::endl;
+		ss << "    ecPos = ecPos4;" << std::endl;
+	}
 	ss << std::endl;
 
 	// Pass through all varyings (always normalize normals, output world-space normal)
@@ -529,6 +538,7 @@ bool CDriverGL3::setupMegaVertexProgram()
 	if (m_UserVertexProgram)
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
+		m_VPWorldSpacePositionOutput = m_UserVertexProgram->features().OutputsWorldSpacePosition;
 		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO;
 		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO;
 		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO;
@@ -548,6 +558,12 @@ bool CDriverGL3::setupMegaVertexProgram()
 	m_VPNormalOutput = false;
 	if (m_UserPixelProgram)
 		m_VPNormalOutput = m_UserPixelProgram->features().InputsWorldSpaceNormal;
+
+	// Mega VP outputs world-space position when requested by PP
+	m_VPWorldSpacePositionOutput = false;
+	if (m_UserPixelProgram)
+		m_VPWorldSpacePositionOutput = m_UserPixelProgram->features().InputsWorldSpacePosition;
+
 	m_ProgramUsesLightTableUBO[VertexProgram] = m_UseMegaLightTableUBO;
 	m_ProgramUsesCameraUBO[VertexProgram] = m_UseMegaCameraUBO;
 	m_ProgramUsesObjectUBO[VertexProgram] = m_UseMegaObjectUBO;
@@ -645,6 +661,10 @@ void CDriverGL3::setupMegaVPUniforms()
 		idx = p->getUniformIndex(CProgramIndex::NlWorldSpaceNormal);
 		if (idx != ~0u)
 			nglProgramUniform1i(progId, idx, m_VPNormalOutput ? 1 : 0);
+
+		idx = p->getUniformIndex(CProgramIndex::NlWorldSpacePosition);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, m_VPWorldSpacePositionOutput ? 1 : 0);
 	}
 }
 

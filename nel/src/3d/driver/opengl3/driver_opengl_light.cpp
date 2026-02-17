@@ -641,7 +641,7 @@ void CDriverGL3::setClipPlane(uint index, const NLMISC::CPlane &plane)
 }
 
 // ***************************************************************************
-// Per-Object UBO data layout (std140, 288 bytes, matches GLSL NlModel block)
+// Per-Object UBO data layout (std140, 304 bytes, matches GLSL NlModel block)
 struct CObjectUBOData
 {
 	float modelViewProjection[16]; // 64
@@ -657,8 +657,10 @@ struct CObjectUBOData
 	sint32 vertexColorLighted;     // 4
 	sint32 vertexFormat;           // 4
 	sint32 worldSpaceNormal;       // 4
-};                                 // 288
-static_assert(sizeof(CObjectUBOData) == 288, "Object UBO layout mismatch");
+	sint32 worldSpacePosition;     // 4
+	sint32 _pad[3];                // 12 (pad to 16-byte std140 alignment)
+};                                 // 304
+static_assert(sizeof(CObjectUBOData) == 304, "Object UBO layout mismatch");
 
 void CDriverGL3::uploadObjectUBO()
 {
@@ -748,6 +750,10 @@ void CDriverGL3::uploadObjectUBO()
 	data.vertexColorLighted = m_VPBuiltinCurrent.VertexColorLighted ? 1 : 0;
 	data.vertexFormat = (sint32)m_VPBuiltinCurrent.VertexFormat;
 	data.worldSpaceNormal = m_VPNormalOutput ? 1 : 0;
+	data.worldSpacePosition = m_VPWorldSpacePositionOutput ? 1 : 0;
+	data._pad[0] = 0;
+	data._pad[1] = 0;
+	data._pad[2] = 0;
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CObjectUBOData);

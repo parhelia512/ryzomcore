@@ -53,6 +53,8 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 		return right.Normalize;
 	if (left.WorldSpaceNormal != right.WorldSpaceNormal)
 		return right.WorldSpaceNormal;
+	if (left.WorldSpacePosition != right.WorldSpacePosition)
+		return right.WorldSpacePosition;
 	if (left.ClipPlaneMask != right.ClipPlaneMask)
 		return left.ClipPlaneMask < right.ClipPlaneMask;
 
@@ -82,6 +84,8 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 		return false;
 	if (left.WorldSpaceNormal != right.WorldSpaceNormal)
 		return false;
+	if (left.WorldSpacePosition != right.WorldSpacePosition)
+		return false;
 	if (left.ClipPlaneMask != right.ClipPlaneMask)
 		return false;
 
@@ -97,7 +101,7 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 {
 	uint32 h;
 
-	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0) | ((uint32)v.ClipPlaneMask << 20) | (v.Normalize ? (1 << 26) : 0) | (v.WorldSpaceNormal ? (1 << 27) : 0));
+	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0) | ((uint32)v.ClipPlaneMask << 20) | (v.Normalize ? (1 << 26) : 0) | (v.WorldSpaceNormal ? (1 << 27) : 0) | (v.WorldSpacePosition ? (1 << 28) : 0));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			h = NLMISC::wangHash(h ^ v.LightMode[i]);
@@ -358,17 +362,18 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "uniform vec4 selfIllumination;" << std::endl;
 
 	bool normalVarying = desc.WorldSpaceNormal && hasFlag(desc.VertexFormat, g_VertexFlags[Normal]);
-	bool needEcPos = desc.Fog || lighting || needEyeLinear || needReflection || needClipPlanes;
+	bool needPositionOutput = desc.Fog || desc.WorldSpacePosition;
+	bool needEcPos = needPositionOutput || lighting || needEyeLinear || needReflection || needClipPlanes;
 	bool needNormalMatrix = lighting || needReflection || normalVarying;
 	if (needEcPos)
 		ss << "uniform mat4 modelView;" << std::endl;
-	if (lighting || normalVarying)
+	if (lighting || normalVarying || desc.WorldSpacePosition)
 		ss << "uniform mat4 viewMatrix;" << std::endl;
 	if (needEcPos)
 		ss << "vec4 ecPos4;" << std::endl;
 	if (needNormalMatrix && !lighting) // lighting block declares it separately (with light uniforms)
 		ss << "uniform mat3 normalMatrix;" << std::endl;
-	if (desc.Fog)
+	if (needPositionOutput)
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
 	ss << std::endl;
 
@@ -399,8 +404,13 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 
 	if (needEcPos)
 		ss << "ecPos4 = modelView * v" << g_AttribNames[0] << ";" << std::endl;
-	if (desc.Fog)
-		ss << "ecPos = ecPos4;" << std::endl;
+	if (needPositionOutput)
+	{
+		if (desc.WorldSpacePosition)
+			ss << "ecPos = vec4(transpose(mat3(viewMatrix)) * ecPos4.xyz, ecPos4.w);" << std::endl;
+		else
+			ss << "ecPos = ecPos4;" << std::endl;
+	}
 	ss << std::endl;
 
 	ss << "vec4 diffuseVertex;" << std::endl;
@@ -668,6 +678,16 @@ void CDriverGL3::setWorldSpaceNormalVP(bool enable)
 	if (m_VPBuiltinCurrent.WorldSpaceNormal != enable)
 	{
 		m_VPBuiltinCurrent.WorldSpaceNormal = enable;
+		m_VPBuiltinTouched = true;
+	}
+}
+
+void CDriverGL3::setWorldSpacePositionVP(bool enable)
+{
+	H_AUTO_OGL(CDriverGL3_setWorldSpacePositionVP)
+	if (m_VPBuiltinCurrent.WorldSpacePosition != enable)
+	{
+		m_VPBuiltinCurrent.WorldSpacePosition = enable;
 		m_VPBuiltinTouched = true;
 	}
 }

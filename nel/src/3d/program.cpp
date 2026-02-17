@@ -359,6 +359,8 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"nlAlphaTest",
 	"nlFogMode",
 	"nlWorldSpaceNormal",
+	"nlWorldSpacePosition",
+	"cameraForward",
 	"samplerCube0",
 	"samplerCube1",
 	"samplerCube2",

@@ -821,6 +821,7 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 	if (m_UserVertexProgram)
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
+		m_VPWorldSpacePositionOutput = m_UserVertexProgram->features().OutputsWorldSpacePosition;
 		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO;
 		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO;
 		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO;
@@ -840,6 +841,12 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 		needNormal = m_UserPixelProgram->features().InputsWorldSpaceNormal;
 	setWorldSpaceNormalVP(needNormal);
 
+	// Check if PP needs world-space position varying
+	bool needWorldPos = false;
+	if (m_UserPixelProgram)
+		needWorldPos = m_UserPixelProgram->features().InputsWorldSpacePosition;
+	setWorldSpacePositionVP(needWorldPos);
+
 	if (m_VPBuiltinTouched)
 	{
 		generateBuiltinVertexProgram();
@@ -851,6 +858,7 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 		|| (m_VPBuiltinCurrent.VertexFormat & g_VertexFlags[SecondaryColor]);
 	m_VPNormalOutput = m_VPBuiltinCurrent.WorldSpaceNormal
 		&& (m_VPBuiltinCurrent.VertexFormat & g_VertexFlags[Normal]);
+	m_VPWorldSpacePositionOutput = m_VPBuiltinCurrent.WorldSpacePosition;
 	m_ProgramUsesLightTableUBO[VertexProgram] = false; // Builtin non-mega VP does not use UBOs
 	m_ProgramUsesCameraUBO[VertexProgram] = false;
 	m_ProgramUsesObjectUBO[VertexProgram] = false;
@@ -990,6 +998,14 @@ void CDriverGL3::setupUniforms(TProgram program)
 		uint fogDensityIdx = p->getUniformIndex(CProgramIndex::FogDensity);
 		if (fogDensityIdx != ~0)
 			nglProgramUniform1f(progId, fogDensityIdx, _FogDensity);
+
+		// Camera forward for world-space fog (second row of view matrix, NeL Y = forward)
+		uint camFwdIdx = p->getUniformIndex(CProgramIndex::CameraForward);
+		if (camFwdIdx != ~0)
+		{
+			const float *v = _ViewMtx.get();
+			nglProgramUniform3f(progId, camFwdIdx, v[1], v[5], v[9]);
+		}
 	}
 
 	if (!m_ProgramUsesMaterialUBO[program])

@@ -94,6 +94,8 @@ bool operator<(const CPPBuiltin &left, const CPPBuiltin &right)
 		return left.FogMode < right.FogMode;
 	if (left.SpecularSeparate != right.SpecularSeparate)
 		return right.SpecularSeparate;
+	if (left.WorldSpacePosition != right.WorldSpacePosition)
+		return right.WorldSpacePosition;
 
 	return false;
 }
@@ -124,6 +126,8 @@ bool operator==(const CPPBuiltin &left, const CPPBuiltin &right)
 		return false;
 	if (left.SpecularSeparate != right.SpecularSeparate)
 		return false;
+	if (left.WorldSpacePosition != right.WorldSpacePosition)
+		return false;
 
 	return true;
 }
@@ -149,7 +153,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h32 = NLMISC::wangHash(h32 ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0)));
+	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0)));
 
 	h64 = h64 ^ h32; // NLMISC::wangHash64(h64 ^ h32);
 	nlctassert(sizeof(size_t) >= sizeof(uint64));
@@ -169,7 +173,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h = NLMISC::wangHash(h ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0)));
+	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0)));
 
 	nlctassert(sizeof(size_t) >= sizeof(uint32));
 	return (size_t)h;
@@ -593,12 +597,17 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		ss << "uniform vec4 fogColor;" << std::endl;
 		if (desc.FogMode != 0) // Exp or Exp2
 			ss << "uniform float fogDensity;" << std::endl;
+		if (desc.WorldSpacePosition)
+			ss << "uniform vec3 cameraForward;" << std::endl;
 
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
 
 		ss << "vec4 applyFog(vec4 col)" << std::endl;
 		ss << "{" << std::endl;
-		ss << "  float z = abs(ecPos.y / ecPos.w);" << std::endl;
+		if (desc.WorldSpacePosition)
+			ss << "  float z = abs(dot(ecPos.xyz, cameraForward));" << std::endl;
+		else
+			ss << "  float z = abs(ecPos.y / ecPos.w);" << std::endl;
 		switch (desc.FogMode)
 		{
 		default: // Linear
@@ -774,6 +783,11 @@ void CPPBuiltin::checkDriverStateTouched(CDriverGL3 *driver) // MUST NOT depend 
 	if (SpecularSeparate != driver->m_VPSpecularOutput)
 	{
 		SpecularSeparate = driver->m_VPSpecularOutput;
+		Touched = true;
+	}
+	if (WorldSpacePosition != driver->m_VPWorldSpacePositionOutput)
+	{
+		WorldSpacePosition = driver->m_VPWorldSpacePositionOutput;
 		Touched = true;
 	}
 }
