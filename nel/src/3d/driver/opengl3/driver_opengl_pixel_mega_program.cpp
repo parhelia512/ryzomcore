@@ -639,8 +639,9 @@ bool CDriverGL3::initMegaPixelPrograms()
 								if (objectUBO && !cameraUBO)
 									continue;
 
-								// objectUBO implies lightTableUBO
-								if (objectUBO && !tableUBO)
+								// objectUBO implies lightTableUBO when PPL code is active
+								// (non-table PPL references nlLightMode which isn't in NlModel UBO)
+								if (objectUBO && !tableUBO && fogOrPpl)
 									continue;
 
 								std::string result;
