@@ -369,6 +369,11 @@ CDriverGL3::CDriverGL3()
 	_ObjectUBOId = 0;
 	_ObjectUBOCapacity = 0;
 	_OverrideMaterialUBOId = 0;
+	for (sint i = 0; i < UBBindingCount; ++i)
+	{
+		_BoundUserUB[i] = NULL;
+		_UserUBBoundId[i] = 0;
+	}
 	memset(&_LightMapUBOOverride, 0, sizeof(_LightMapUBOOverride));
 }
 

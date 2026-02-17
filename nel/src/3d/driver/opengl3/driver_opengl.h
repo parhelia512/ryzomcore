@@ -1412,6 +1412,11 @@ private:
 	void    uploadObjectUBO();
 	void    uploadMaterialUBO();
 
+	// User UBO bindings (deferred upload — flushed in setupUniforms)
+	NLMISC::CRefPtr<CUniformBuffer> _BoundUserUB[UBBindingCount]; // NULL = unbound, auto-nullifies on deletion
+	GLuint           _UserUBBoundId[UBBindingCount];  // GL buffer ID currently at each GL binding point (0 = unbound)
+	void    flushUserUBOs();
+
 	// Lightmap UBO override (set before setupBuiltinPrograms for lightmap passes)
 	struct CLightMapUBOOverride
 	{

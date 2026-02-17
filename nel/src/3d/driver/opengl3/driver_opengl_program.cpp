@@ -871,6 +871,9 @@ bool CDriverGL3::setupUniforms()
 	if (m_ProgramUsesLightTableUBO[VertexProgram] || m_ProgramUsesLightTableUBO[PixelProgram])
 		uploadLightTableUBO();
 
+	// Flush user-bound UBOs (upload if dirty, bind to GL points)
+	flushUserUBOs();
+
 	setupUniforms(IDriver::VertexProgram);
 	setupUniforms(IDriver::PixelProgram);
 	return true;

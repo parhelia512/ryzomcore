@@ -214,51 +214,87 @@ static const sint s_UBBindingToGL[] = {
 bool CDriverGL3::bindUniformBuffer(TUBBinding binding, CUniformBuffer *ub)
 {
 	nlassert(binding < UBBindingCount);
-	sint glBinding = s_UBBindingToGL[binding];
+	if (_BoundUserUB[binding] == ub)
+		return true;
+
+	_BoundUserUB[binding] = ub;
 
 	if (!ub)
 	{
-		nglBindBufferBase(GL_UNIFORM_BUFFER, glBinding, 0);
-		return true;
-	}
-
-	// Create driver info on first use
-	if (!ub->DrvInfos)
-	{
-		ItUBDrvInfoPtrList it = _UBDrvInfos.insert(_UBDrvInfos.end(), (IUBDrvInfos *)NULL);
-		CUBDrvInfosGL3 *info = new CUBDrvInfosGL3(this, it, ub);
-		*it = info;
-		ub->DrvInfos = info;
-	}
-
-	CUBDrvInfosGL3 *info = static_cast<CUBDrvInfosGL3 *>((IUBDrvInfos *)ub->DrvInfos);
-
-	// Upload if dirty
-	if (ub->Touched)
-	{
-		sint dataSize = ub->Format.size();
-		GLenum usage = usageHintToGL(ub->UsageHint);
-
-		nglBindBuffer(GL_UNIFORM_BUFFER, info->getBufferId());
-
-		if (info->getCapacity() < dataSize)
+		// Immediate unbind — avoid dangling pointer if buffer is released before next flush
+		if (_UserUBBoundId[binding])
 		{
-			// Allocate or grow
-			nglBufferData(GL_UNIFORM_BUFFER, dataSize, ub->data(), usage);
-			info->setCapacity(dataSize);
+			nglBindBufferBase(GL_UNIFORM_BUFFER, s_UBBindingToGL[binding], 0);
+			_UserUBBoundId[binding] = 0;
 		}
-		else
-		{
-			// Orphan + rewrite (same size)
-			nglBufferData(GL_UNIFORM_BUFFER, dataSize, NULL, usage);
-			nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, ub->data());
-		}
-
-		ub->Touched = false;
 	}
-
-	nglBindBufferBase(GL_UNIFORM_BUFFER, glBinding, info->getBufferId());
 	return true;
+}
+
+// ***************************************************************************
+// CDriverGL3::flushUserUBOs
+// ***************************************************************************
+
+void CDriverGL3::flushUserUBOs()
+{
+	for (sint i = 0; i < UBBindingCount; ++i)
+	{
+		CUniformBuffer *ub = _BoundUserUB[i];
+
+		if (!ub)
+		{
+			// Detect auto-nullification: CRefPtr cleared it behind our back
+			if (_UserUBBoundId[i])
+			{
+				nglBindBufferBase(GL_UNIFORM_BUFFER, s_UBBindingToGL[i], 0);
+				_UserUBBoundId[i] = 0;
+			}
+			continue;
+		}
+
+		// Create driver info on first use
+		if (!ub->DrvInfos)
+		{
+			ItUBDrvInfoPtrList it = _UBDrvInfos.insert(_UBDrvInfos.end(), (IUBDrvInfos *)NULL);
+			CUBDrvInfosGL3 *info = new CUBDrvInfosGL3(this, it, ub);
+			*it = info;
+			ub->DrvInfos = info;
+		}
+
+		CUBDrvInfosGL3 *info = static_cast<CUBDrvInfosGL3 *>((IUBDrvInfos *)ub->DrvInfos);
+
+		// Upload if data dirty
+		if (ub->Touched)
+		{
+			sint dataSize = ub->Format.size();
+			GLenum usage = usageHintToGL(ub->UsageHint);
+
+			nglBindBuffer(GL_UNIFORM_BUFFER, info->getBufferId());
+
+			if (info->getCapacity() < dataSize)
+			{
+				// Allocate or grow
+				nglBufferData(GL_UNIFORM_BUFFER, dataSize, ub->data(), usage);
+				info->setCapacity(dataSize);
+			}
+			else
+			{
+				// Orphan + rewrite (same size)
+				nglBufferData(GL_UNIFORM_BUFFER, dataSize, NULL, usage);
+				nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, ub->data());
+			}
+
+			ub->Touched = false;
+		}
+
+		// Bind to indexed binding point only when GL buffer ID changed
+		GLuint bufId = info->getBufferId();
+		if (_UserUBBoundId[i] != bufId)
+		{
+			nglBindBufferBase(GL_UNIFORM_BUFFER, s_UBBindingToGL[i], bufId);
+			_UserUBBoundId[i] = bufId;
+		}
+	}
 }
 
 } // NLDRIVERGL3
