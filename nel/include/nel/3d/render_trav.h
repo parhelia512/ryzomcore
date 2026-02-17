@@ -266,6 +266,7 @@ public:
 
 	// Light table mode
 	bool					_LightTableMode;
+	bool					_LightTableActive;        // True between init and teardown within a frame
 	std::vector<CPointLight*>	_LightTablePointLights; // For resetting _TableIndex at frame end
 	uint					_LightTableSize;          // Current table size in driver
 	uint					_MaxLightTableSize;       // Queried from driver via getMaxLightTableSize()

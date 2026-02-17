@@ -171,6 +171,8 @@ void	CDriverGL3::setLightTableSize(uint count)
 	H_AUTO_OGL(CDriverGL3_setLightTableSize)
 	_LightTable.resize(count);
 	_LightTableDirty = true;
+	// Invalidate cached lightmap dynamic light table index (may have been in the old table range)
+	_LightMapDynLightTableIndex = -1;
 }
 
 // ***************************************************************************
@@ -324,6 +326,39 @@ void			CDriverGL3::setupLightMapDynamicLighting(bool enable)
 		else
 		{
 			enableLightInternal(0, false);
+		}
+
+		// In table mode, uploadObjectUBO() reads _LightTableObjIndices instead of
+		// _LightEnable/_UserLight. Register the dynamic light in the table so the
+		// UBO path can reference it.
+		if (_LightTableMode)
+		{
+			// Clear all per-object table slots
+			for (uint i = 0; i < MaxLight; ++i)
+			{
+				_LightTableObjIndices[i] = -1;
+				_LightTableObjFactors[i] = 0.0f;
+			}
+
+			if (_LightMapDynamicLightEnabled)
+			{
+				// Lazily register the dynamic light in the table (once per table batch)
+				if (_LightMapDynLightTableIndex < 0)
+				{
+					_LightMapDynLightTableIndex = (sint16)_LightTable.size();
+					_LightTable.push_back(_LightMapDynamicLight);
+					_LightTableDirty = true;
+				}
+				else
+				{
+					// Update the existing table entry (light may have changed)
+					_LightTable[_LightMapDynLightTableIndex] = _LightMapDynamicLight;
+					_LightTableDirty = true;
+				}
+
+				_LightTableObjIndices[0] = _LightMapDynLightTableIndex;
+				_LightTableObjFactors[0] = 1.0f;
+			}
 		}
 
 		// ok it has been setup

@@ -948,6 +948,7 @@ private:
 	CLight						_LightMapDynamicLight;
 	bool						_LightMapDynamicLightEnabled;
 	bool						_LightMapDynamicLightDirty;
+	sint16						_LightMapDynLightTableIndex; // Table-mode: cached index of dynamic light in _LightTable (-1 = not registered)
 	// this is the backup of standard lighting (cause GL states may be modified by Lightmap Dynamic Lighting)
 	CLight						_UserLight0;
 	CLight						_UserLight[MaxLight];

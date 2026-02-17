@@ -323,6 +323,7 @@ CDriverGL3::CDriverGL3()
 
 	_LightMapDynamicLightEnabled = false;
 	_LightMapDynamicLightDirty= false;
+	_LightMapDynLightTableIndex = -1;
 	_LightTableMode= false;
 	_LightTableUBOId = 0;
 	_LightTableDirty = false;
