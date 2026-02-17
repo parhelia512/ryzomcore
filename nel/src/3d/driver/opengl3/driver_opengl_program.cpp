@@ -801,7 +801,7 @@ bool CDriverGL3::setupBuiltinPixelProgram()
 	matDrv->PPBuiltin.checkMaterialStateTouched(mat);
 
 	// Propagate PP state changes to material UBO dirty flag
-	if (matDrv->PPBuiltin.Touched)
+	if (matDrv->PPBuiltin.MaterialUBOTouched)
 		matDrv->MaterialUBODirty = true;
 
 	if (matDrv->PPBuiltin.Touched)
@@ -809,6 +809,7 @@ bool CDriverGL3::setupBuiltinPixelProgram()
 		generateBuiltinPixelProgram(mat);
 		nlassert(matDrv->PPBuiltin.PixelProgram);
 		matDrv->PPBuiltin.Touched = false;
+		matDrv->PPBuiltin.MaterialUBOTouched = false;
 	}
 
 	if (!activePixelProgram(matDrv->PPBuiltin.PixelProgram, true))

@@ -495,8 +495,11 @@ bool CDriverGL3::setupMegaPixelProgram()
 	matDrv->PPBuiltin.checkMaterialStateTouched(mat);
 
 	// Propagate PP state changes to material UBO dirty flag
-	if (matDrv->PPBuiltin.Touched)
+	if (matDrv->PPBuiltin.MaterialUBOTouched)
+	{
 		matDrv->MaterialUBODirty = true;
+		matDrv->PPBuiltin.MaterialUBOTouched = false;
+	}
 
 	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	// Cube variant: any cubemap in the material's sampler modes

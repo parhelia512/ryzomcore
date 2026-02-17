@@ -57,7 +57,7 @@ static const uint64 SamplerCube = 1;
 /// Builtin pixel program description
 struct CPPBuiltin
 {
-	CPPBuiltin() : Touched(true), FogMode(0), SpecularSeparate(false) { }
+	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false) { }
 
 	uint16 VertexFormat;
 	bool Fog;
@@ -73,6 +73,7 @@ struct CPPBuiltin
 	NLMISC::CRefPtr<CPixelProgram> PixelProgram;
 
 	bool Touched;
+	bool MaterialUBOTouched; // Only set when fields in material UBO change (Shader, Flags, TextureActive, TexEnvMode)
 
 	void checkDriverStateTouched(CDriverGL3 *driver);
 	void checkDriverMaterialStateTouched(CDriverGL3 *driver, CMaterial &mat);

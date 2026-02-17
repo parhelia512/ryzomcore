@@ -801,6 +801,7 @@ void CPPBuiltin::checkDriverMaterialStateTouched(CDriverGL3 *driver, CMaterial &
 		{
 			TextureActive = textureActive;
 			Touched = true;
+			MaterialUBOTouched = true;
 		}
 		if (TexSamplerMode != texSamplerMode)
 		{
@@ -823,6 +824,7 @@ void CPPBuiltin::checkMaterialStateTouched(CMaterial &mat) // MUST NOT depend on
 	{
 		Shader = shader;
 		Touched = true;
+		MaterialUBOTouched = true;
 	}
 	uint32 flags = mat.getFlags();
 	flags &= IDRV_MAT_ALPHA_TEST; // TODO: |= with the wanted flags from the VP when flags are added to the VP
@@ -830,6 +832,7 @@ void CPPBuiltin::checkMaterialStateTouched(CMaterial &mat) // MUST NOT depend on
 	{
 		Flags = flags;
 		Touched = true;
+		MaterialUBOTouched = true;
 	}
 	uint maxTex = maxTextures(shader);
 	if (touched & IDRV_TOUCHED_ALLTEX) // Note: There is a case where textures are provided where no texture coordinates are provided, this is handled gracefully by the pixel program generation (it will use a vec(0) texture coordinate). The inverse is an optimization issue
@@ -856,6 +859,7 @@ void CPPBuiltin::checkMaterialStateTouched(CMaterial &mat) // MUST NOT depend on
 			{
 				TextureActive = textureActive;
 				Touched = true;
+				MaterialUBOTouched = true;
 			}
 			if (TexSamplerMode != texSamplerMode)
 			{
@@ -873,6 +877,7 @@ void CPPBuiltin::checkMaterialStateTouched(CMaterial &mat) // MUST NOT depend on
 			{
 				TexEnvMode[stage] = mat._TexEnvs[stage].EnvPacked;
 				Touched = true;
+				MaterialUBOTouched = true;
 			}
 		}
 	}
