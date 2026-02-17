@@ -156,7 +156,7 @@ void generateUniformBufferGLSL(std::stringstream &ss, const CUniformBufferFormat
 	std::string blockName = ubf.Name.empty()
 		? ("NlUBO" + NLMISC::toString(binding))
 		: ubf.Name;
-	ss << "layout(std140, binding = " << binding << ") uniform " << blockName << "\n";
+	ss << "layout(std140) uniform " << blockName << "\n";
 	ss << "{\n";
 	for (sint i = 0; i < (sint)ubf.count(); ++i)
 	{

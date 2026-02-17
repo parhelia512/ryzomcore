@@ -59,7 +59,7 @@ static std::string insertBuiltinHeaders(const char *source, bool lightTable, boo
 		result.append(GLSLMaterialHeader);
 
 	// User UBO declarations — map key is TUBBinding enum (0=VP, 1=PP),
-	// translate to GL binding points for GLSL layout(binding = N)
+	// translate to GL binding points for fallback block name generation
 	if (!userUBOs.empty())
 	{
 		static const sint s_UBBindingToGLSL[] = {
@@ -1232,6 +1232,28 @@ void CDriverGL3::setupInitialUniforms(IProgram *program)
 		drvInfo->setMaterialBlockIndex(materialBlock);
 		if (materialBlock != GL_INVALID_INDEX)
 			nglUniformBlockBinding(id, materialBlock, NL_BUILTIN_MATERIAL_BINDING);
+
+		// Resolve and bind user UBO blocks (VP/PP) — binding points set at link time
+		CSource *src = program->source();
+		if (src)
+		{
+			static const sint s_UBBindingToGL[] = {
+				NL_USER_VERTEX_PROGRAM_BINDING,  // UBBindingVertexProgram
+				NL_USER_PIXEL_PROGRAM_BINDING,   // UBBindingPixelProgram
+			};
+			for (std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> >::const_iterator
+				it = src->UniformBufferFormats.begin(); it != src->UniformBufferFormats.end(); ++it)
+			{
+				nlassert(it->first >= 0 && it->first < UBBindingCount);
+				const CUniformBufferFormat &ubf = *it->second;
+				std::string blockName = ubf.Name.empty()
+					? ("NlUBO" + NLMISC::toString(s_UBBindingToGL[it->first]))
+					: ubf.Name;
+				GLuint blockIdx = nglGetUniformBlockIndex(id, blockName.c_str());
+				if (blockIdx != GL_INVALID_INDEX)
+					nglUniformBlockBinding(id, blockIdx, s_UBBindingToGL[it->first]);
+			}
+		}
 	}
 }
 
