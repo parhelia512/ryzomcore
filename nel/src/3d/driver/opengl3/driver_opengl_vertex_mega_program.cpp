@@ -20,17 +20,17 @@
  * Split vs Fold Design:
  *
  *   SPLITS (separate shader variants — correspond to separate rendering passes):
- *   - Fog (on/off): Controls ecPos varying output needed by PP fog calculation.
- *     Sky/UI render with fog off, world renders with fog on — always separate
- *     passes. Free split.
+ *   - fogOrPpl (on/off): Controls ecPos varying output needed by PP fog/PPL.
+ *     fogOrPpl=0 for UI/sky (no fog, no PPL). fogOrPpl=1 for world geometry
+ *     where fog and PPL are runtime-gated. Always separate passes. Free split.
  *   - Clip plane (none vs active): Requires static gl_ClipDistance[6] array,
  *     forces rasterizer to interpolate 6 extra floats per fragment. Only used
  *     during water reflection and R2 editor — always a separate pass. Free split.
- *   - Light table (on/off): When on, lights are read from a UBO with per-object
+ *   - tableUBO (on/off): When on, lights are read from a UBO with per-object
  *     indices and factors. When off, lights use individual pre-multiplied uniforms.
  *     Different uniform sets, so a separate variant avoids dead declarations.
  *
- *   Result: 8 VP variants — m_MegaVP[fog][clip][table]
+ *   Result: 8 VP variants — m_MegaVP[fogOrPpl][clip][tableUBO]
  *
  *   FOLDS (uniform-controlled branching — zero GPU cost):
  *   - VertexFormat: All 16 in attributes declared; unbound ones read GL default
@@ -77,14 +77,14 @@ static const char *s_TexGenAccess[4] = {
 	"nlTexGenMode.x", "nlTexGenMode.y", "nlTexGenMode.z", "nlTexGenMode.w"
 };
 
-void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool cameraUBO, bool objectUBO, bool materialUBO)
+void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO, bool cameraUBO, bool objectUBO, bool materialUBO)
 {
-	// Object UBO implies table and camera UBO
-	if (objectUBO) { table = true; cameraUBO = true; }
+	// Object UBO implies tableUBO and camera UBO
+	if (objectUBO) { tableUBO = true; cameraUBO = true; }
 
 	std::stringstream ss;
 	ss << "// Megashader Vertex Program";
-	ss << " (fog=" << (int)fog << ", clip=" << (int)clip << ", table=" << (int)table
+	ss << " (fogOrPpl=" << (int)fogOrPpl << ", clip=" << (int)clip << ", tableUBO=" << (int)tableUBO
 	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
 	   << ", materialUBO=" << (int)materialUBO << ")" << std::endl;
 	ss << std::endl;
@@ -117,7 +117,7 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 		ss << "uniform mat4 viewMatrix;" << std::endl;
 	ss << std::endl;
 
-	if (table)
+	if (tableUBO)
 	{
 		// NlLightInfo struct and NlLightTable UBO block are provided by GLSLBuiltinHeader
 
@@ -187,7 +187,7 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 		ss << "uniform int nlVertexColorLighted;" << std::endl;
 		ss << "uniform int nlVertexFormat;" << std::endl;
 	}
-	if (!table && !objectUBO)
+	if (!tableUBO && !objectUBO)
 	{
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			ss << "uniform int nlLightMode" << i << ";" << std::endl;
@@ -197,7 +197,7 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 	if (!objectUBO)
 	{
 		ss << "uniform int nlWorldSpaceNormal;" << std::endl;
-		if (fog)
+		if (fogOrPpl)
 			ss << "uniform int nlWorldSpacePosition;" << std::endl;
 		ss << "uniform int nlNumPerPixelLights;" << std::endl;
 	}
@@ -223,7 +223,7 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 			continue;
 		ss << "layout(location = " << i << ") smooth out vec4 " << g_AttribNames[i] << ";" << std::endl;
 	}
-	if (fog)
+	if (fogOrPpl)
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
 	ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
@@ -277,7 +277,7 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 
 	// Eye-space position (always needed: lighting, texgen, clip, fog)
 	ss << "  vec4 ecPos4 = modelView * vposition;" << std::endl;
-	if (fog)
+	if (fogOrPpl)
 	{
 		ss << "  if (nlWorldSpacePosition != 0)" << std::endl;
 		ss << "    ecPos = vec4(transpose(mat3(viewMatrix)) * ecPos4.xyz, ecPos4.w);" << std::endl;
@@ -326,7 +326,7 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 		ss << "    vec4 effectiveDiffuse = (nlVertexColorLighted != 0) ? vec4(1.0) : materialDiffuse;" << std::endl;
 	}
 
-	if (table)
+	if (tableUBO)
 	{
 		// Material properties: from UBO or individual uniforms
 		const char *matDiffStr = materialUBO ? "effectiveDiffuse" : "nlMaterialDiffuse";
@@ -484,11 +484,11 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool c
 
 bool CDriverGL3::initMegaVertexPrograms()
 {
-	for (int fog = 0; fog < 2; ++fog)
+	for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
 	{
 		for (int clip = 0; clip < 2; ++clip)
 		{
-			for (int table = 0; table < 2; ++table)
+			for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
 			{
 				for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
 				{
@@ -496,18 +496,18 @@ bool CDriverGL3::initMegaVertexPrograms()
 					{
 						for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
 						{
-							// objectUBO implies table and cameraUBO
-							if (objectUBO && (!table || !cameraUBO))
+							// objectUBO implies tableUBO and cameraUBO
+							if (objectUBO && (!tableUBO || !cameraUBO))
 								continue;
 
 							std::string result;
-							megaVPGenerate(result, fog != 0, clip != 0, table != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
+							megaVPGenerate(result, fogOrPpl != 0, clip != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
 
 							CVertexProgram *vp = new CVertexProgram();
 							IProgram::CSource *src = new IProgram::CSource();
 							src->Profile = IProgram::glsl330v;
-							src->DisplayName = NLMISC::toString("Mega VP (fog=%d, clip=%d, table=%d, cam=%d, obj=%d, mat=%d)", fog, clip, table, cameraUBO, objectUBO, materialUBO);
-							src->Features.UsesLightTableUBO = (table != 0);
+							src->DisplayName = NLMISC::toString("Mega VP (fogOrPpl=%d, clip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", fogOrPpl, clip, tableUBO, cameraUBO, objectUBO, materialUBO);
+							src->Features.UsesLightTableUBO = (tableUBO != 0);
 							src->Features.UsesCameraUBO = (cameraUBO != 0);
 							src->Features.UsesObjectUBO = (objectUBO != 0);
 							src->Features.UsesMaterialUBO = (materialUBO != 0);
@@ -523,7 +523,7 @@ bool CDriverGL3::initMegaVertexPrograms()
 								return false;
 							}
 
-							m_MegaVP[fog][clip][table][cameraUBO][objectUBO][materialUBO] = vp;
+							m_MegaVP[fogOrPpl][clip][tableUBO][cameraUBO][objectUBO][materialUBO] = vp;
 						}
 					}
 				}
@@ -585,14 +585,14 @@ bool CDriverGL3::setupMegaVertexProgram()
 		m_ProgramUsesCameraUBO[VertexProgram] = true;
 	}
 
-	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
+	int fogOrPpl = (m_VPBuiltinCurrent.Fog || _NumPerPixelLights > 0) ? 1 : 0;
 	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
-	int table = m_ProgramUsesLightTableUBO[VertexProgram] ? 1 : 0;
+	int tableUBO = m_ProgramUsesLightTableUBO[VertexProgram] ? 1 : 0;
 	int cameraUBO = m_ProgramUsesCameraUBO[VertexProgram] ? 1 : 0;
 	int objectUBO = m_ProgramUsesObjectUBO[VertexProgram] ? 1 : 0;
 	int materialUBO = m_ProgramUsesMaterialUBO[VertexProgram] ? 1 : 0;
 
-	CVertexProgram *vp = m_MegaVP[fog][clip][table][cameraUBO][objectUBO][materialUBO];
+	CVertexProgram *vp = m_MegaVP[fogOrPpl][clip][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(vp);
 
 	if (!activeVertexProgram(vp, true))

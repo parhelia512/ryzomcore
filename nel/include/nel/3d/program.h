@@ -425,6 +425,7 @@ struct CProgramIndex
 		NlWorldSpaceNormal,
 		NlWorldSpacePosition,
 		NlNumPerPixelLights,
+		NlFogEnabled,
 		CameraForward,
 		SamplerCube0,
 		SamplerCube1,

@@ -20,16 +20,21 @@
  * Split vs Fold Design:
  *
  *   SPLITS (separate shader variants):
- *   - Fog (on/off): Separate pass (sky/UI vs world). Free split.
+ *   - fogOrPpl (on/off): fogOrPpl=0 for UI/sky (no ecPos/fog/PPL code).
+ *     fogOrPpl=1 for world geometry where fog and PPL are runtime-gated
+ *     via nlFogEnabled and nlNumPerPixelLights uniforms. Free split.
  *   - Cubemap (has any vs none): sampler2D vs samplerCube is a static GLSL
  *     type. Only Specular shader uses cubemaps, always a separate material
  *     group. In the cube variant, sampler1 is declared as samplerCube.
  *     Free split.
- *
  *   - Specular separate (on/off): Whether VP outputs specularColor varying.
  *     Mega VP always outputs it; user VPs may not. Free split.
+ *   - tableUBO (on/off): Whether lights are read from NlLightTable UBO with
+ *     per-object indices/factors, or from individual pp-prefixed uniforms.
+ *     Different uniform sets require separate variants. Only valid when
+ *     fogOrPpl=1 (PPL needs ecPos).
  *
- *   Result: 8 PP variants — m_MegaPP[fog][cube][specular]
+ *   Result: m_MegaPP[fogOrPpl][cube][specular][tableUBO] (max 12 base variants)
  *
  *   FOLDS (uniform-controlled branching — zero GPU cost):
  *   - Shader type (Normal/UserColor/Specular/LightMap): 4 short paths in
@@ -71,15 +76,15 @@ static const char *s_LightFacAccess[8] = {
 	"nlLightFactors45.x", "nlLightFactors45.y", "nlLightFactors45.z", "nlLightFactors45.w"
 };
 
-void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int ppl, bool cameraUBO, bool objectUBO, bool materialUBO)
+void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular, bool tableUBO, bool cameraUBO, bool objectUBO, bool materialUBO)
 {
 	// Object UBO implies camera UBO
 	if (objectUBO) { cameraUBO = true; }
 
 	std::stringstream ss;
 	ss << "// Megashader Pixel Program";
-	ss << " (fog=" << (int)fog << ", cube=" << (int)cube << ", specular=" << (int)specular
-	   << ", ppl=" << ppl
+	ss << " (fogOrPpl=" << (int)fogOrPpl << ", cube=" << (int)cube << ", specular=" << (int)specular
+	   << ", tableUBO=" << (int)tableUBO
 	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
 	   << ", materialUBO=" << (int)materialUBO << ")" << std::endl;
 	ss << std::endl;
@@ -99,7 +104,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 	}
 	ss << std::endl;
 
-	if (fog)
+	if (fogOrPpl)
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
 	if (specular)
@@ -136,7 +141,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 	ss << std::endl;
 
 	// Fog uniforms (individual uniforms only when no camera UBO)
-	if (fog && !cameraUBO)
+	if (fogOrPpl && !cameraUBO)
 	{
 		ss << "uniform vec2 fogParams;" << std::endl;
 		ss << "uniform vec4 fogColor;" << std::endl;
@@ -158,60 +163,65 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 	}
 	if (!objectUBO)
 		ss << "uniform int nlVertexFormat;" << std::endl;
-	if (fog && !cameraUBO)
+	if (fogOrPpl && !cameraUBO)
 		ss << "uniform int nlFogMode;" << std::endl;
-	if (fog && !objectUBO)
+	if (fogOrPpl && !objectUBO)
 		ss << "uniform int nlWorldSpacePosition;" << std::endl;
 
-	// PPL uniforms
-	if (ppl == 1)
+	// fogOrPpl uniforms: fog enable (per-material), PPL data, and nlNumPerPixelLights
+	if (fogOrPpl)
 	{
-		// Table PPL path: light data from nlLights[idx] UBO, per-object indices/factors
-		if (!objectUBO)
+		// nlFogEnabled: always individual uniform (per-material, not in any UBO)
+		ss << "uniform int nlFogEnabled;" << std::endl;
+
+		if (tableUBO)
 		{
-			ss << "uniform int nlNumPerPixelLights;" << std::endl;
+			// Table PPL path: light data from nlLights[idx] UBO, per-object indices/factors
+			if (!objectUBO)
+			{
+				for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+				{
+					ss << "uniform int nlLightIndex" << i << ";" << std::endl;
+					ss << "uniform float nlLightFactor" << i << ";" << std::endl;
+				}
+			}
+			if (!materialUBO)
+			{
+				ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
+				ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
+				ss << "uniform float nlMaterialShininess;" << std::endl;
+			}
+			if (!cameraUBO)
+				ss << "uniform vec3 pzbCameraPos;" << std::endl;
+		}
+		else
+		{
+			// Non-table PPL path: raw per-light values via pp-prefixed uniforms
 			for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			{
-				ss << "uniform int nlLightIndex" << i << ";" << std::endl;
-				ss << "uniform float nlLightFactor" << i << ";" << std::endl;
+				if (!objectUBO)
+					ss << "uniform int nlLightMode" << i << ";" << std::endl;
+				ss << "uniform vec3 ppLight" << i << "DirOrPos;" << std::endl;
+				ss << "uniform vec4 ppLight" << i << "ColDiff;" << std::endl;
+				ss << "uniform vec4 ppLight" << i << "ColSpec;" << std::endl;
+				ss << "uniform float ppLight" << i << "ConstAttn;" << std::endl;
+				ss << "uniform float ppLight" << i << "LinAttn;" << std::endl;
+				ss << "uniform float ppLight" << i << "QuadAttn;" << std::endl;
+				ss << "uniform vec3 ppLight" << i << "SpotDir;" << std::endl;
+				ss << "uniform float ppLight" << i << "SpotCutoff;" << std::endl;
+				ss << "uniform float ppLight" << i << "SpotExp;" << std::endl;
 			}
+			if (!materialUBO)
+			{
+				ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
+				ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
+				ss << "uniform float nlMaterialShininess;" << std::endl;
+			}
+			if (!cameraUBO)
+				ss << "uniform vec3 pzbCameraPos;" << std::endl;
 		}
-		if (!materialUBO)
-		{
-			ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
-			ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
-			ss << "uniform float nlMaterialShininess;" << std::endl;
-		}
-		if (!cameraUBO)
-			ss << "uniform vec3 pzbCameraPos;" << std::endl;
-	}
-	else if (ppl == 2)
-	{
-		// Non-table PPL path: raw per-light values via pp-prefixed uniforms
 		if (!objectUBO)
 			ss << "uniform int nlNumPerPixelLights;" << std::endl;
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-		{
-			if (!objectUBO)
-				ss << "uniform int nlLightMode" << i << ";" << std::endl;
-			ss << "uniform vec3 ppLight" << i << "DirOrPos;" << std::endl;
-			ss << "uniform vec4 ppLight" << i << "ColDiff;" << std::endl;
-			ss << "uniform vec4 ppLight" << i << "ColSpec;" << std::endl;
-			ss << "uniform float ppLight" << i << "ConstAttn;" << std::endl;
-			ss << "uniform float ppLight" << i << "LinAttn;" << std::endl;
-			ss << "uniform float ppLight" << i << "QuadAttn;" << std::endl;
-			ss << "uniform vec3 ppLight" << i << "SpotDir;" << std::endl;
-			ss << "uniform float ppLight" << i << "SpotCutoff;" << std::endl;
-			ss << "uniform float ppLight" << i << "SpotExp;" << std::endl;
-		}
-		if (!materialUBO)
-		{
-			ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
-			ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
-			ss << "uniform float nlMaterialShininess;" << std::endl;
-		}
-		if (!cameraUBO)
-			ss << "uniform vec3 pzbCameraPos;" << std::endl;
 	}
 	ss << std::endl;
 
@@ -296,7 +306,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 	ss << std::endl;
 
 	// Fog function
-	if (fog)
+	if (fogOrPpl)
 	{
 		ss << "vec4 applyFog(vec4 col) {" << std::endl;
 		ss << "  float z;" << std::endl;
@@ -318,7 +328,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 	}
 
 	// Per-pixel lighting function (world-space Blinn-Phong)
-	if (ppl)
+	if (fogOrPpl)
 	{
 		ss << "void computeLightPP(int lightMode, vec3 dirOrPos, vec4 colDiff, vec4 colSpec," << std::endl;
 		ss << "                    float shininess, float constAttn, float linAttn, float quadAttn," << std::endl;
@@ -357,7 +367,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 	ss << std::endl;
 
 	// Per-pixel lighting accumulation
-	if (ppl)
+	if (fogOrPpl)
 	{
 		const char *matDiffStr = materialUBO ? "materialDiffuse" : "nlMaterialDiffuse";
 		const char *matSpecStr = materialUBO ? "materialSpecular" : "nlMaterialSpecular";
@@ -370,7 +380,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 		ss << "    vec3 eyeDir = normalize(-wsPos);" << std::endl;
 		ss << "    vec4 pplDiff = vec4(0.0);" << std::endl;
 
-		if (ppl == 1)
+		if (tableUBO)
 		{
 			// Table PPL: light data from nlLights[idx] UBO
 			for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
@@ -401,7 +411,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 				ss << "    }" << std::endl;
 			}
 		}
-		else if (ppl == 2)
+		else
 		{
 			// Non-table PPL: raw per-light values via pp-prefixed uniforms
 			// No index/factor indirection — nlLightMode{i} gates disabled lights (mode < 0)
@@ -586,7 +596,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 	// Add specular post-texture (matches legacy GL_COLOR_SUM / GL_SEPARATE_SPECULAR_COLOR)
 	if (specular)
 		ss << "  fragColor.rgb += specularColor.rgb;" << std::endl;
-	if (ppl)
+	if (fogOrPpl)
 		ss << "  fragColor.rgb += pplSpecAccum.rgb;" << std::endl;
 	ss << std::endl;
 
@@ -594,9 +604,9 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 	ss << "  if (nlAlphaTest != 0 && fragColor.a <= alphaRef) discard;" << std::endl;
 	ss << std::endl;
 
-	// Fog
-	if (fog)
-		ss << "  fragColor = applyFog(fragColor);" << std::endl;
+	// Fog (runtime-gated: fogOrPpl=1 always has the function, but only applies when fog is enabled)
+	if (fogOrPpl)
+		ss << "  if (nlFogEnabled != 0) fragColor = applyFog(fragColor);" << std::endl;
 
 	ss << "}" << std::endl;
 
@@ -607,16 +617,16 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, int
 
 bool CDriverGL3::initMegaPixelPrograms()
 {
-	for (int fog = 0; fog < 2; ++fog)
+	for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
 	{
 		for (int cube = 0; cube < 2; ++cube)
 		{
 			for (int specular = 0; specular < 2; ++specular)
 			{
-				for (int ppl = 0; ppl < 3; ++ppl)
+				for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
 				{
-					// ppl requires fog (ecPos varying for world-space position)
-					if (ppl && !fog)
+					// tableUBO only valid when fogOrPpl (PPL needs ecPos)
+					if (tableUBO && !fogOrPpl)
 						continue;
 
 					for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
@@ -629,20 +639,18 @@ bool CDriverGL3::initMegaPixelPrograms()
 								if (objectUBO && !cameraUBO)
 									continue;
 
-								// Non-table PPL (ppl=2) requires individual nlLightMode uniforms,
-								// which aren't in the NlModel UBO. objectUBO implies lightTableUBO
-								// at runtime (→ ppl=1), so this combination is never selected.
-								if (ppl == 2 && objectUBO)
+								// objectUBO implies lightTableUBO
+								if (objectUBO && !tableUBO)
 									continue;
 
 								std::string result;
-								megaPPGenerate(result, fog != 0, cube != 0, specular != 0, ppl, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
+								megaPPGenerate(result, fogOrPpl != 0, cube != 0, specular != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
 
 								CPixelProgram *pp = new CPixelProgram();
 								IProgram::CSource *src = new IProgram::CSource();
 								src->Profile = IProgram::glsl330f;
-								src->DisplayName = NLMISC::toString("Mega PP (fog=%d, cube=%d, spec=%d, ppl=%d, cam=%d, obj=%d, mat=%d)", fog, cube, specular, ppl, cameraUBO, objectUBO, materialUBO);
-								src->Features.UsesLightTableUBO = (ppl == 1);
+								src->DisplayName = NLMISC::toString("Mega PP (fogOrPpl=%d, cube=%d, spec=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", fogOrPpl, cube, specular, tableUBO, cameraUBO, objectUBO, materialUBO);
+								src->Features.UsesLightTableUBO = (tableUBO != 0);
 								src->Features.UsesCameraUBO = (cameraUBO != 0);
 								src->Features.UsesObjectUBO = (objectUBO != 0);
 								src->Features.UsesMaterialUBO = (materialUBO != 0);
@@ -658,7 +666,7 @@ bool CDriverGL3::initMegaPixelPrograms()
 									return false;
 								}
 
-								m_MegaPP[fog][cube][specular][ppl][cameraUBO][objectUBO][materialUBO] = pp;
+								m_MegaPP[fogOrPpl][cube][specular][tableUBO][cameraUBO][objectUBO][materialUBO] = pp;
 							}
 						}
 					}
@@ -692,20 +700,18 @@ bool CDriverGL3::setupMegaPixelProgram()
 		matDrv->PPBuiltin.MaterialUBOTouched = false;
 	}
 
-	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
+	int fogOrPpl = (m_VPBuiltinCurrent.Fog || _NumPerPixelLights > 0) ? 1 : 0;
 	// Cube variant: any cubemap in the material's sampler modes
 	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
 	int specular = m_VPSpecularOutput ? 1 : 0;
+	int tableUBO = m_ProgramUsesLightTableUBO[VertexProgram] ? 1 : 0;
 	int cameraUBO = m_ProgramUsesCameraUBO[VertexProgram] ? 1 : 0;
 	int objectUBO = m_ProgramUsesObjectUBO[VertexProgram] ? 1 : 0;
 	int materialUBO = m_ProgramUsesMaterialUBO[VertexProgram] ? 1 : 0;
-	// PPL variant: requires fog (ecPos varying). pzbCameraPos comes from camera UBO or individual uniform.
-	// ppl: 0=none, 1=table PPL (light table UBO), 2=non-table PPL (individual pp-prefixed uniforms)
-	int ppl = 0;
-	if (_NumPerPixelLights > 0 && fog)
-		ppl = m_ProgramUsesLightTableUBO[VertexProgram] ? 1 : 2;
+	// fogOrPpl=0 + tableUBO=1 variant doesn't exist
+	if (!fogOrPpl) tableUBO = 0;
 
-	CPixelProgram *pp = m_MegaPP[fog][cube][specular][ppl][cameraUBO][objectUBO][materialUBO];
+	CPixelProgram *pp = m_MegaPP[fogOrPpl][cube][specular][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(pp);
 
 	if (!activePixelProgram(pp, true))

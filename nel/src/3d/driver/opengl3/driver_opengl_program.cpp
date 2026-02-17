@@ -1162,6 +1162,14 @@ void CDriverGL3::setupUniforms(TProgram program)
 			nglProgramUniform1i(progId, cpmIdx, (sint32)m_VPBuiltinCurrent.ClipPlaneMask);
 	}
 
+	// nlFogEnabled: per-material fog enable state — always individual uniform (not in any UBO,
+	// since nlFogMode is in the per-frame NlCamera UBO, but fog enable is per-material)
+	{
+		uint fogEnIdx = p->getUniformIndex(CProgramIndex::NlFogEnabled);
+		if (fogEnIdx != ~0u)
+			nglProgramUniform1i(progId, fogEnIdx, m_VPBuiltinCurrent.Fog ? 1 : 0);
+	}
+
 	if (m_ProgramUsesObjectUBO[program])
 	{
 		// Object UBO handles selfIllumination, light indices/factors, matrices — skip individual uploads
