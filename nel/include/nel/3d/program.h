@@ -75,7 +75,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), OutputsWorldSpaceNormal(false), InputsWorldSpaceNormal(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), InputsWorldSpaceNormal(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -104,10 +104,11 @@ struct CProgramFeatures
 	/// Whether this VP outputs a separate specular color varying (for post-texture addition).
 	bool OutputsSpecularColor;
 
-	/// Whether this VP outputs a world-space normal varying at location 2.
-	bool OutputsWorldSpaceNormal;
-
 	/// Whether this PP requires a world-space normal varying at location 2 from the VP.
+	/// When set, the builtin VP transforms the normal to world space before output.
+	/// When false, the VP still outputs the normal varying (object-space) if the VB
+	/// has normals — user PPs may consume it directly. The builtin PP only supports
+	/// world-space normals as input; object-space normals are only used by user PPs.
 	bool InputsWorldSpaceNormal;
 
 	// UBO flags (todo: enum)
