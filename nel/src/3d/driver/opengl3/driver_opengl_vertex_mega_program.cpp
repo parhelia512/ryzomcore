@@ -64,11 +64,11 @@ namespace /* anonymous */ {
 
 
 
-void megaVPGenerate(std::string &result, bool fog, bool clip, bool table)
+void megaVPGenerate(std::string &result, bool fog, bool clip, bool table, bool cameraUBO)
 {
 	std::stringstream ss;
 	ss << "// Megashader Vertex Program";
-	ss << " (fog=" << (int)fog << ", clip=" << (int)clip << ", table=" << (int)table << ")" << std::endl;
+	ss << " (fog=" << (int)fog << ", clip=" << (int)clip << ", table=" << (int)table << ", cameraUBO=" << (int)cameraUBO << ")" << std::endl;
 	ss << std::endl;
 	ss << "#version 330" << std::endl;
 	ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
@@ -83,10 +83,14 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table)
 	ss << "};" << std::endl;
 	ss << std::endl;
 
+	// NlCamera UBO block is provided by GLSLCameraHeader
+	// (prepended automatically by compileVertexProgram when UsesCameraUBO is set).
+
 	// Matrix uniforms (existing names — setupUniforms() works unchanged)
 	ss << "uniform mat4 modelViewProjection;" << std::endl;
 	ss << "uniform mat4 modelView;" << std::endl;
-	ss << "uniform mat4 viewMatrix;" << std::endl;
+	if (!cameraUBO)
+		ss << "uniform mat4 viewMatrix;" << std::endl;
 	ss << "uniform mat3 normalMatrix;" << std::endl;
 	ss << std::endl;
 
@@ -104,7 +108,8 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table)
 		ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
 		ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
 		ss << "uniform float nlMaterialShininess;" << std::endl;
-		ss << "uniform vec3 pzbCameraPos;" << std::endl;
+		if (!cameraUBO)
+			ss << "uniform vec3 pzbCameraPos;" << std::endl;
 		ss << std::endl;
 	}
 	else
@@ -135,8 +140,8 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table)
 		ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
 	ss << std::endl;
 
-	// Clip plane uniforms
-	if (clip)
+	// Clip plane uniforms (individual uniforms only when no camera UBO)
+	if (clip && !cameraUBO)
 	{
 		for (int i = 0; i < 6; ++i)
 			ss << "uniform vec4 clipPlane" << i << ";" << std::endl;
@@ -154,7 +159,7 @@ void megaVPGenerate(std::string &result, bool fog, bool clip, bool table)
 		ss << "uniform int nlTexGenMode" << i << ";" << std::endl;
 	ss << "uniform int nlVertexColorLighted;" << std::endl;
 	ss << "uniform int nlVertexFormat;" << std::endl;
-	if (clip)
+	if (clip && !cameraUBO)
 		ss << "uniform int nlClipPlaneMask;" << std::endl;
 	ss << std::endl;
 
@@ -394,27 +399,31 @@ bool CDriverGL3::initMegaVertexPrograms()
 		{
 			for (int table = 0; table < 2; ++table)
 			{
-				std::string result;
-				megaVPGenerate(result, fog != 0, clip != 0, table != 0);
-
-				CVertexProgram *vp = new CVertexProgram();
-				IProgram::CSource *src = new IProgram::CSource();
-				src->Profile = IProgram::glsl330v;
-				src->DisplayName = NLMISC::toString("Mega VP (fog=%d, clip=%d, table=%d)", fog, clip, table);
-				src->Features.UsesLightTableUBO = (table != 0);
-				src->setSource(result);
-				vp->addSource(src);
-
-				nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
-
-				if (!compileVertexProgram(vp))
+				for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
 				{
-					nlwarning("GL3: Mega VP compilation failed (fog=%d, clip=%d, table=%d)", fog, clip, table);
-					delete vp;
-					return false;
-				}
+					std::string result;
+					megaVPGenerate(result, fog != 0, clip != 0, table != 0, cameraUBO != 0);
 
-				m_MegaVP[fog][clip][table] = vp;
+					CVertexProgram *vp = new CVertexProgram();
+					IProgram::CSource *src = new IProgram::CSource();
+					src->Profile = IProgram::glsl330v;
+					src->DisplayName = NLMISC::toString("Mega VP (fog=%d, clip=%d, table=%d, cameraUBO=%d)", fog, clip, table, cameraUBO);
+					src->Features.UsesLightTableUBO = (table != 0);
+					src->Features.UsesCameraUBO = (cameraUBO != 0);
+					src->setSource(result);
+					vp->addSource(src);
+
+					nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+					if (!compileVertexProgram(vp))
+					{
+						nlwarning("GL3: Mega VP compilation failed (fog=%d, clip=%d, table=%d, cameraUBO=%d)", fog, clip, table, cameraUBO);
+						delete vp;
+						return false;
+					}
+
+					m_MegaVP[fog][clip][table][cameraUBO] = vp;
+				}
 			}
 		}
 	}
@@ -429,17 +438,20 @@ bool CDriverGL3::setupMegaVertexProgram()
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
 		m_VPUsesLightTableUBO = m_UserVertexProgram->features().UsesLightTableUBO;
+		m_VPUsesCameraUBO = m_UserVertexProgram->features().UsesCameraUBO;
 		return true;
 	}
 
 	m_VPSpecularOutput = true; // Mega VP always outputs specularColor
 	m_VPUsesLightTableUBO = m_UseLightUBO; // Mega VP uses UBO when driver switch is on
+	m_VPUsesCameraUBO = m_UseCameraUBO;
 
 	int fog = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
 	int table = m_UseLightUBO ? 1 : 0;
+	int cameraUBO = m_UseCameraUBO ? 1 : 0;
 
-	CVertexProgram *vp = m_MegaVP[fog][clip][table];
+	CVertexProgram *vp = m_MegaVP[fog][clip][table][cameraUBO];
 	nlassert(vp);
 
 	if (!activeVertexProgram(vp, true))
@@ -498,10 +510,13 @@ void CDriverGL3::setupMegaVPUniforms()
 	if (idx != ~0u)
 		nglProgramUniform1i(progId, idx, (sint32)m_VPBuiltinCurrent.VertexFormat);
 
-	// Clip plane mask (only in clip variant)
-	idx = p->getUniformIndex(CProgramIndex::NlClipPlaneMask);
-	if (idx != ~0u)
-		nglProgramUniform1i(progId, idx, (sint32)m_VPBuiltinCurrent.ClipPlaneMask);
+	// Clip plane mask (only in clip variant, skip when camera UBO provides it)
+	if (!m_VPUsesCameraUBO)
+	{
+		idx = p->getUniformIndex(CProgramIndex::NlClipPlaneMask);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, (sint32)m_VPBuiltinCurrent.ClipPlaneMask);
+	}
 }
 
 } // NLDRIVERGL3

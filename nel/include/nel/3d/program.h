@@ -74,7 +74,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), UsesLightTableUBO(false) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), UsesLightTableUBO(false), UsesCameraUBO(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -107,6 +107,9 @@ struct CProgramFeatures
 	// These are set on both user and builtin programs (todo)
 	/// Whether this VP reads lights from a UBO light table + per-object indices/factors.
 	bool UsesLightTableUBO;
+
+	/// Whether this program reads camera/fog/clip state from a UBO (binding 0).
+	bool UsesCameraUBO;
 };
 
 // Stucture used to cache the indices of builtin parameters which are used by the drivers

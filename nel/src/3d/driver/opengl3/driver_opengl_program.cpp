@@ -25,8 +25,8 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
-// Insert GLSLBuiltinHeader after leading # preprocessor lines (#version, #extension, etc.)
-static std::string insertBuiltinHeader(const char *source)
+// Insert builtin UBO headers after leading # preprocessor lines (#version, #extension, etc.)
+static std::string insertBuiltinHeaders(const char *source, bool lightTable, bool camera)
 {
 	const char *p = source;
 
@@ -48,7 +48,10 @@ static std::string insertBuiltinHeader(const char *source)
 
 	std::string result;
 	result.append(source, p - source);
-	result.append(GLSLBuiltinHeader);
+	if (camera)
+		result.append(GLSLCameraHeader);
+	if (lightTable)
+		result.append(GLSLLightTableHeader);
 	result.append(p);
 	return result;
 }
@@ -189,9 +192,9 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 
 	std::string fullSource;
 	const char *s;
-	if (src->Features.UsesLightTableUBO)
+	if (src->Features.UsesLightTableUBO || src->Features.UsesCameraUBO)
 	{
-		fullSource = insertBuiltinHeader(src->SourcePtr);
+		fullSource = insertBuiltinHeaders(src->SourcePtr, src->Features.UsesLightTableUBO, src->Features.UsesCameraUBO);
 		s = fullSource.c_str();
 	}
 	else
@@ -308,7 +311,17 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 	if (src == NULL)
 		return false;
 
-	const char *s = src->SourcePtr;
+	std::string fullSource;
+	const char *s;
+	if (src->Features.UsesCameraUBO)
+	{
+		fullSource = insertBuiltinHeaders(src->SourcePtr, false, true);
+		s = fullSource.c_str();
+	}
+	else
+	{
+		s = src->SourcePtr;
+	}
 	unsigned int id = nglCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &s);
 	if (id == 0)
 		return false;
@@ -819,10 +832,16 @@ void CDriverGL3::setupUniforms(TProgram program)
 		setUniform4x4f(program, mvpIndex, mvp);
 	}
 
-	uint vmIndex = p->getUniformIndex(CProgramIndex::ViewMatrix);
-	if (vmIndex != ~0)
+	if (m_VPUsesCameraUBO)
 	{
-		setUniform4x4f(program, vmIndex, _ViewMtx);
+		// Camera UBO: upload once per frame, skip individual uniform uploads
+		uploadCameraUBO();
+	}
+	else
+	{
+		uint vmIndex = p->getUniformIndex(CProgramIndex::ViewMatrix);
+		if (vmIndex != ~0)
+			setUniform4x4f(program, vmIndex, _ViewMtx);
 	}
 
 	uint mvIndex = p->getUniformIndex(CProgramIndex::ModelView);
@@ -851,17 +870,20 @@ void CDriverGL3::setupUniforms(TProgram program)
 		setUniform3x3f(program, nmIdx, nm);
 	}
 
-	uint fogParamsIdx = p->getUniformIndex(CProgramIndex::FogParams);
-	if (fogParamsIdx != ~0)
-		nglProgramUniform2f(progId, fogParamsIdx, _FogStart, _FogEnd);
+	if (!m_VPUsesCameraUBO)
+	{
+		uint fogParamsIdx = p->getUniformIndex(CProgramIndex::FogParams);
+		if (fogParamsIdx != ~0)
+			nglProgramUniform2f(progId, fogParamsIdx, _FogStart, _FogEnd);
 
-	uint fogColorIdx = p->getUniformIndex(CProgramIndex::FogColor);
-	if (fogColorIdx != ~0)
-		nglProgramUniform4fv(progId, fogColorIdx, 1, _CurrentFogColor);
+		uint fogColorIdx = p->getUniformIndex(CProgramIndex::FogColor);
+		if (fogColorIdx != ~0)
+			nglProgramUniform4fv(progId, fogColorIdx, 1, _CurrentFogColor);
 
-	uint fogDensityIdx = p->getUniformIndex(CProgramIndex::FogDensity);
-	if (fogDensityIdx != ~0)
-		nglProgramUniform1f(progId, fogDensityIdx, _FogDensity);
+		uint fogDensityIdx = p->getUniformIndex(CProgramIndex::FogDensity);
+		if (fogDensityIdx != ~0)
+			nglProgramUniform1f(progId, fogDensityIdx, _FogDensity);
+	}
 
 	uint colorIndex = p->getUniformIndex(CProgramIndex::Color);
 	if (colorIndex != ~0)
@@ -946,9 +968,12 @@ void CDriverGL3::setupUniforms(TProgram program)
 		if (mshIdx != ~0u)
 			nglProgramUniform1f(progId, mshIdx, mat.getShininess());
 
-		uint pzbIdx = p->getUniformIndex(CProgramIndex::PzbCameraPos);
-		if (pzbIdx != ~0u)
-			nglProgramUniform3f(progId, pzbIdx, _PZBCameraPos.x, _PZBCameraPos.y, _PZBCameraPos.z);
+		if (!m_VPUsesCameraUBO)
+		{
+			uint pzbIdx = p->getUniformIndex(CProgramIndex::PzbCameraPos);
+			if (pzbIdx != ~0u)
+				nglProgramUniform3f(progId, pzbIdx, _PZBCameraPos.x, _PZBCameraPos.y, _PZBCameraPos.z);
+		}
 	}
 	else
 	{
@@ -1048,14 +1073,17 @@ void CDriverGL3::setupUniforms(TProgram program)
 		}
 	}
 
-	// Upload clip plane uniforms (eye-space plane equations)
-	for (uint i = 0; i < MaxClipPlanes; ++i)
+	// Upload clip plane uniforms (eye-space plane equations) — skip when camera UBO active
+	if (!m_VPUsesCameraUBO)
 	{
-		if (!_ClipPlaneEnabled[i])
-			continue;
-		uint cpIdx = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::ClipPlane0 + i));
-		if (cpIdx != ~0u)
-			nglProgramUniform4f(progId, cpIdx, _ClipPlaneEye[i][0], _ClipPlaneEye[i][1], _ClipPlaneEye[i][2], _ClipPlaneEye[i][3]);
+		for (uint i = 0; i < MaxClipPlanes; ++i)
+		{
+			if (!_ClipPlaneEnabled[i])
+				continue;
+			uint cpIdx = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::ClipPlane0 + i));
+			if (cpIdx != ~0u)
+				nglProgramUniform4f(progId, cpIdx, _ClipPlaneEye[i][0], _ClipPlaneEye[i][1], _ClipPlaneEye[i][2], _ClipPlaneEye[i][3]);
+		}
 	}
 }
 
@@ -1079,6 +1107,12 @@ void CDriverGL3::setupInitialUniforms(IProgram *program)
 		drvInfo->setLightTableBlockIndex(lightTableBlock);
 		if (lightTableBlock != GL_INVALID_INDEX)
 			nglUniformBlockBinding(id, lightTableBlock, NL_BUILTIN_LIGHT_TABLE_BINDING);
+
+		// Resolve and cache NlCamera UBO block index, bind to its binding point
+		GLuint cameraBlock = nglGetUniformBlockIndex(id, "NlCamera");
+		drvInfo->setCameraBlockIndex(cameraBlock);
+		if (cameraBlock != GL_INVALID_INDEX)
+			nglUniformBlockBinding(id, cameraBlock, NL_BUILTIN_CAMERA_BINDING);
 	}
 }
 

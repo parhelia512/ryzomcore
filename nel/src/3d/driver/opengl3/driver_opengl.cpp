@@ -329,6 +329,10 @@ CDriverGL3::CDriverGL3()
 	_LightTableDirty = false;
 	_UserLightUBODirty = true;
 	_LightTableUBOCapacity = 0;
+	m_UseCameraUBO = true; // Default to UBO mode; set false for legacy uniform debugging
+	_CameraUBOId = 0;
+	_CameraUBODirty = true;
+	_CameraUBOCapacity = 0;
 	_LightTableObjCount = 0;
 	for (uint i = 0; i < MaxLight; ++i)
 	{
@@ -486,8 +490,9 @@ bool CDriverGL3::setupDisplay()
 	if (!initProgramPipeline())
 		nlerror("Failed to create Pipeline Object");
 
-	// Create the light table UBO
+	// Create UBOs
 	nglGenBuffers(1, &_LightTableUBOId);
+	nglGenBuffers(1, &_CameraUBOId);
 
 	if (m_UseMegaShaders)
 	{
@@ -496,8 +501,8 @@ bool CDriverGL3::setupDisplay()
 		else if (!initMegaPixelPrograms())
 			nlwarning("GL3: Failed to init mega pixel programs, falling back to per-material shaders");
 		else
-			nlinfo("GL3: Mega shaders initialized (8 VP + 8 PP variants)");
-		if (!m_MegaVP[0][0][0] || !m_MegaPP[0][0][0])
+			nlinfo("GL3: Mega shaders initialized (16 VP + 16 PP variants)");
+		if (!m_MegaVP[0][0][0][0] || !m_MegaPP[0][0][0][0])
 			m_UseMegaShaders = false; // Fallback
 	}
 
@@ -813,11 +818,16 @@ bool CDriverGL3::release()
 		delete it->PixelProgram;
 	m_PPBuiltinCache.clear();
 
-	// Delete the light table UBO
+	// Delete UBOs
 	if (_LightTableUBOId)
 	{
 		nglDeleteBuffers(1, &_LightTableUBOId);
 		_LightTableUBOId = 0;
+	}
+	if (_CameraUBOId)
+	{
+		nglDeleteBuffers(1, &_CameraUBOId);
+		_CameraUBOId = 0;
 	}
 
 	// Call IDriver::release() before, to destroy textures, shaders and VBs...
@@ -1171,6 +1181,7 @@ void CDriverGL3::setupFog(float start, float end, CRGBA color)
 
 	_FogStart = start;
 	_FogEnd = end;
+	_CameraUBODirty = true;
 }
 
 // ***************************************************************************
@@ -1205,6 +1216,7 @@ void CDriverGL3::setupFogMode(TFogMode mode, float density)
 	H_AUTO_OGL(CDriverGL3_setupFogMode)
 	_FogMode = mode;
 	_FogDensity = density;
+	_CameraUBODirty = true;
 }
 
 // ***************************************************************************
@@ -2038,6 +2050,7 @@ IProgramDrvInfos(drv, it)
 {
 	programId = 0;
 	lightTableBlockIndex = GL_INVALID_INDEX;
+	cameraBlockIndex = GL_INVALID_INDEX;
 }
 
 CProgramDrvInfosGL3::~CProgramDrvInfosGL3()

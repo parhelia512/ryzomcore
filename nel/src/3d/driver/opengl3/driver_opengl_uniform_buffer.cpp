@@ -25,7 +25,7 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
-const char *GLSLBuiltinHeader =
+const char *GLSLLightTableHeader =
 	// Light table UBO: shared across all objects, uploaded once when lights change.
 	// User VPs can reference nlLights[] directly when UsesLightTableUBO is set.
 	// Binding point is set from the CPU via glUniformBlockBinding in setupInitialUniforms.
@@ -43,6 +43,26 @@ const char *GLSLBuiltinHeader =
 	"};\n"
 	"layout(std140) uniform NlLightTable {\n"
 	"    NlLightInfo nlLights[128];\n"
+	"};\n";
+
+const char *GLSLCameraHeader =
+	// Camera/global state UBO: shared across all objects, uploaded once per frame.
+	// Contains view matrix, fog params, PZB camera pos, clip planes, and control masks.
+	// Binding point is set from the CPU via glUniformBlockBinding in setupInitialUniforms.
+	"layout(std140) uniform NlCamera {\n"
+	"    mat4  viewMatrix;\n"
+	"    vec4  fogColor;\n"
+	"    vec3  pzbCameraPos;\n"
+	"    float fogDensity;\n"
+	"    vec2  fogParams;\n"
+	"    int   nlFogMode;\n"
+	"    int   nlClipPlaneMask;\n"
+	"    vec4  clipPlane0;\n"
+	"    vec4  clipPlane1;\n"
+	"    vec4  clipPlane2;\n"
+	"    vec4  clipPlane3;\n"
+	"    vec4  clipPlane4;\n"
+	"    vec4  clipPlane5;\n"
 	"};\n";
 
 // Draft UBO infrastructure arrays — indices match the _BINDING defines

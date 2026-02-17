@@ -963,6 +963,13 @@ private:
 	float						_LightTableObjFactors[MaxLight];
 	uint						_LightTableObjCount;
 
+	// Camera/global state UBO (viewMatrix, fog, clipPlanes, pzbCameraPos)
+	bool						m_UseCameraUBO; // Debug switch: true=UBO mode, false=legacy uniforms
+	GLuint						_CameraUBOId;
+	bool						_CameraUBODirty;
+	sint						_CameraUBOCapacity; // Current GPU buffer capacity (bytes)
+	void						uploadCameraUBO();
+
 	// Clip planes (in eye space, pre-transformed for shader)
 	enum { MaxClipPlanes = 6 };
 	bool						_ClipPlaneEnabled[MaxClipPlanes];
@@ -1366,16 +1373,19 @@ private:
 	CVPBuiltin m_VPBuiltinCurrent;
 	bool m_VPBuiltinTouched;
 
-	// Megashader support: m_MegaVP[fog][clip][table], m_MegaPP[fog][cube][specular]
+	// Megashader support: m_MegaVP[fog][clip][table][cameraUBO], m_MegaPP[fog][cube][specular][cameraUBO]
 	bool m_UseMegaShaders;
-	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2];
-	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2];
+	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2];
+	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2];
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;
 
 	// Whether the current VP uses UBO-based light table
 	bool m_VPUsesLightTableUBO;
+
+	// Whether the current VP/PP reads camera/fog/clip state from UBO
+	bool m_VPUsesCameraUBO;
 
 	// EMBM support
 	void	initEMBM();
@@ -1447,10 +1457,13 @@ public:
 	// Cached UBO block indices (resolved once at compile time, GL_INVALID_INDEX if not present)
 	GLuint getLightTableBlockIndex() const { return lightTableBlockIndex; }
 	void setLightTableBlockIndex(GLuint idx) { lightTableBlockIndex = idx; }
+	GLuint getCameraBlockIndex() const { return cameraBlockIndex; }
+	void setCameraBlockIndex(GLuint idx) { cameraBlockIndex = idx; }
 
 private:
 	GLuint programId;
 	GLuint lightTableBlockIndex;
+	GLuint cameraBlockIndex;
 };
 
 /*

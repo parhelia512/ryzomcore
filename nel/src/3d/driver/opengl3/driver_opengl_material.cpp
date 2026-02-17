@@ -956,8 +956,22 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		}
 	}
 
+	// If multi-pass, set fog color to black for pass 1+ (additive blending must not add fog).
+	// Must be done BEFORE setupBuiltinPrograms() so the camera UBO picks up the zeroed color.
+	float savedFogColor[4];
+	if (pass > 0 && _FogEnabled)
+	{
+		memcpy(savedFogColor, _CurrentFogColor, sizeof(savedFogColor));
+		memset(_CurrentFogColor, 0, sizeof(_CurrentFogColor));
+		_CameraUBODirty = true;
+	}
+
 	// Setup the programs now
 	setupBuiltinPrograms();
+
+	// Restore fog color (UBO already uploaded with black for this pass)
+	if (pass > 0 && _FogEnabled)
+		memcpy(_CurrentFogColor, savedFogColor, sizeof(savedFogColor));
 
 	// Set PP constants (lightmap factors, possibly x2 scaled)
 	for (uint stage = 0; stage < std::min(_Extensions.MaxFragmentTextureImageUnits, (GLint)IDRV_PROGRAM_MAXSAMPLERS); ++stage)
@@ -967,14 +981,6 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		{
 			setUniform4f(IDriver::PixelProgram, constantIdx, constant[stage].R, constant[stage].G, constant[stage].B, constant[stage].A);
 		}
-	}
-
-	// If multi-pass, set fog color to black for pass 1+ (additive blending must not add fog)
-	if (pass > 0 && _FogEnabled)
-	{
-		uint fogColorIdx = m_DriverPixelProgram->getUniformIndex(CProgramIndex::FogColor);
-		if (fogColorIdx != ~0u)
-			setUniform4f(IDriver::PixelProgram, fogColorIdx, 0.0f, 0.0f, 0.0f, 0.0f);
 	}
 
 	// Override VP uniforms for per-pass lightmap rendering
@@ -1027,17 +1033,11 @@ void			CDriverGL3::endLightMapMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_endLightMapMultiPass)
 
-	// If multi-pass was used with fog, restore the real fog color
+	// If multi-pass was used with fog, ensure the real fog color is restored.
+	// The camera UBO was uploaded with black fog for pass 1+; dirty it so the
+	// real color gets re-uploaded on the next draw call.
 	if (_NLightMapPass >= 2 && _FogEnabled)
-	{
-		if (m_DriverPixelProgram)
-		{
-			uint fogColorIdx = m_DriverPixelProgram->getUniformIndex(CProgramIndex::FogColor);
-			if (fogColorIdx != ~0u)
-				setUniform4f(IDriver::PixelProgram, fogColorIdx,
-					_CurrentFogColor[0], _CurrentFogColor[1], _CurrentFogColor[2], _CurrentFogColor[3]);
-		}
-	}
+		_CameraUBODirty = true;
 }
 
 // ***************************************************************************
@@ -1356,6 +1356,11 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 	uint b1idx = _WaterFP[fpIdx]->getUniformIndex(CProgramIndex::Bump1ScaleBias);
 	if (b1idx != ~0u)
 		setUniform4f(IDriver::PixelProgram, b1idx, 2.f * factor1, -factor1, 0.f, 0.f);
+
+	// Water VP/PP use individual uniforms, not camera UBO.
+	// Reset this flag since setupBuiltinPrograms() is not called for Water materials,
+	// so it may be stale from the previous draw call's mega shader.
+	m_VPUsesCameraUBO = false;
 
 	// Auto-set standard uniforms (fogParams, fogColor for FP; modelView for VP)
 	setupUniforms(IDriver::PixelProgram);

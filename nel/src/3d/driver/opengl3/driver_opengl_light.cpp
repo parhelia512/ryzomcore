@@ -475,6 +475,79 @@ void CDriverGL3::uploadLightTableUBO()
 }
 
 // ***************************************************************************
+// Camera UBO data layout (std140, 208 bytes, matches GLSL NlCamera block)
+struct CCameraUBOData
+{
+	float viewMatrix[16];    // 64
+	float fogColor[4];       // 16
+	float pzbCameraPos[3];   // 12
+	float fogDensity;        //  4
+	float fogParams[2];      //  8
+	sint32 fogMode;          //  4
+	sint32 clipPlaneMask;    //  4
+	float clipPlane[6][4];   // 96
+};                           // 208
+static_assert(sizeof(CCameraUBOData) == 208, "Camera UBO layout mismatch");
+
+void CDriverGL3::uploadCameraUBO()
+{
+	H_AUTO_OGL(CDriverGL3_uploadCameraUBO)
+
+	if (!_CameraUBOId || !_CameraUBODirty)
+		return;
+
+	CCameraUBOData data;
+
+	// View matrix (column-major, CMatrix::get() returns column-major)
+	const float *vm = _ViewMtx.get();
+	memcpy(data.viewMatrix, vm, 16 * sizeof(float));
+
+	// Fog color
+	memcpy(data.fogColor, _CurrentFogColor, 4 * sizeof(float));
+
+	// PZB camera position
+	data.pzbCameraPos[0] = _PZBCameraPos.x;
+	data.pzbCameraPos[1] = _PZBCameraPos.y;
+	data.pzbCameraPos[2] = _PZBCameraPos.z;
+
+	// Fog density
+	data.fogDensity = _FogDensity;
+
+	// Fog params (start, end)
+	data.fogParams[0] = _FogStart;
+	data.fogParams[1] = _FogEnd;
+
+	// Fog mode and clip plane mask
+	data.fogMode = (sint32)_FogMode;
+	data.clipPlaneMask = (sint32)m_VPBuiltinCurrent.ClipPlaneMask;
+
+	// Clip planes
+	for (uint i = 0; i < MaxClipPlanes; ++i)
+		memcpy(data.clipPlane[i], _ClipPlaneEye[i], 4 * sizeof(float));
+
+	// Upload
+	const GLsizeiptr dataSize = sizeof(CCameraUBOData);
+	nglBindBuffer(GL_UNIFORM_BUFFER, _CameraUBOId);
+
+	if (_CameraUBOCapacity < (sint)dataSize)
+	{
+		nglBufferData(GL_UNIFORM_BUFFER, dataSize, &data, GL_STREAM_DRAW);
+		_CameraUBOCapacity = (sint)dataSize;
+	}
+	else
+	{
+		// Orphan + rewrite
+		nglBufferData(GL_UNIFORM_BUFFER, _CameraUBOCapacity, NULL, GL_STREAM_DRAW);
+		nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, &data);
+	}
+
+	nglBindBuffer(GL_UNIFORM_BUFFER, 0);
+	nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_CAMERA_BINDING, _CameraUBOId);
+
+	_CameraUBODirty = false;
+}
+
+// ***************************************************************************
 void CDriverGL3::enableClipPlane(uint index, bool enable)
 {
 	H_AUTO_OGL(CDriverGL3_enableClipPlane)
@@ -491,6 +564,7 @@ void CDriverGL3::enableClipPlane(uint index, bool enable)
 
 	// Trigger VP regeneration to include/exclude gl_ClipDistance output
 	touchClipPlaneVP(index, enable);
+	_CameraUBODirty = true;
 }
 
 // ***************************************************************************
@@ -521,6 +595,7 @@ void CDriverGL3::setClipPlane(uint index, const NLMISC::CPlane &plane)
 	_ClipPlaneEye[index][1] = invJ.x * pa + invJ.y * pb + invJ.z * pc;
 	_ClipPlaneEye[index][2] = invK.x * pa + invK.y * pb + invK.z * pc;
 	_ClipPlaneEye[index][3] = invPos.x * pa + invPos.y * pb + invPos.z * pc + pd;
+	_CameraUBODirty = true;
 }
 
 } // NLDRIVERGL3

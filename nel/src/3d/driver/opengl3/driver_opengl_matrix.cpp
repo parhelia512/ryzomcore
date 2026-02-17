@@ -71,6 +71,7 @@ void CDriverGL3::setupViewMatrixEx(const CMatrix& mtx, const CVector &cameraPos)
 	_SpecularTexMtx = _ViewMtx;
 	_SpecularTexMtx.setPos(CVector(0.0f,0.0f,0.0f));
 	_SpecularTexMtx.invert();
+	_CameraUBODirty = true;
 }
 
 
@@ -87,6 +88,7 @@ void CDriverGL3::setupViewMatrix(const CMatrix& mtx)
 	_SpecularTexMtx = _ViewMtx;
 	_SpecularTexMtx.setPos(CVector(0.0f,0.0f,0.0f));
 	_SpecularTexMtx.invert();
+	_CameraUBODirty = true;
 }
 
 // ***************************************************************************

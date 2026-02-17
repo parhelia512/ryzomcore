@@ -61,11 +61,11 @@ namespace /* anonymous */ {
 
 #define MEGA_PP_MAX_SAMPLERS 8
 
-void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular)
+void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular, bool cameraUBO)
 {
 	std::stringstream ss;
 	ss << "// Megashader Pixel Program";
-	ss << " (fog=" << (int)fog << ", cube=" << (int)cube << ", specular=" << (int)specular << ")" << std::endl;
+	ss << " (fog=" << (int)fog << ", cube=" << (int)cube << ", specular=" << (int)specular << ", cameraUBO=" << (int)cameraUBO << ")" << std::endl;
 	ss << std::endl;
 	ss << "#version 330" << std::endl;
 	ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
@@ -112,8 +112,11 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular)
 		ss << "uniform vec4 embmMatrix" << i << ";" << std::endl;
 	ss << std::endl;
 
-	// Fog uniforms
-	if (fog)
+	// NlCamera UBO block is provided by GLSLCameraHeader
+	// (prepended automatically by compilePixelProgram when UsesCameraUBO is set).
+
+	// Fog uniforms (individual uniforms only when no camera UBO)
+	if (fog && !cameraUBO)
 	{
 		ss << "uniform vec2 fogParams;" << std::endl;
 		ss << "uniform vec4 fogColor;" << std::endl;
@@ -130,7 +133,7 @@ void megaPPGenerate(std::string &result, bool fog, bool cube, bool specular)
 	ss << "uniform uint nlTexEnvMode3;" << std::endl;
 	ss << "uniform int nlAlphaTest;" << std::endl;
 	ss << "uniform int nlVertexFormat;" << std::endl;
-	if (fog)
+	if (fog && !cameraUBO)
 		ss << "uniform int nlFogMode;" << std::endl;
 	ss << std::endl;
 
@@ -422,26 +425,30 @@ bool CDriverGL3::initMegaPixelPrograms()
 		{
 			for (int specular = 0; specular < 2; ++specular)
 			{
-				std::string result;
-				megaPPGenerate(result, fog != 0, cube != 0, specular != 0);
-
-				CPixelProgram *pp = new CPixelProgram();
-				IProgram::CSource *src = new IProgram::CSource();
-				src->Profile = IProgram::glsl330f;
-				src->DisplayName = NLMISC::toString("Mega PP (fog=%d, cube=%d, specular=%d)", fog, cube, specular);
-				src->setSource(result);
-				pp->addSource(src);
-
-				nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
-
-				if (!compilePixelProgram(pp))
+				for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
 				{
-					nlwarning("GL3: Mega PP compilation failed (fog=%d, cube=%d, specular=%d)", fog, cube, specular);
-					delete pp;
-					return false;
-				}
+					std::string result;
+					megaPPGenerate(result, fog != 0, cube != 0, specular != 0, cameraUBO != 0);
 
-				m_MegaPP[fog][cube][specular] = pp;
+					CPixelProgram *pp = new CPixelProgram();
+					IProgram::CSource *src = new IProgram::CSource();
+					src->Profile = IProgram::glsl330f;
+					src->DisplayName = NLMISC::toString("Mega PP (fog=%d, cube=%d, specular=%d, cameraUBO=%d)", fog, cube, specular, cameraUBO);
+					src->Features.UsesCameraUBO = (cameraUBO != 0);
+					src->setSource(result);
+					pp->addSource(src);
+
+					nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+					if (!compilePixelProgram(pp))
+					{
+						nlwarning("GL3: Mega PP compilation failed (fog=%d, cube=%d, specular=%d, cameraUBO=%d)", fog, cube, specular, cameraUBO);
+						delete pp;
+						return false;
+					}
+
+					m_MegaPP[fog][cube][specular][cameraUBO] = pp;
+				}
 			}
 		}
 	}
@@ -466,8 +473,9 @@ bool CDriverGL3::setupMegaPixelProgram()
 	// Cube variant: any cubemap in the material's sampler modes
 	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
 	int specular = m_VPSpecularOutput ? 1 : 0;
+	int cameraUBO = m_VPUsesCameraUBO ? 1 : 0;
 
-	CPixelProgram *pp = m_MegaPP[fog][cube][specular];
+	CPixelProgram *pp = m_MegaPP[fog][cube][specular][cameraUBO];
 	nlassert(pp);
 
 	if (!activePixelProgram(pp, true))
@@ -525,10 +533,13 @@ void CDriverGL3::setupMegaPPUniforms()
 	if (idx != ~0u)
 		nglProgramUniform1i(progId, idx, (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0);
 
-	// Fog mode
-	idx = p->getUniformIndex(CProgramIndex::NlFogMode);
-	if (idx != ~0u)
-		nglProgramUniform1i(progId, idx, (int)_FogMode);
+	// Fog mode (skip when camera UBO provides it)
+	if (!m_VPUsesCameraUBO)
+	{
+		idx = p->getUniformIndex(CProgramIndex::NlFogMode);
+		if (idx != ~0u)
+			nglProgramUniform1i(progId, idx, (int)_FogMode);
+	}
 
 	// Vertex format (for texcoord availability)
 	idx = p->getUniformIndex(CProgramIndex::NlVertexFormat);

@@ -42,9 +42,10 @@ namespace NLDRIVERGL3 {
 #define NL_USER_PIXEL_PROGRAM_BINDING 7 // (draft) User-specified uniform buffer bound by pixel program
 #define NL_USER_MATERIAL_BINDING 8 // (draft) User-specified uniform buffer bound by material
 
-// Driver-side GLSL header prepended to all shaders (after #version and preprocessor lines).
-// Contains builtin UBO declarations (NlLightTable, etc.)
-extern const char *GLSLBuiltinHeader;
+// Driver-side GLSL headers prepended to shaders (after #version and preprocessor lines).
+// Each header is inserted independently based on CProgramFeatures flags.
+extern const char *GLSLLightTableHeader; // NlLightTable UBO block (UsesLightTableUBO)
+extern const char *GLSLCameraHeader;     // NlCamera UBO block (UsesCameraUBO)
 
 void generateUniformBufferGLSL(std::stringstream &ss, const CUniformBufferFormat &ubf, sint binding);
 
