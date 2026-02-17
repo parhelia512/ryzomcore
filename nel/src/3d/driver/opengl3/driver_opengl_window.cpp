@@ -564,7 +564,7 @@ void CDriverGL3::setWindowIcon(const std::vector<NLMISC::CBitmap> &bitmaps)
 }
 
 // --------------------------------------------------
-bool CDriverGL3::setDisplay(nlWindow wnd, const GfxMode &mode, bool show, bool resizeable) throw(EBadDisplay)
+bool CDriverGL3::setDisplay(nlWindow wnd, const GfxMode &mode, bool show, bool resizeable)
 {
 	H_AUTO_OGL(CDriverGL3_setDisplay)
 

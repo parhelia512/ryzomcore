@@ -164,6 +164,9 @@ bool registerGlExtensions(CGlExtensions &ext);
 	NB: we do it for all (EXT, NV, ARB extension) even it should be useful only for ARB ones.
 */
 
+namespace NL3D {
+namespace NLDRIVERGL3 {
+
 // Core 3.30
 extern PFNGLGETSTRINGIPROC								nglGetStringi;
 
@@ -273,7 +276,8 @@ extern PFNGLCOMPRESSEDTEXSUBIMAGE2DPROC					nglCompressedTexSubImage2D;
 extern PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC					nglCompressedTexSubImage1D;
 extern PFNGLGETCOMPRESSEDTEXIMAGEPROC					nglGetCompressedTexImage;
 
-extern PFNGLBLENDCOLORPROC								nglBlendColor;
+typedef void (APIENTRYP NEL_PFNGLBLENDCOLORPROC) (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
+extern NEL_PFNGLBLENDCOLORPROC							nglBlendColor;
 
 extern PFNGLFENCESYNCPROC								nglFenceSync;
 extern PFNGLISSYNCPROC									nglIsSync;
@@ -388,6 +392,9 @@ extern NEL_PFNGLXSWAPINTERVALMESAPROC			nglXSwapIntervalMESA;
 extern NEL_PFNGLXGETSWAPINTERVALMESAPROC		nglXGetSwapIntervalMESA;
 
 #endif
+
+} // NLDRIVERGL3
+} // NL3D
 
 
 

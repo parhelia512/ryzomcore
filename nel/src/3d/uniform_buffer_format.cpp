@@ -47,7 +47,7 @@ const sint CUniformBufferFormat::s_TypeAlignment[] = {
 	8,
 	16,
 	16,
-	4, // Bool
+	4, // Boolean
 	8,
 	16,
 	16,
@@ -75,7 +75,7 @@ const sint CUniformBufferFormat::s_TypeSize[] = {
 	8,
 	12,
 	16,
-	4, // Bool
+	4, // Boolean
 	8,
 	12,
 	16,

@@ -51,13 +51,13 @@ using namespace NLMISC;
 
 // NSAddressOfSymbol, NSIsSymbolNameDefined, NSLookupAndBindSymbol are deprecated
 #include <dlfcn.h>
-void *nglGetProcAddress(const char *name)
+static void *nglGetProcAddress(const char *name)
 {
 	return dlsym(RTLD_DEFAULT, name);
 }
 
 #elif defined (NL_OS_UNIX)
-void (*nglGetProcAddress(const char *procName))()
+static void (*nglGetProcAddress(const char *procName))()
 {
 	return glXGetProcAddressARB((const GLubyte *)procName);
 }
@@ -66,6 +66,9 @@ void (*nglGetProcAddress(const char *procName))()
 
 // ***************************************************************************
 // The exported function names
+
+namespace NL3D {
+namespace NLDRIVERGL3 {
 
 // Core 3.30
 PFNGLGETSTRINGIPROC								nglGetStringi;
@@ -176,7 +179,7 @@ PFNGLCOMPRESSEDTEXSUBIMAGE2DPROC				nglCompressedTexSubImage2D;
 PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC				nglCompressedTexSubImage1D;
 PFNGLGETCOMPRESSEDTEXIMAGEPROC					nglGetCompressedTexImage;
 
-PFNGLBLENDCOLORPROC								nglBlendColor;
+NEL_PFNGLBLENDCOLORPROC							nglBlendColor;
 
 PFNGLFENCESYNCPROC								nglFenceSync;
 PFNGLISSYNCPROC									nglIsSync;
@@ -295,9 +298,6 @@ NEL_PFNGLXGETSWAPINTERVALMESAPROC				nglXGetSwapIntervalMESA;
 // ***************************************************************************
 // ***************************************************************************
 
-
-namespace	NL3D {
-namespace NLDRIVERGL3 {
 
 #define CHECK_EXT(ext_str) \
 	if (strstr(glext, ext_str)==NULL) { nlwarning("3D: OpengGL extension '%s' was not found", ext_str); return false; } else { nldebug("3D: OpengGL Extension '%s' found", ext_str); }
@@ -483,7 +483,8 @@ static bool setupGLCore(std::vector<const char *> &glext)
 	CHECK_ADDRESS(PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC, glCompressedTexSubImage1D);
 	CHECK_ADDRESS(PFNGLGETCOMPRESSEDTEXIMAGEPROC, glGetCompressedTexImage);
 
-	CHECK_ADDRESS(PFNGLBLENDCOLORPROC, glBlendColor);
+	nglBlendColor = (NEL_PFNGLBLENDCOLORPROC)nglGetProcAddress("glBlendColor");
+	if (!nglBlendColor) { nlwarning("3D: GetProcAddress(\"glBlendColor\") returns NULL"); return false; }
 
 	CHECK_ADDRESS(PFNGLFENCESYNCPROC, glFenceSync);
 	CHECK_ADDRESS(PFNGLISSYNCPROC, glIsSync);
