@@ -2,17 +2,22 @@
 // Hierarchical wind tree vertex program with per-vertex Gouraud lighting.
 // GLSL 330 version for GL3/GLES3 driver.
 //
-// Preprocessor defines prepended at runtime:
-//   #define NUM_POINT_LIGHTS n (0-3)
-//   [#define USE_SPECULAR]
-//   [#define USE_NORMALIZE]
+// Two variants exist at runtime:
 //
+// 1. LEGACY (16-variant path):
+//    Uses preprocessor defines for light count/specular/normalize.
+//    Lighting in object space with pre-multiplied light×material colors.
+//    Source: WindTreeVPCodeGLSL_Body (meshvp_wind_tree.cpp)
+//
+// 2. UBO (single program, shown below):
+//    Uses NlCamera, NlLightTable, NlModel UBOs for eye-space lighting.
+//    All variants folded (light count via indices, specular via material=black).
+//    Source: WindTreeVPCodeGLSL_UBO_Body (meshvp_wind_tree.cpp)
+//
+// This file shows the UBO variant for reference.
 // Requires: #version 330 and GL_ARB_separate_shader_objects
 // (prepended by the constructor before this source)
-
-#ifndef NUM_POINT_LIGHTS
-#define NUM_POINT_LIGHTS 0
-#endif
+// UBO blocks (NlCamera, NlLightTable, NlModel) are inserted by insertBuiltinHeaders.
 
 // Inputs
 layout (location = 0) in vec4 vposition;
@@ -23,164 +28,138 @@ layout (location = 8) in vec4 vtexCoord0;
 // Outputs
 out gl_PerVertex { vec4 gl_Position; };
 layout(location = 3) smooth out vec4 vertexColor;
-#ifdef USE_SPECULAR
 layout(location = 4) smooth out vec4 specularColor;
-#endif
 layout(location = 8) smooth out vec4 texCoord0;
 layout(location = 0) smooth out vec4 ecPos;
 
-// Transform
-uniform mat4 modelViewProjection;
-uniform mat4 modelView;
+// Wind animation (individual uniforms)
+// TODO: Wind and material uniforms will move to user VP UBO (binding 5) via CUniformBuffer when IDriver bind API is available.
+uniform vec3 windLevel1;
+uniform vec3 windLevel2[4];
+uniform vec3 windLevel3[4];
 
-// Wind animation
-uniform vec4 windLevel1;
-uniform vec4 windLevel2[4];
-uniform vec4 windLevel3[4];
+// Material (individual uniforms)
+uniform vec4 nlMaterialDiffuse;
+uniform vec4 nlMaterialSpecular;
+uniform float nlMaterialShininess;
 
-// Lighting
-uniform vec4 ambient;
-uniform vec4 diffuse0;
-#if NUM_POINT_LIGHTS >= 1
-uniform vec4 diffuse1;
-#endif
-#if NUM_POINT_LIGHTS >= 2
-uniform vec4 diffuse2;
-#endif
-#if NUM_POINT_LIGHTS >= 3
-uniform vec4 diffuse3;
-#endif
-uniform vec4 diffuseAlpha;
+void computeLight(int lightMode, vec3 dirOrPos, vec4 colDiff, vec4 colSpec, float shininess,
+                   float constAttn, float linAttn, float quadAttn,
+                   vec3 spotDir, float spotCutoff, float spotExp,
+                   vec3 normal3, vec3 ecPos3, vec3 eyeDir,
+                   inout vec4 lightDiffuse, inout vec4 lightSpecular)
+{
+  if (lightMode < 0) return;
 
-#ifdef USE_SPECULAR
-uniform vec4 specular0; // .w = shininess
-#if NUM_POINT_LIGHTS >= 1
-uniform vec4 specular1;
-#endif
-#if NUM_POINT_LIGHTS >= 2
-uniform vec4 specular2;
-#endif
-#if NUM_POINT_LIGHTS >= 3
-uniform vec4 specular3;
-#endif
-uniform vec4 sunDir;    // object-space sun direction
-uniform vec4 eyePos;    // object-space eye position
-#if NUM_POINT_LIGHTS >= 1
-uniform vec4 plPos0;
-#endif
-#if NUM_POINT_LIGHTS >= 2
-uniform vec4 plPos1;
-#endif
-#if NUM_POINT_LIGHTS >= 3
-uniform vec4 plPos2;
-#endif
-#else
-uniform vec4 dirOrPos0; // sun direction
-#if NUM_POINT_LIGHTS >= 1
-uniform vec4 dirOrPos1;
-#endif
-#if NUM_POINT_LIGHTS >= 2
-uniform vec4 dirOrPos2;
-#endif
-#if NUM_POINT_LIGHTS >= 3
-uniform vec4 dirOrPos3;
-#endif
-#endif
+  vec3 lightDir;
+  float attnFactor = 1.0;
+
+  if (lightMode == 0) { // DirectionalLight
+    lightDir = normalize(mat3(viewMatrix) * dirOrPos);
+  } else {
+    // Point or spot light
+    vec4 lightPos4 = viewMatrix * vec4(dirOrPos, 1.0);
+    vec3 lightPos = lightPos4.xyz / lightPos4.w;
+    vec3 lightVec = lightPos - ecPos3;
+    float lightDistance = length(lightVec);
+    lightDir = lightVec / lightDistance;
+    float attenuation = constAttn + linAttn * lightDistance + quadAttn * lightDistance * lightDistance;
+    attnFactor = 1.0 / attenuation;
+    if (lightMode == 2) { // SpotLight
+      vec3 spotDirView = normalize(mat3(viewMatrix) * spotDir);
+      float spotDot = dot(-lightDir, spotDirView);
+      attnFactor *= (spotDot >= spotCutoff) ? pow(spotDot, spotExp) : 0.0;
+    }
+  }
+
+  float diffAngle = max(0.0, dot(lightDir, normal3));
+  lightDiffuse += diffAngle * attnFactor * colDiff;
+
+  vec3 halfVector = normalize(lightDir + eyeDir);
+  float specAngle = max(0.0, dot(normal3, halfVector));
+  float specPow = pow(specAngle, shininess);
+  lightSpecular += specPow * attnFactor * colSpec;
+}
 
 void main()
 {
-  // --- Wind Animation ---
-  // Extract 3 hierarchy blend factors from vertex color R channel
+  // --- Wind Animation (object space) ---
   vec3 factors = clamp(vprimaryColor.xxx * 3.0 + vec3(0.0, -1.0, -2.0), 0.0, 1.0);
   vec4 pos = vposition;
-  pos.xyz += windLevel1.xyz * factors.x;
-
-  // Phase indices from G and B channels (0..3.99 -> int 0..3)
+  pos.xyz += windLevel1 * factors.x;
   vec2 phase = vprimaryColor.yz * 3.99;
   int idx2 = int(phase.x);
-  pos.xyz += windLevel2[idx2].xyz * factors.y;
+  pos.xyz += windLevel2[idx2] * factors.y;
   int idx3 = int(phase.y);
-  pos.xyz += windLevel3[idx3].xyz * factors.z;
+  pos.xyz += windLevel3[idx3] * factors.z;
 
-  // --- Lighting ---
-  vec3 N = vnormal.xyz;
-#ifdef USE_NORMALIZE
-  N = normalize(N);
-#endif
-
-  vec4 litColor = ambient;
-
-#ifdef USE_SPECULAR
-  float shininess = specular0.w;
-  vec3 V = normalize(eyePos.xyz - pos.xyz);
-
-  // Sun
-  vec3 H = normalize(sunDir.xyz + V);
-  float NdotL = max(dot(N, sunDir.xyz), 0.0);
-  float NdotH = max(dot(N, H), 0.0);
-  float specPow = NdotL > 0.0 ? pow(NdotH, shininess) : 0.0;
-  litColor += NdotL * diffuse0;
-  vec3 specAccum = specPow * specular0.xyz;
-
-  #if NUM_POINT_LIGHTS >= 1
-  {
-    vec3 L = normalize(plPos0.xyz - pos.xyz);
-    H = normalize(L + V);
-    NdotL = max(dot(N, L), 0.0);
-    NdotH = max(dot(N, H), 0.0);
-    specPow = NdotL > 0.0 ? pow(NdotH, shininess) : 0.0;
-    litColor += NdotL * diffuse1;
-    specAccum += specPow * specular1.xyz;
-  }
-  #endif
-  #if NUM_POINT_LIGHTS >= 2
-  {
-    vec3 L = normalize(plPos1.xyz - pos.xyz);
-    H = normalize(L + V);
-    NdotL = max(dot(N, L), 0.0);
-    NdotH = max(dot(N, H), 0.0);
-    specPow = NdotL > 0.0 ? pow(NdotH, shininess) : 0.0;
-    litColor += NdotL * diffuse2;
-    specAccum += specPow * specular2.xyz;
-  }
-  #endif
-  #if NUM_POINT_LIGHTS >= 3
-  {
-    vec3 L = normalize(plPos2.xyz - pos.xyz);
-    H = normalize(L + V);
-    NdotL = max(dot(N, L), 0.0);
-    NdotH = max(dot(N, H), 0.0);
-    specPow = NdotL > 0.0 ? pow(NdotH, shininess) : 0.0;
-    litColor += NdotL * diffuse3;
-    specAccum += specPow * specular3.xyz;
-  }
-  #endif
-
-  // Combine: diffuse with material alpha; specular output separately (added post-texture by PP)
-  vertexColor = clamp(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw, 0.0, 1.0);
-  specularColor = clamp(vec4(specAccum, 0.0), 0.0, 1.0);
-
-#else // Non-specular
-
-  // Sun (directional)
-  litColor += max(dot(N, dirOrPos0.xyz), 0.0) * diffuse0;
-
-  #if NUM_POINT_LIGHTS >= 1
-  litColor += max(dot(N, normalize(dirOrPos1.xyz - pos.xyz)), 0.0) * diffuse1;
-  #endif
-  #if NUM_POINT_LIGHTS >= 2
-  litColor += max(dot(N, normalize(dirOrPos2.xyz - pos.xyz)), 0.0) * diffuse2;
-  #endif
-  #if NUM_POINT_LIGHTS >= 3
-  litColor += max(dot(N, normalize(dirOrPos3.xyz - pos.xyz)), 0.0) * diffuse3;
-  #endif
-
-  vertexColor = clamp(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw, 0.0, 1.0);
-
-#endif // USE_SPECULAR
-
-  // --- Transform & Output ---
+  // --- Transform ---
   gl_Position = modelViewProjection * pos;
+  vec4 ecPos4 = modelView * pos;
+  ecPos = ecPos4;
+
+  // --- Lighting (eye space, light table) ---
+  vec3 normal3 = normalize(normalMatrix * vnormal.xyz);
+  vec3 ecPos3 = ecPos4.xyz / ecPos4.w;
+  vec3 eyeDir = normalize(-ecPos3);
+  vec4 diffuseVertex = vec4(0.0);
+  vec4 specularVertex = vec4(0.0);
+
+  // Unrolled 8 light slots from NlModel UBO
+  { int idx = nlLightIndices01.x;
+    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.x;
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+  } }
+  { int idx = nlLightIndices01.y;
+    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.y;
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+  } }
+  { int idx = nlLightIndices01.z;
+    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.z;
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+  } }
+  { int idx = nlLightIndices01.w;
+    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.w;
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+  } }
+  { int idx = nlLightIndices45.x;
+    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.x;
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+  } }
+  { int idx = nlLightIndices45.y;
+    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.y;
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+  } }
+  { int idx = nlLightIndices45.z;
+    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.z;
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+  } }
+  { int idx = nlLightIndices45.w;
+    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.w;
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+  } }
+
+  // Self-illumination from NlModel UBO
+  diffuseVertex.rgb += selfIllumination.rgb;
+  diffuseVertex.a = 1.0;
+
+  vertexColor = clamp(diffuseVertex, 0.0, 1.0);
+  specularColor = clamp(vec4(specularVertex.rgb, 0.0), 0.0, 1.0);
   texCoord0 = vtexCoord0;
-  ecPos = modelView * pos; // eye-space position for FP fog computation
 }

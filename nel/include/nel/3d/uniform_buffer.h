@@ -37,7 +37,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <nel/misc/matrix.h>
 
 #include <nel/3d/uniform_buffer_format.h>
-#include <nel/3d/driver.h>
 
 #define NL3D_UNIFORM_BUFFER_DEBUG 1
 
@@ -47,6 +46,7 @@ namespace NLMISC {
 
 namespace NL3D {
 
+class IDriver;
 class CUniformBuffer;
 class IUBDrvInfos;
 typedef	std::list<IUBDrvInfos*> TUBDrvInfoPtrList;
@@ -64,6 +64,15 @@ typedef	TUBDrvInfoPtrList::iterator ItUBDrvInfoPtrList;
 #define NL3D_UNIFORM_BUFFER_ASSERT_LOCKED(ub) /* ub->Locked doesn't exist when NL3D_UNIFORM_BUFFER_DEBUG is 0 */
 #endif
 
+/// User-facing UBO binding points for bindUniformBuffer().
+/// The driver maps these to internal binding indices.
+enum TUBBinding
+{
+	UBBindingVertexProgram = 0,
+	UBBindingPixelProgram,
+	UBBindingCount
+};
+
 // Uniform buffer
 class CUniformBuffer : public NLMISC::CRefCount
 {
@@ -71,8 +80,16 @@ public:
 	CUniformBuffer();
 	~CUniformBuffer();
 
+	enum TUsageHint
+	{
+		StreamDraw,   // Data changes every frame/draw call (GL_STREAM_DRAW)
+		DynamicDraw,  // Data changes occasionally (GL_DYNAMIC_DRAW)
+		StaticDraw    // Data set once or rarely (GL_STATIC_DRAW)
+	};
+
 	void *lock();
 	void unlock();
+	inline const void *data() const { return m_HostMemory.data(); }
 
 	inline void set(sint offset, float f) { NL3D_UNIFORM_BUFFER_ASSERT_LOCKED(this); reinterpret_cast<float &>(m_HostMemory[offset]) = f; }
 	inline void set(sint offset, float f0, float f1) { NL3D_UNIFORM_BUFFER_ASSERT_LOCKED(this); float *f = reinterpret_cast<float *>(&m_HostMemory[offset]); f[0] = f0; f[1] = f1; }
@@ -88,6 +105,7 @@ private:
 	
 public:
 	CUniformBufferFormat Format;
+	TUsageHint UsageHint;
 
 public: // Driver-only
 	NLMISC::CRefPtr<IUBDrvInfos> DrvInfos;

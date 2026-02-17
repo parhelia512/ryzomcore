@@ -638,7 +638,7 @@ void updateWaterEnvMap()
 		WaterEnvMapRdr.CurrTime = TimeInSec - FirstTimeInSec;
 		WaterEnvMapRdr.CurrWeather = WeatherManager.getWeatherValue();
 		CSky &sky = ContinentMngr.cur()->CurrentSky;
-		WaterEnvMap->setAlpha(255); // Not useful and does not work under D3D, use alpha map instead on your water shape! // sky.getWaterEnvMapAlpha())
+		WaterEnvMap->setAlpha(ClientCfg.ForceWaterEnvMap ? 128 : 255); // Not useful and does not work under D3D, use alpha map instead on your water shape! // sky.getWaterEnvMapAlpha())
 		Scene->updateWaterEnvMaps(TimeInSec - FirstTimeInSec);
 	}
 	#endif

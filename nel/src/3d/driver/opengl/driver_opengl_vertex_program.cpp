@@ -1825,6 +1825,11 @@ bool CDriverGL::compileVertexProgram(NL3D::CVertexProgram *program)
 {
 	if (program->m_DrvInfo == NULL)
 	{
+		if (program->m_CompileFailed)
+			return false;
+
+		bool result = false;
+
 		// If an arbvp1 source is available and ARB extension is supported,
 		// prefer the ARB path (compileARBVertexProgram tries arbvp1 first,
 		// then falls back to nelvp internally).
@@ -1833,26 +1838,31 @@ bool CDriverGL::compileVertexProgram(NL3D::CVertexProgram *program)
 			for (uint i = 0; i < program->getSourceNb(); ++i)
 			{
 				if (program->getSource(i)->Profile == CVertexProgram::arbvp1)
-					return compileARBVertexProgram(program);
+				{
+					result = compileARBVertexProgram(program);
+					if (!result) program->m_CompileFailed = true;
+					return result;
+				}
 			}
 		}
 
 		// Extension-priority dispatch (nelvp only)
 		if (_Extensions.NVVertexProgram)
 		{
-			return compileNVVertexProgram(program);
+			result = compileNVVertexProgram(program);
 		}
 		else if (_Extensions.ARBVertexProgram)
 		{
-			return compileARBVertexProgram(program);
+			result = compileARBVertexProgram(program);
 		}
 		else if (_Extensions.EXTVertexShader)
 		{
-			return compileEXTVertexShader(program);
+			result = compileEXTVertexShader(program);
 		}
 
-		// Can't do anything
-		return false;
+		if (!result)
+			program->m_CompileFailed = true;
+		return result;
 	}
 	return true;
 }

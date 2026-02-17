@@ -902,9 +902,9 @@ void CStereoOVR::renderGUI()
 		quadUV.Uv3 = CUV(0.f,  1.f);
 		
 		const uint nbQuads = 128;
-		static CVertexBuffer vb;
-		static CIndexBuffer ib;
-		
+		static CVertexBuffer vb; // STATIC GPU RESOURCE: Blocks multiple driver instances
+		static CIndexBuffer ib; // STATIC GPU RESOURCE: Blocks multiple driver instances
+
 		vb.setVertexFormat(CVertexBuffer::PositionFlag | CVertexBuffer::TexCoord0Flag);
 		vb.setPreferredMemory(CVertexBuffer::RAMVolatile, false);
 		vb.setNumVertices((nbQuads + 1) * 2);

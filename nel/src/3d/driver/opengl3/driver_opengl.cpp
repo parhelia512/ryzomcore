@@ -323,6 +323,7 @@ CDriverGL3::CDriverGL3()
 
 	_LightMapDynamicLightEnabled = false;
 	_LightMapDynamicLightDirty= false;
+	_LightMapDynLightTableIndex = -1;
 	_LightTableMode= false;
 	_LightTableUBOId = 0;
 	_LightTableDirty = false;
@@ -361,13 +362,18 @@ CDriverGL3::CDriverGL3()
 	m_UseMegaObjectUBO = true;
 	m_UseMegaMaterialUBO = true;
 	m_VPSpecularOutput = true;
-	m_VPUsesLightTableUBO = false;
-	m_VPUsesCameraUBO = false;
+	memset(m_ProgramUsesLightTableUBO, 0, sizeof(m_ProgramUsesLightTableUBO));
+	memset(m_ProgramUsesCameraUBO, 0, sizeof(m_ProgramUsesCameraUBO));
+	memset(m_ProgramUsesObjectUBO, 0, sizeof(m_ProgramUsesObjectUBO));
+	memset(m_ProgramUsesMaterialUBO, 0, sizeof(m_ProgramUsesMaterialUBO));
 	_ObjectUBOId = 0;
 	_ObjectUBOCapacity = 0;
-	m_VPUsesObjectUBO = false;
-	m_VPUsesMaterialUBO = false;
 	_OverrideMaterialUBOId = 0;
+	for (sint i = 0; i < UBBindingCount; ++i)
+	{
+		_BoundUserUB[i] = NULL;
+		_UserUBBoundId[i] = 0;
+	}
 	memset(&_LightMapUBOOverride, 0, sizeof(_LightMapUBOOverride));
 }
 

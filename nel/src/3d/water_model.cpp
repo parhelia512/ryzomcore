@@ -353,7 +353,7 @@ static void DrawPoly2D(CVertexBuffer &vb, IDriver *drv, const NLMISC::CMatrix &m
 			vba.setValueFloat2Ex (WATER_VB_DX,  k, 0, 0);
 		}
 	}
-	static CIndexBuffer ib;
+	static CIndexBuffer ib; // STATIC GPU RESOURCE: Blocks multiple driver instances
 	ib.setNumIndexes(3 * p.Vertices.size());
 	{
 		CIndexBufferReadWrite ibaWrite;
@@ -1627,7 +1627,7 @@ void	CWaterModel::traverseRender()
 	{
 		// not supported, simple uniform render
 		drv->setupModelMatrix(getWorldMatrix());
-		static CMaterial waterMat;
+		static CMaterial waterMat; // STATIC GPU RESOURCE: Blocks multiple driver instances
 		static bool initDone = false;
 		if (!initDone)
 		{
@@ -1800,7 +1800,7 @@ void CWaterModel::doSimpleRender(IDriver *drv)
 	}
 	//
 	static std::vector<CSimpleVertexInfo> verts;
-	static CIndexBuffer indices;
+	static CIndexBuffer indices; // STATIC GPU RESOURCE: Blocks multiple driver instances
 	//
 	NLMISC::CPolygon2D &poly = shape->_Poly;
 	uint numVerts = poly.Vertices.size();

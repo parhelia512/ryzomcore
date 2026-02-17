@@ -28,19 +28,23 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "std3d.h"
 #include <nel/3d/uniform_buffer.h>
+#include <nel/3d/driver.h>
 
 #include <nel/misc/debug.h>
 
 namespace NL3D {
 
 CUniformBuffer::CUniformBuffer()
+	: UsageHint(StreamDraw)
+	, Touched(false)
+#if NL3D_UNIFORM_BUFFER_DEBUG
+	, Locked(0)
+#endif
 {
 	nlctassert(sizeof(float) == 4);
 	nlctassert(sizeof(NLMISC::CVector2f) == 8);
 	nlctassert(sizeof(NLMISC::CVector) == 12);
 	nlctassert(sizeof(NLMISC::CVectorH) == 16);
-
-	// ...
 }
 
 CUniformBuffer::~CUniformBuffer()
@@ -59,12 +63,11 @@ CUniformBuffer::~CUniformBuffer()
 
 void *CUniformBuffer::lock()
 {
-	m_HostMemory.reserve(Format.size());
-	return &m_HostMemory[0];
-
+	m_HostMemory.resize(Format.size());
 #if NL3D_UNIFORM_BUFFER_DEBUG
 	++Locked;
 #endif
+	return m_HostMemory.data();
 }
 
 void CUniformBuffer::unlock()
@@ -79,7 +82,7 @@ void CUniformBuffer::unlock()
 
 IUBDrvInfos::~IUBDrvInfos()
 {
-	// TODO: _Driver->removeUBDrvInfoPtr(_DriverIterator);
+	m_Driver->removeUBDrvInfoPtr(m_DriverIterator);
 }
 
 } /* namespace NL3D */

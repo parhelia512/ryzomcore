@@ -948,6 +948,7 @@ private:
 	CLight						_LightMapDynamicLight;
 	bool						_LightMapDynamicLightEnabled;
 	bool						_LightMapDynamicLightDirty;
+	sint16						_LightMapDynLightTableIndex; // Table-mode: cached index of dynamic light in _LightTable (-1 = not registered)
 	// this is the backup of standard lighting (cause GL states may be modified by Lightmap Dynamic Lighting)
 	CLight						_UserLight0;
 	CLight						_UserLight[MaxLight];
@@ -1267,7 +1268,9 @@ private:
 	bool			isVertexProgramSupported() const{ return true; }
 
 	bool			isVertexProgramEmulated() const{ return false; }
-	
+
+	bool			supportBuiltinUBO() const { return true; }
+
 	bool			supportVertexProgram(CVertexProgram::TProfile profile) const;
 
 	bool			compileVertexProgram(CVertexProgram *program);
@@ -1318,6 +1321,8 @@ private:
 	void			setUniformFog(TProgram program, uint index);
 
 	bool			isUniformProgramState() { return false; }
+
+	virtual bool	bindUniformBuffer(TUBBinding binding, CUniformBuffer *ub) NL_OVERRIDE;
 
 	// Double-sided vertex color is not supported. No engine code uses it; D3D never supported it either.
 	void			enableVertexProgramDoubleSidedColor(bool doubleSided) {}
@@ -1393,22 +1398,24 @@ private:
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;
 
-	// Whether the current VP uses UBO-based light table
-	bool m_VPUsesLightTableUBO;
-
-	// Whether the current VP/PP reads camera/fog/clip state from UBO
-	bool m_VPUsesCameraUBO;
+	// Per-program UBO usage flags (indexed by IDriver::TProgram)
+	static const uint NumTProgram = 3;
+	bool m_ProgramUsesLightTableUBO[NumTProgram]; // Program reads from NlLightTable UBO
+	bool m_ProgramUsesCameraUBO[NumTProgram];     // Program reads camera/fog/clip from NlCamera UBO
+	bool m_ProgramUsesObjectUBO[NumTProgram];     // Program reads from NlModel UBO
+	bool m_ProgramUsesMaterialUBO[NumTProgram];   // Program reads from NlMaterial UBO
 
 	// Per-Object UBO (runtime state of currently bound program)
 	GLuint  _ObjectUBOId;           // Global GL buffer
 	sint    _ObjectUBOCapacity;     // Current GPU buffer capacity (bytes)
-	bool    m_VPUsesObjectUBO;      // Current VP reads from NlModel UBO
-
-	// Material UBO (runtime state of currently bound program)
-	bool    m_VPUsesMaterialUBO;    // Current VP/PP reads from NlMaterial UBO
 	GLuint  _OverrideMaterialUBOId; // Global buffer for per-pass material overrides (lightmap)
 	void    uploadObjectUBO();
 	void    uploadMaterialUBO();
+
+	// User UBO bindings (deferred upload — flushed in setupUniforms)
+	NLMISC::CRefPtr<CUniformBuffer> _BoundUserUB[UBBindingCount]; // NULL = unbound, auto-nullifies on deletion
+	GLuint           _UserUBBoundId[UBBindingCount];  // GL buffer ID currently at each GL binding point (0 = unbound)
+	void    flushUserUBOs();
 
 	// Lightmap UBO override (set before setupBuiltinPrograms for lightmap passes)
 	struct CLightMapUBOOverride

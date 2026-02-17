@@ -106,31 +106,6 @@ const char *GLSLMaterialHeader =
 	"    int   _matPad2;\n"
 	"};\n";
 
-// Draft UBO infrastructure arrays — indices match the _BINDING defines
-static const char *s_UniformBufferBindDefine[] = {
-	"0", // NL_BUILTIN_CAMERA_BINDING
-	"1", // NL_BUILTIN_LIGHT_TABLE_BINDING
-	"2", // NL_BUILTIN_MODEL_BINDING (draft)
-	"3", // NL_BUILTIN_MATERIAL_BINDING (draft)
-	"4", // NL_USER_ENV_BINDING (draft)
-	"5", // NL_USER_VERTEX_PROGRAM_BINDING (draft)
-	"6", // NL_USER_GEOMETRY_PROGRAM_BINDING (draft)
-	"7", // NL_USER_PIXEL_PROGRAM_BINDING (draft)
-	"8", // NL_USER_MATERIAL_BINDING (draft)
-};
-
-static const char *s_UniformBufferName[] = {
-	"BuiltinCamera",
-	"NlLightTable",
-	"BuiltinModel",       // draft
-	"BuiltinMaterial",     // draft
-	"UserEnv",             // draft
-	"UserLocal",           // draft
-	"UserLocal",           // draft
-	"UserLocal",           // draft
-	"UserMaterial",        // draft
-};
-
 static const char *s_TypeKeyword[] = {
 	"float", // float
 	"vec2", // CVector2D
@@ -139,8 +114,8 @@ static const char *s_TypeKeyword[] = {
 	"int", // sint32
 	"ivec2",
 	"ivec3",
-	"ivec3",
-	"unsigned int", // uint32
+	"ivec4",
+	"uint", // uint32
 	"uvec2",
 	"uvec3",
 	"uvec4",
@@ -167,7 +142,7 @@ void generateUniformBufferGLSL(std::stringstream &ss, const CUniformBufferFormat
 		ss << "struct " << ubf.getStructName(i) << "\n";
 		ss << "{\n";
 		const CUniformBufferFormat &sf = ubf.getStructFormat(i);
-		for (sint j = 0; j < sf.count(); ++j)
+		for (sint j = 0; j < (sint)sf.count(); ++j)
 		{
 			const CUniformBufferFormat::CEntry &field = sf.get(j);
 			ss << "\t" << s_TypeKeyword[field.Type] << " " << NLMISC::CStringMapper::unmap(field.Name);
@@ -178,9 +153,12 @@ void generateUniformBufferGLSL(std::stringstream &ss, const CUniformBufferFormat
 		ss << "};\n";
 	}
 
-	ss << "layout(std140, binding = " << s_UniformBufferBindDefine[binding] << ") uniform " << s_UniformBufferName[binding] << "\n";
+	std::string blockName = ubf.Name.empty()
+		? ("NlUBO" + NLMISC::toString(binding))
+		: ubf.Name;
+	ss << "layout(std140) uniform " << blockName << "\n";
 	ss << "{\n";
-	for (sint i = 0; i < ubf.count(); ++i)
+	for (sint i = 0; i < (sint)ubf.count(); ++i)
 	{
 		const CUniformBufferFormat::CEntry &entry = ubf.get(i);
 		if (entry.StructIndex >= 0)
@@ -192,7 +170,131 @@ void generateUniformBufferGLSL(std::stringstream &ss, const CUniformBufferFormat
 			ss << "[" << entry.Count << "]";
 		ss << ";\n";
 	}
-	ss << "}\n";
+	ss << "};\n";
+}
+
+// ***************************************************************************
+// CUBDrvInfosGL3
+// ***************************************************************************
+
+CUBDrvInfosGL3::CUBDrvInfosGL3(IDriver *drv, ItUBDrvInfoPtrList it, CUniformBuffer *ub)
+	: IUBDrvInfos(drv, it, ub)
+	, _BufferId(0)
+	, _Capacity(0)
+{
+	nglGenBuffers(1, &_BufferId);
+}
+
+CUBDrvInfosGL3::~CUBDrvInfosGL3()
+{
+	if (_BufferId)
+		nglDeleteBuffers(1, &_BufferId);
+}
+
+// ***************************************************************************
+// CDriverGL3::bindUniformBuffer
+// ***************************************************************************
+
+static GLenum usageHintToGL(CUniformBuffer::TUsageHint hint)
+{
+	switch (hint)
+	{
+	case CUniformBuffer::StreamDraw:  return GL_STREAM_DRAW;
+	case CUniformBuffer::DynamicDraw: return GL_DYNAMIC_DRAW;
+	case CUniformBuffer::StaticDraw:  return GL_STATIC_DRAW;
+	default:                          return GL_STREAM_DRAW;
+	}
+}
+
+static const sint s_UBBindingToGL[] = {
+	NL_USER_VERTEX_PROGRAM_BINDING,  // UBBindingVertexProgram
+	NL_USER_PIXEL_PROGRAM_BINDING,   // UBBindingPixelProgram
+};
+
+bool CDriverGL3::bindUniformBuffer(TUBBinding binding, CUniformBuffer *ub)
+{
+	nlassert(binding < UBBindingCount);
+	if (_BoundUserUB[binding] == ub)
+		return true;
+
+	_BoundUserUB[binding] = ub;
+
+	if (!ub)
+	{
+		// Immediate unbind — avoid dangling pointer if buffer is released before next flush
+		if (_UserUBBoundId[binding])
+		{
+			nglBindBufferBase(GL_UNIFORM_BUFFER, s_UBBindingToGL[binding], 0);
+			_UserUBBoundId[binding] = 0;
+		}
+	}
+	return true;
+}
+
+// ***************************************************************************
+// CDriverGL3::flushUserUBOs
+// ***************************************************************************
+
+void CDriverGL3::flushUserUBOs()
+{
+	for (sint i = 0; i < UBBindingCount; ++i)
+	{
+		CUniformBuffer *ub = _BoundUserUB[i];
+
+		if (!ub)
+		{
+			// Detect auto-nullification: CRefPtr cleared it behind our back
+			if (_UserUBBoundId[i])
+			{
+				nglBindBufferBase(GL_UNIFORM_BUFFER, s_UBBindingToGL[i], 0);
+				_UserUBBoundId[i] = 0;
+			}
+			continue;
+		}
+
+		// Create driver info on first use
+		if (!ub->DrvInfos)
+		{
+			ItUBDrvInfoPtrList it = _UBDrvInfos.insert(_UBDrvInfos.end(), (IUBDrvInfos *)NULL);
+			CUBDrvInfosGL3 *info = new CUBDrvInfosGL3(this, it, ub);
+			*it = info;
+			ub->DrvInfos = info;
+		}
+
+		CUBDrvInfosGL3 *info = static_cast<CUBDrvInfosGL3 *>((IUBDrvInfos *)ub->DrvInfos);
+
+		// Upload if data dirty
+		if (ub->Touched)
+		{
+			sint dataSize = ub->Format.size();
+			GLenum usage = usageHintToGL(ub->UsageHint);
+
+			nglBindBuffer(GL_UNIFORM_BUFFER, info->getBufferId());
+
+			if (info->getCapacity() < dataSize)
+			{
+				// Allocate or grow
+				nglBufferData(GL_UNIFORM_BUFFER, dataSize, ub->data(), usage);
+				info->setCapacity(dataSize);
+			}
+			else
+			{
+				// Orphan + rewrite (same size)
+				nglBufferData(GL_UNIFORM_BUFFER, dataSize, NULL, usage);
+				nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, ub->data());
+			}
+
+			ub->Touched = false;
+		}
+
+		// Bind to indexed binding point only when GL buffer ID changed
+		GLuint bufId = info->getBufferId();
+		if (_UserUBBoundId[i] != bufId)
+		{
+			nglBindBufferBase(GL_UNIFORM_BUFFER, s_UBBindingToGL[i], bufId);
+			_UserUBBoundId[i] = bufId;
+		}
+	}
 }
 
 } // NLDRIVERGL3

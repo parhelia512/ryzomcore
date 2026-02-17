@@ -98,6 +98,7 @@ CRenderTrav::CRenderTrav()
 	// objects share the same point lights, and prepares for future UBO/SSBO
 	// based lighting where all lights must be accessible from the shader.
 	_LightTableMode= true;
+	_LightTableActive= false;
 	_LightTableSize= 0;
 	_MaxLightTableSize= (uint)~0;
 
@@ -245,7 +246,7 @@ void		CRenderTrav::traverse(UScene::TRenderPart renderPart, bool newRender, bool
 		// Render the opaque materials
 		_CurrentPassOpaque = true;
 		OrderOpaqueList.begin();
-		if(_LightTableMode && _LightTableSize > 0)
+		if(_LightTableMode && _LightTableActive)
 		{
 			// Batched traversal: pre-fill the light table, then render.
 			// When the table is full, render the batch, flush, and continue.
@@ -658,8 +659,7 @@ void		CRenderTrav::resetLightSetup()
 		// If in light table mode, handle init/teardown
 		if(_LightTableMode)
 		{
-			// Check if table was already enabled (this is the end-of-frame call)
-			if(_LightTableSize > 0)
+			if(_LightTableActive)
 			{
 				// Teardown: reset _TableIndex on all tracked point lights
 				for(i=0; i<_LightTablePointLights.size(); ++i)
@@ -668,6 +668,7 @@ void		CRenderTrav::resetLightSetup()
 				}
 				_LightTablePointLights.clear();
 				_LightTableSize= 0;
+				_LightTableActive= false;
 
 				// Disable table mode in driver so legacy setLight/enableLight resumes
 				Driver->enableLightTableMode(false);
@@ -678,6 +679,7 @@ void		CRenderTrav::resetLightSetup()
 				_LightTablePointLights.clear();
 				_LightTableSize= 1;
 				_MaxLightTableSize= Driver->getMaxLightTableSize();
+				_LightTableActive= true;
 
 				// Upload sun as entry 0
 				CLight sunLight;
@@ -729,7 +731,7 @@ void		CRenderTrav::changeLightSetup(CLightContribution	*lightContribution, bool 
 		return;
 
 	// If in light table mode, dispatch to table path
-	if(_LightTableMode && _LightTableSize > 0)
+	if(_LightTableMode && _LightTableActive)
 	{
 		changeLightSetupTable(lightContribution, useLocalAttenuation);
 		return;
@@ -1161,7 +1163,9 @@ void		CRenderTrav::beginVPLightSetup(CVertexProgramLighted *program, const CMatr
 void		CRenderTrav::changeVPLightSetupMaterial(const CMaterial &mat, bool excludeStrongest)
 {
 	CVertexProgramLighted *program = _VPCurrent;
-	nlassert(program);
+	// UBO-based VPs skip beginVPLightSetup(), so _VPCurrent is NULL.
+	// Material uniforms are handled by the driver's setupUniforms() instead.
+	if (!program) return;
 
 	// Must test if at least done one time.
 	if(!_VPMaterialCacheDirty)

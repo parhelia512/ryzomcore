@@ -279,6 +279,9 @@ bool CDriverD3D::compileVertexProgram(NL3D::CVertexProgram *program)
 	// Program setuped ?
 	if (program->m_DrvInfo == NULL)
 	{
+		if (program->m_CompileFailed)
+			return false;
+
 		// Try vs_2_0 source first (native D3D VS from Cg)
 		IProgram::CSource *vs20Source = NULL;
 		for (uint i = 0; i < program->getSourceNb(); ++i)
@@ -344,6 +347,7 @@ bool CDriverD3D::compileVertexProgram(NL3D::CVertexProgram *program)
 		if (!source)
 		{
 			nlwarning("Direct3D driver: no 'vs_2_0' or 'nelvp' profile found, vertex program cannot be used");
+			program->m_CompileFailed = true;
 			return false;
 		}
 
@@ -366,6 +370,7 @@ bool CDriverD3D::compileVertexProgram(NL3D::CVertexProgram *program)
 		{
 			nlwarning("Unable to parse a vertex program :");
 			nlwarning(errorOutput.c_str());
+			program->m_CompileFailed = true;
 			#ifdef NL_DEBUG_D3D
 				nlassert(0);
 			#endif // NL_DEBUG_D3D
@@ -411,12 +416,16 @@ bool CDriverD3D::compileVertexProgram(NL3D::CVertexProgram *program)
 		if (D3DXAssembleShader (dest.c_str(), (UINT)dest.size(), NULL, NULL, 0, &pShader, &pErrorMsgs) == D3D_OK)
 		{
 			if (_DeviceInterface->CreateVertexShader((DWORD*)pShader->GetBufferPointer(), &(getVertexProgramD3D(*program)->Shader)) != D3D_OK)
+			{
+				program->m_CompileFailed = true;
 				return false;
+			}
 		}
 		else
 		{
 			nlwarning ("Can't assemble vertex program:");
 			nlwarning ((const char*)pErrorMsgs->GetBufferPointer());
+			program->m_CompileFailed = true;
 			return false;
 		}
 
