@@ -12,6 +12,48 @@ ENDIF(NOT WIN32)
 
 FILE(GLOB SRC *.cpp *.h *.def)
 
+SOURCE_GROUP("" FILES
+		driver_opengl.cpp
+		driver_opengl.h
+		driver_opengl.def
+		stdopengl.cpp
+		stdopengl.h)
+
+SOURCE_GROUP(rendering FILES
+		driver_opengl_rendering.cpp
+		driver_opengl_material.cpp
+		driver_opengl_texture.cpp
+		driver_opengl_light.cpp
+		driver_opengl_matrix.cpp
+		driver_opengl_states.cpp
+		driver_opengl_states.h)
+
+SOURCE_GROUP(program FILES
+		driver_opengl_program.cpp
+		driver_opengl_program.h
+		driver_opengl_vertex_program.cpp
+		driver_opengl_pixel_program.cpp
+		driver_opengl_vertex_mega_program.cpp
+		driver_opengl_pixel_mega_program.cpp)
+
+SOURCE_GROUP(vertex FILES
+		driver_opengl_vertex.cpp
+		driver_opengl_vertex_buffer.cpp
+		driver_opengl_vertex_buffer.h
+		driver_opengl_uniform_buffer.cpp
+		driver_opengl_uniform_buffer.h)
+
+SOURCE_GROUP(extension FILES
+		driver_opengl_extension.cpp
+		driver_opengl_extension.h
+		driver_opengl_extension_def.h)
+
+SOURCE_GROUP(window FILES
+		driver_opengl_window.cpp
+		driver_opengl_inputs.cpp
+		unix_event_emitter.cpp
+		unix_event_emitter.h)
+
 IF(APPLE)
   FILE(GLOB MAC_SRC mac/*.h mac/*.m mac/*.mm mac/*.cpp)
   SET(SRC ${SRC} ${MAC_SRC})
