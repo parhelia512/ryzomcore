@@ -1267,7 +1267,9 @@ private:
 	bool			isVertexProgramSupported() const{ return true; }
 
 	bool			isVertexProgramEmulated() const{ return false; }
-	
+
+	bool			supportBuiltinUBO() const { return true; }
+
 	bool			supportVertexProgram(CVertexProgram::TProfile profile) const;
 
 	bool			compileVertexProgram(CVertexProgram *program);

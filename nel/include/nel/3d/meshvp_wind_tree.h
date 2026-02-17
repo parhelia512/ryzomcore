@@ -28,6 +28,8 @@
 namespace NL3D {
 
 class CVertexProgramWindTree;
+class CVertexProgramWindTreeUBO;
+struct CWindTreeVPIdx;
 
 // ***************************************************************************
 /**
@@ -40,6 +42,7 @@ class CMeshVPWindTree : public IMeshVertexProgram
 {
 public:
 	friend class CVertexProgramWindTree;
+	friend class CVertexProgramWindTreeUBO;
 
 	enum	{HrcDepth= 3};
 
@@ -120,7 +123,16 @@ private:
 	 */
 	static	NLMISC::CSmartPtr<CVertexProgramWindTree> _VertexProgram[NumVp];
 
+	/// Single UBO-based VP (all light/specular/normalize folded). GL3-only, falls back to 16 variants if not compiled.
+	static	NLMISC::CSmartPtr<CVertexProgramWindTreeUBO> _VertexProgramUBO;
+
 	NLMISC::CRefPtr<CVertexProgramWindTree> _ActiveVertexProgram;
+	NLMISC::CRefPtr<CVertexProgramWindTreeUBO> _ActiveVertexProgramUBO;
+
+	// Returns the active program's wind/material uniform indices
+	const CWindTreeVPIdx &activeIdx() const;
+	// Returns true if the UBO program is active
+	bool isUBOActive() const;
 
 	// WindTree Time for this mesh param setup. Stored in mesh because same for all instances.
 	float		_CurrentTime[HrcDepth];

@@ -1161,7 +1161,9 @@ void		CRenderTrav::beginVPLightSetup(CVertexProgramLighted *program, const CMatr
 void		CRenderTrav::changeVPLightSetupMaterial(const CMaterial &mat, bool excludeStrongest)
 {
 	CVertexProgramLighted *program = _VPCurrent;
-	nlassert(program);
+	// UBO-based VPs skip beginVPLightSetup(), so _VPCurrent is NULL.
+	// Material uniforms are handled by the driver's setupUniforms() instead.
+	if (!program) return;
 
 	// Must test if at least done one time.
 	if(!_VPMaterialCacheDirty)

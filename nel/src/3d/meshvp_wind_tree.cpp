@@ -46,6 +46,7 @@ static const uint	VPLightConstantStart = 24;
 
 // ***************************************************************************
 NLMISC::CSmartPtr<CVertexProgramWindTree> CMeshVPWindTree::_VertexProgram[CMeshVPWindTree::NumVp];
+NLMISC::CSmartPtr<CVertexProgramWindTreeUBO> CMeshVPWindTree::_VertexProgramUBO;
 
 // Precompiled Cg output for arbvp1 and vs_2_0 profiles
 #include "shaders/wind_tree_vp_embedded.h"
@@ -198,6 +199,151 @@ static const char* WindTreeVPCodeGLSL_Body =
 	"  ecPos = modelView * pos;\n"
 	"}\n";
 
+// UBO-based GLSL body: uses NlCamera, NlLightTable, NlModel UBOs for lighting.
+// All 16 variants (light count, specular, normalize) folded into one shader.
+// TODO: Wind and material uniforms will move to user VP UBO (binding 5) via CUniformBuffer when IDriver bind API is available.
+static const char* WindTreeVPCodeGLSL_UBO_Body =
+	"layout (location = 0) in vec4 vposition;\n"
+	"layout (location = 2) in vec4 vnormal;\n"
+	"layout (location = 3) in vec4 vprimaryColor;\n"
+	"layout (location = 8) in vec4 vtexCoord0;\n"
+	"out gl_PerVertex { vec4 gl_Position; };\n"
+	"layout(location = 3) smooth out vec4 vertexColor;\n"
+	"layout(location = 4) smooth out vec4 specularColor;\n"
+	"layout(location = 8) smooth out vec4 texCoord0;\n"
+	"layout(location = 0) smooth out vec4 ecPos;\n"
+	"\n"
+	"// Wind animation (individual uniforms)\n"
+	"uniform vec3 windLevel1;\n"
+	"uniform vec3 windLevel2[4];\n"
+	"uniform vec3 windLevel3[4];\n"
+	"\n"
+	"// Material (individual uniforms)\n"
+	"// TODO: Material will move to user VP UBO via CUniformBuffer.\n"
+	"uniform vec4 nlMaterialDiffuse;\n"
+	"uniform vec4 nlMaterialSpecular;\n"
+	"uniform float nlMaterialShininess;\n"
+	"\n"
+	"void computeLight(int lightMode, vec3 dirOrPos, vec4 colDiff, vec4 colSpec, float shininess,\n"
+	"                   float constAttn, float linAttn, float quadAttn,\n"
+	"                   vec3 spotDir, float spotCutoff, float spotExp,\n"
+	"                   vec3 normal3, vec3 ecPos3, vec3 eyeDir,\n"
+	"                   inout vec4 lightDiffuse, inout vec4 lightSpecular)\n"
+	"{\n"
+	"  if (lightMode < 0) return;\n"
+	"\n"
+	"  vec3 lightDir;\n"
+	"  float attnFactor = 1.0;\n"
+	"\n"
+	"  if (lightMode == 0) {\n"  // DirectionalLight
+	"    lightDir = normalize(mat3(viewMatrix) * dirOrPos);\n"
+	"  } else {\n"
+	"    vec4 lightPos4 = viewMatrix * vec4(dirOrPos, 1.0);\n"
+	"    vec3 lightPos = lightPos4.xyz / lightPos4.w;\n"
+	"    vec3 lightVec = lightPos - ecPos3;\n"
+	"    float lightDistance = length(lightVec);\n"
+	"    lightDir = lightVec / lightDistance;\n"
+	"    float attenuation = constAttn + linAttn * lightDistance + quadAttn * lightDistance * lightDistance;\n"
+	"    attnFactor = 1.0 / attenuation;\n"
+	"    if (lightMode == 2) {\n"  // SpotLight
+	"      vec3 spotDirView = normalize(mat3(viewMatrix) * spotDir);\n"
+	"      float spotDot = dot(-lightDir, spotDirView);\n"
+	"      attnFactor *= (spotDot >= spotCutoff) ? pow(spotDot, spotExp) : 0.0;\n"
+	"    }\n"
+	"  }\n"
+	"\n"
+	"  float diffAngle = max(0.0, dot(lightDir, normal3));\n"
+	"  lightDiffuse += diffAngle * attnFactor * colDiff;\n"
+	"\n"
+	"  vec3 halfVector = normalize(lightDir + eyeDir);\n"
+	"  float specAngle = max(0.0, dot(normal3, halfVector));\n"
+	"  float specPow = pow(specAngle, shininess);\n"
+	"  lightSpecular += specPow * attnFactor * colSpec;\n"
+	"}\n"
+	"\n"
+	"void main()\n"
+	"{\n"
+	"  // --- Wind Animation (object space) ---\n"
+	"  vec3 factors = clamp(vprimaryColor.xxx * 3.0 + vec3(0.0, -1.0, -2.0), 0.0, 1.0);\n"
+	"  vec4 pos = vposition;\n"
+	"  pos.xyz += windLevel1 * factors.x;\n"
+	"  vec2 phase = vprimaryColor.yz * 3.99;\n"
+	"  int idx2 = int(phase.x);\n"
+	"  pos.xyz += windLevel2[idx2] * factors.y;\n"
+	"  int idx3 = int(phase.y);\n"
+	"  pos.xyz += windLevel3[idx3] * factors.z;\n"
+	"\n"
+	"  // --- Transform ---\n"
+	"  gl_Position = modelViewProjection * pos;\n"
+	"  vec4 ecPos4 = modelView * pos;\n"
+	"  ecPos = ecPos4;\n"
+	"\n"
+	"  // --- Lighting (eye space, light table) ---\n"
+	"  vec3 normal3 = normalize(normalMatrix * vnormal.xyz);\n"
+	"  vec3 ecPos3 = ecPos4.xyz / ecPos4.w;\n"
+	"  vec3 eyeDir = normalize(-ecPos3);\n"
+	"  vec4 diffuseVertex = vec4(0.0);\n"
+	"  vec4 specularVertex = vec4(0.0);\n"
+	"\n"
+	"  // Unrolled 8 light slots from NlModel UBO\n"
+	"  { int idx = nlLightIndices01.x;\n"
+	"    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.x;\n"
+	"      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;\n"
+	"      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,\n"
+	"        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);\n"
+	"  } }\n"
+	"  { int idx = nlLightIndices01.y;\n"
+	"    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.y;\n"
+	"      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;\n"
+	"      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,\n"
+	"        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);\n"
+	"  } }\n"
+	"  { int idx = nlLightIndices01.z;\n"
+	"    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.z;\n"
+	"      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;\n"
+	"      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,\n"
+	"        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);\n"
+	"  } }\n"
+	"  { int idx = nlLightIndices01.w;\n"
+	"    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.w;\n"
+	"      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;\n"
+	"      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,\n"
+	"        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);\n"
+	"  } }\n"
+	"  { int idx = nlLightIndices45.x;\n"
+	"    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.x;\n"
+	"      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;\n"
+	"      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,\n"
+	"        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);\n"
+	"  } }\n"
+	"  { int idx = nlLightIndices45.y;\n"
+	"    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.y;\n"
+	"      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;\n"
+	"      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,\n"
+	"        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);\n"
+	"  } }\n"
+	"  { int idx = nlLightIndices45.z;\n"
+	"    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.z;\n"
+	"      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;\n"
+	"      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,\n"
+	"        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);\n"
+	"  } }\n"
+	"  { int idx = nlLightIndices45.w;\n"
+	"    if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.w;\n"
+	"      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;\n"
+	"      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,\n"
+	"        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);\n"
+	"  } }\n"
+	"\n"
+	"  // Self-illumination from NlModel UBO\n"
+	"  diffuseVertex.rgb += selfIllumination.rgb;\n"
+	"  diffuseVertex.a = 1.0;\n"
+	"\n"
+	"  vertexColor = clamp(diffuseVertex, 0.0, 1.0);\n"
+	"  specularColor = clamp(vec4(specularVertex.rgb, 0.0), 0.0, 1.0);\n"
+	"  texCoord0 = vtexCoord0;\n"
+	"}\n";
+
 static const char*	WindTreeVPCodeWave=
 "!!VP1.0																				\n\
   # extract from color.R the 3 factors into R0.xyz									\n\
@@ -237,22 +383,44 @@ static const char*	WindTreeVPCodeEnd=
 ";
 
 
+// Shared index struct for wind tree VP uniforms
+struct CWindTreeVPIdx
+{
+	uint ProgramConstants[3];
+	uint WindLevel1;
+	uint WindLevel2[4];
+	uint WindLevel3[4];
+	// Material (individual uniforms — future: user VP UBO)
+	uint MaterialDiffuse;
+	uint MaterialSpecular;
+	uint MaterialShininess;
+};
+
 class CVertexProgramWindTree : public CVertexProgramLighted
 {
 public:
-	struct CIdx
-	{
-		uint ProgramConstants[3];
-		uint WindLevel1;
-		uint WindLevel2[4];
-		uint WindLevel3[4];
-	};
+	typedef CWindTreeVPIdx CIdx;
 	CVertexProgramWindTree(uint numPls, bool specular, bool normalize);
 	virtual ~CVertexProgramWindTree() { };
 	virtual void buildInfo();
 	const CIdx &idx() const { return m_Idx; }
 
 	bool PerMeshSetup;
+
+private:
+	CIdx m_Idx;
+
+};
+
+// UBO-based wind tree VP (extends CVertexProgram, not CVertexProgramLighted)
+class CVertexProgramWindTreeUBO : public CVertexProgram
+{
+public:
+	typedef CWindTreeVPIdx CIdx;
+	CVertexProgramWindTreeUBO();
+	virtual ~CVertexProgramWindTreeUBO() { };
+	virtual void buildInfo();
+	const CIdx &idx() const { return m_Idx; }
 
 private:
 	CIdx m_Idx;
@@ -345,6 +513,10 @@ void CVertexProgramWindTree::buildInfo()
 		m_Idx.WindLevel3[1] = 21;
 		m_Idx.WindLevel3[2] = 22;
 		m_Idx.WindLevel3[3] = 23;
+		// Assembly path uses pre-multiplied colors via changeVPLightSetupMaterial
+		m_Idx.MaterialDiffuse = ~0;
+		m_Idx.MaterialSpecular = ~0;
+		m_Idx.MaterialShininess = ~0;
 	}
 	else
 	{
@@ -361,7 +533,44 @@ void CVertexProgramWindTree::buildInfo()
 		m_Idx.WindLevel3[1] = getUniformIndex("windLevel3[1]");
 		m_Idx.WindLevel3[2] = getUniformIndex("windLevel3[2]");
 		m_Idx.WindLevel3[3] = getUniformIndex("windLevel3[3]");
+		m_Idx.MaterialDiffuse = getUniformIndex("nlMaterialDiffuse");
+		m_Idx.MaterialSpecular = getUniformIndex("nlMaterialSpecular");
+		m_Idx.MaterialShininess = getUniformIndex("nlMaterialShininess");
 	}
+}
+
+CVertexProgramWindTreeUBO::CVertexProgramWindTreeUBO()
+{
+	// Single UBO-based VP (GL3-only, no assembly fallback)
+	CSource *source = new CSource();
+	source->Features.OutputsSpecularColor = true;
+	source->Features.UsesLightTableUBO = true;
+	source->Features.UsesCameraUBO = true;
+	source->Features.UsesObjectUBO = true;
+	source->DisplayName = "glsl330v/MeshVPWindTree/UBO";
+	source->Profile = CVertexProgram::glsl330v;
+	source->setSource(std::string(WindTreeVPCodeGLSL_Header) + WindTreeVPCodeGLSL_UBO_Body);
+	addSource(source);
+}
+
+void CVertexProgramWindTreeUBO::buildInfo()
+{
+	// No CVertexProgramLighted::buildInfo() — lighting handled by UBOs, not individual uniforms
+	m_Idx.ProgramConstants[0] = ~0;
+	m_Idx.ProgramConstants[1] = ~0;
+	m_Idx.ProgramConstants[2] = ~0;
+	m_Idx.WindLevel1 = getUniformIndex("windLevel1");
+	m_Idx.WindLevel2[0] = getUniformIndex("windLevel2[0]");
+	m_Idx.WindLevel2[1] = getUniformIndex("windLevel2[1]");
+	m_Idx.WindLevel2[2] = getUniformIndex("windLevel2[2]");
+	m_Idx.WindLevel2[3] = getUniformIndex("windLevel2[3]");
+	m_Idx.WindLevel3[0] = getUniformIndex("windLevel3[0]");
+	m_Idx.WindLevel3[1] = getUniformIndex("windLevel3[1]");
+	m_Idx.WindLevel3[2] = getUniformIndex("windLevel3[2]");
+	m_Idx.WindLevel3[3] = getUniformIndex("windLevel3[3]");
+	m_Idx.MaterialDiffuse = getUniformIndex("nlMaterialDiffuse");
+	m_Idx.MaterialSpecular = getUniformIndex("nlMaterialSpecular");
+	m_Idx.MaterialShininess = getUniformIndex("nlMaterialShininess");
 }
 
 
@@ -396,6 +605,20 @@ CMeshVPWindTree::CMeshVPWindTree()
 // ***************************************************************************
 CMeshVPWindTree::~CMeshVPWindTree()
 {
+}
+
+// ***************************************************************************
+const CWindTreeVPIdx &CMeshVPWindTree::activeIdx() const
+{
+	if (_ActiveVertexProgramUBO)
+		return _ActiveVertexProgramUBO->idx();
+	nlassert(_ActiveVertexProgram);
+	return _ActiveVertexProgram->idx();
+}
+
+bool CMeshVPWindTree::isUBOActive() const
+{
+	return _ActiveVertexProgramUBO != NULL;
 }
 
 
@@ -438,6 +661,9 @@ void CMeshVPWindTree::initVertexPrograms()
 			// combine
 			_VertexProgram[i] = new CVertexProgramWindTree(numPls, specular, normalize);
 		}
+
+		// Single UBO-based VP (all light/specular/normalize folded, GL3-only)
+		_VertexProgramUBO = new CVertexProgramWindTreeUBO();
 	}
 }
 
@@ -488,26 +714,24 @@ inline void			CMeshVPWindTree::setupPerMesh(IDriver *driver, CScene *scene)
 		}
 	}
 
-	CVertexProgramWindTree *program = _ActiveVertexProgram;
-	nlassert(program);
+	const CWindTreeVPIdx &vpIdx = activeIdx();
 
 	// Setup common constants for each instances.
 	// c[8] take useful constants.
-	driver->setUniform4f(IDriver::VertexProgram, program->idx().ProgramConstants[0], 
+	driver->setUniform4f(IDriver::VertexProgram, vpIdx.ProgramConstants[0],
 		0, 1, 0.5f, 2);
 	// c[9] take other useful constants.
-	driver->setUniform4f(IDriver::VertexProgram, program->idx().ProgramConstants[1], 
+	driver->setUniform4f(IDriver::VertexProgram, vpIdx.ProgramConstants[1],
 		3.f, 0.f, -1.f, -2.f);
 	// c[10] take Number of phase (4) for level2 and 3. -0.01 to avoid int value == 4.
-	driver->setUniform4f(IDriver::VertexProgram, program->idx().ProgramConstants[2], 
+	driver->setUniform4f(IDriver::VertexProgram, vpIdx.ProgramConstants[2],
 		4-0.01f, 0, 0, 0);
 }
 
 // ***************************************************************************
 inline	void		CMeshVPWindTree::setupPerInstanceConstants(IDriver *driver, CScene *scene, CMeshBaseInstance *mbi, const NLMISC::CMatrix &invertedModelMat)
 {
-	CVertexProgramWindTree *program = _ActiveVertexProgram;
-	nlassert(program);
+	const CWindTreeVPIdx &vpIdx = activeIdx();
 
 	// get instance info
 	float	instancePhase= mbi->_VPWindTreePhase;
@@ -525,23 +749,30 @@ inline	void		CMeshVPWindTree::setupPerInstanceConstants(IDriver *driver, CScene 
 	}
 
 
-	// Setup lighting and lighting constants
-	setupLighting(scene, mbi, invertedModelMat);
+	if (!isUBOActive())
+	{
+		CVertexProgramWindTree *program = _ActiveVertexProgram;
+		nlassert(program);
 
-	// c[0..3] take the ModelViewProjection Matrix. After setupModelMatrix();
-	driver->setUniformMatrix(IDriver::VertexProgram, program->getUniformIndex(CProgramIndex::ModelViewProjection),
-		IDriver::ModelViewProjection, IDriver::Identity);
-	// Fog: assembly profiles use dot(fog, pos), GLSL uses ecPos from modelView (no-op for ASM since index is ~0)
-	driver->setUniformFog(IDriver::VertexProgram, program->getUniformIndex(CProgramIndex::Fog));
-	driver->setUniformMatrix(IDriver::VertexProgram, program->getUniformIndex(CProgramIndex::ModelView),
-		IDriver::ModelView, IDriver::Identity);
+		// Legacy path: setup lighting, matrices, and fog as individual uniforms
+		setupLighting(scene, mbi, invertedModelMat);
+
+		// c[0..3] take the ModelViewProjection Matrix. After setupModelMatrix();
+		driver->setUniformMatrix(IDriver::VertexProgram, program->getUniformIndex(CProgramIndex::ModelViewProjection),
+			IDriver::ModelViewProjection, IDriver::Identity);
+		// Fog: assembly profiles use dot(fog, pos), GLSL uses ecPos from modelView (no-op for ASM since index is ~0)
+		driver->setUniformFog(IDriver::VertexProgram, program->getUniformIndex(CProgramIndex::Fog));
+		driver->setUniformMatrix(IDriver::VertexProgram, program->getUniformIndex(CProgramIndex::ModelView),
+			IDriver::ModelView, IDriver::Identity);
+	}
+	// UBO path: matrices, lighting, self-illumination, fog all handled by UBOs + setupUniforms()
 
 
 	// c[15] take Wind of level 0.
 	float	f;
 	f= _CurrentTime[0] + instancePhase;
 	f= speedCos(f) + Bias[0];
-	driver->setUniform3f(IDriver::VertexProgram, program->idx().WindLevel1, 
+	driver->setUniform3f(IDriver::VertexProgram, vpIdx.WindLevel1,
 		maxDeltaPosOS[0]*f );
 
 
@@ -550,19 +781,19 @@ inline	void		CMeshVPWindTree::setupPerInstanceConstants(IDriver *driver, CScene 
 	float	instTime1= _CurrentTime[1] + instancePhase;
 	// phase 0.
 	f= speedCos( instTime1+0 ) + Bias[1];
-	driver->setUniform3f(IDriver::VertexProgram, program->idx().WindLevel2[0], 
+	driver->setUniform3f(IDriver::VertexProgram, vpIdx.WindLevel2[0], 
 		maxDeltaPosOS[1]*f);
 	// phase 1.
 	f= speedCos( instTime1+0.25f ) + Bias[1];
-	driver->setUniform3f(IDriver::VertexProgram, program->idx().WindLevel2[1], 
+	driver->setUniform3f(IDriver::VertexProgram, vpIdx.WindLevel2[1], 
 		maxDeltaPosOS[1]*f);
 	// phase 2.
 	f= speedCos( instTime1+0.50f ) + Bias[1];
-	driver->setUniform3f(IDriver::VertexProgram, program->idx().WindLevel2[2], 
+	driver->setUniform3f(IDriver::VertexProgram, vpIdx.WindLevel2[2], 
 		maxDeltaPosOS[1]*f);
 	// phase 3.
 	f= speedCos( instTime1+0.75f ) + Bias[1];
-	driver->setUniform3f(IDriver::VertexProgram, program->idx().WindLevel2[3], 
+	driver->setUniform3f(IDriver::VertexProgram, vpIdx.WindLevel2[3], 
 		maxDeltaPosOS[1]*f);
 
 
@@ -571,19 +802,19 @@ inline	void		CMeshVPWindTree::setupPerInstanceConstants(IDriver *driver, CScene 
 	float	instTime2= _CurrentTime[2] + instancePhase;
 	// phase 0.
 	f= speedCos( instTime2+0 ) + Bias[2];
-	driver->setUniform3f(IDriver::VertexProgram, program->idx().WindLevel3[0], 
+	driver->setUniform3f(IDriver::VertexProgram, vpIdx.WindLevel3[0], 
 		maxDeltaPosOS[2]*f);
 	// phase 1.
 	f= speedCos( instTime2+0.25f ) + Bias[2];
-	driver->setUniform3f(IDriver::VertexProgram, program->idx().WindLevel3[1], 
+	driver->setUniform3f(IDriver::VertexProgram, vpIdx.WindLevel3[1], 
 		maxDeltaPosOS[2]*f);
 	// phase 2.
 	f= speedCos( instTime2+0.50f ) + Bias[2];
-	driver->setUniform3f(IDriver::VertexProgram, program->idx().WindLevel3[2], 
+	driver->setUniform3f(IDriver::VertexProgram, vpIdx.WindLevel3[2], 
 		maxDeltaPosOS[2]*f);
 	// phase 3.
 	f= speedCos( instTime2+0.75f ) + Bias[2];
-	driver->setUniform3f(IDriver::VertexProgram, program->idx().WindLevel3[3], 
+	driver->setUniform3f(IDriver::VertexProgram, vpIdx.WindLevel3[3], 
 		maxDeltaPosOS[2]*f);
 }
 
@@ -596,27 +827,39 @@ bool	CMeshVPWindTree::begin(IDriver *driver, CScene *scene, CMeshBaseInstance *m
 	// Activate the good VertexProgram
 	//===============
 
-	// Get how many pointLights are setuped now.
-	nlassert(scene != NULL);
-	CRenderTrav		*renderTrav= &scene->getRenderTrav();
-	renderTrav->prepareVPLightSetup();
-	sint	numPls= renderTrav->getNumVPLights()-1;
-	clamp(numPls, 0, CRenderTrav::MaxVPLight-1);
-
-	// Enable normalize only if requested by user. Because lighting don't manage correct "scale lighting"
-	uint	idVP= (SpecularLighting?2:0) + (driver->isForceNormalize()?1:0) ;
-	// correct VP id for correct unmber of pls.
-	idVP= numPls*4 + idVP;
-	// activate VP.
-	if (driver->activeVertexProgram(_VertexProgram[idVP]))
+	// Try UBO program first (single program for all variants)
+	if (_VertexProgramUBO && driver->supportBuiltinUBO()
+		&& driver->activeVertexProgram(_VertexProgramUBO))
 	{
-		_ActiveVertexProgram = _VertexProgram[idVP];
+		_ActiveVertexProgramUBO = _VertexProgramUBO;
+		_ActiveVertexProgram = NULL;
 	}
 	else
 	{
-		// vertex program not supported
-		_ActiveVertexProgram = NULL;
-		return false;
+		_ActiveVertexProgramUBO = NULL;
+
+		// Legacy: select from 16 variants based on numPls/specular/normalize
+		nlassert(scene != NULL);
+		CRenderTrav		*renderTrav= &scene->getRenderTrav();
+		renderTrav->prepareVPLightSetup();
+		sint	numPls= renderTrav->getNumVPLights()-1;
+		clamp(numPls, 0, CRenderTrav::MaxVPLight-1);
+
+		// Enable normalize only if requested by user. Because lighting don't manage correct "scale lighting"
+		uint	idVP= (SpecularLighting?2:0) + (driver->isForceNormalize()?1:0) ;
+		// correct VP id for correct number of pls.
+		idVP= numPls*4 + idVP;
+		// activate VP.
+		if (driver->activeVertexProgram(_VertexProgram[idVP]))
+		{
+			_ActiveVertexProgram = _VertexProgram[idVP];
+		}
+		else
+		{
+			// vertex program not supported
+			_ActiveVertexProgram = NULL;
+			return false;
+		}
 	}
 
 
@@ -638,6 +881,7 @@ void	CMeshVPWindTree::end(IDriver *driver)
 	// Disable the VertexProgram
 	driver->activeVertexProgram(NULL);
 	_ActiveVertexProgram = NULL;
+	_ActiveVertexProgramUBO = NULL;
 }
 
 // ***************************************************************************
@@ -654,7 +898,22 @@ void	CMeshVPWindTree::setupForMaterial(const CMaterial &mat,
 									      CScene *scene,
 										  CVertexBuffer *)
 {
-	SetupForMaterial(mat, scene);
+	if (isUBOActive())
+	{
+		// UBO path: upload raw material properties as individual uniforms
+		// TODO: Material will move to user VP UBO via CUniformBuffer.
+		const CWindTreeVPIdx &vpIdx = activeIdx();
+		NLMISC::CRGBAF d(mat.getDiffuse());
+		drv->setUniform4f(IDriver::VertexProgram, vpIdx.MaterialDiffuse, d.R, d.G, d.B, d.A);
+		NLMISC::CRGBAF s(mat.getSpecular());
+		drv->setUniform4f(IDriver::VertexProgram, vpIdx.MaterialSpecular, s.R, s.G, s.B, s.A);
+		drv->setUniform1f(IDriver::VertexProgram, vpIdx.MaterialShininess, mat.getShininess());
+	}
+	else
+	{
+		// Legacy: pre-multiply light colors by material via changeVPLightSetupMaterial
+		SetupForMaterial(mat, scene);
+	}
 }
 
 // ***************************************************************************
@@ -698,29 +957,55 @@ bool	CMeshVPWindTree::isMBRVpOk(IDriver *driver) const
 			return false;
 		}
 	}
+	// Try to compile UBO program (non-fatal — falls back to 16-variant path at runtime)
+	if (_VertexProgramUBO && !driver->compileVertexProgram(_VertexProgramUBO))
+	{
+		nldebug("GL3 WindTree: UBO vertex program not available, using variant path");
+	}
 	return true;
 }
 
 // ***************************************************************************
 void	CMeshVPWindTree::beginMBRMesh(IDriver *driver, CScene *scene)
 {
-	/* Since need a VertexProgram Activation before activeVBHard, activate a default one
-		bet the common one will be "NoPointLight, NoSpecular, No ForceNormalize" => 0.
-	*/
-	_LastMBRIdVP = 0;
+	// Try UBO program first (single program for all variants, skip variant switching entirely)
+	if (_VertexProgramUBO && driver->supportBuiltinUBO()
+		&& driver->activeVertexProgram(_VertexProgramUBO))
+	{
+		_ActiveVertexProgramUBO = _VertexProgramUBO;
+		_ActiveVertexProgram = NULL;
+		_LastMBRIdVP = ~0u; // Sentinel: UBO path active, no variant switching
+	}
+	else
+	{
+		_ActiveVertexProgramUBO = NULL;
 
-	// activate VP.
-	driver->activeVertexProgram(_VertexProgram[_LastMBRIdVP]);
-	_ActiveVertexProgram = _VertexProgram[_LastMBRIdVP];
+		/* Since need a VertexProgram Activation before activeVBHard, activate a default one
+			bet the common one will be "NoPointLight, NoSpecular, No ForceNormalize" => 0.
+		*/
+		_LastMBRIdVP = 0;
+
+		// activate VP.
+		driver->activeVertexProgram(_VertexProgram[_LastMBRIdVP]);
+		_ActiveVertexProgram = _VertexProgram[_LastMBRIdVP];
+		_VertexProgram[_LastMBRIdVP]->PerMeshSetup = true;
+	}
 
 	// precompute mesh
 	setupPerMesh(driver, scene);
-	_VertexProgram[_LastMBRIdVP]->PerMeshSetup = true;
 }
 
 // ***************************************************************************
 void	CMeshVPWindTree::beginMBRInstance(IDriver *driver, CScene *scene, CMeshBaseInstance *mbi, const NLMISC::CMatrix &invertedModelMat)
 {
+	if (_LastMBRIdVP == ~0u)
+	{
+		// UBO path: single program for all instances, no variant switching
+		setupPerInstanceConstants(driver, scene, mbi, invertedModelMat);
+		return;
+	}
+
+	// Legacy variant path
 	// Get how many pointLights are setuped now.
 	nlassert(scene != NULL);
 	CRenderTrav		*renderTrav= &scene->getRenderTrav();
@@ -758,6 +1043,7 @@ void	CMeshVPWindTree::endMBRMesh(IDriver *driver)
 	// Disable the VertexProgram
 	driver->activeVertexProgram(NULL);
 	_ActiveVertexProgram = NULL;
+	_ActiveVertexProgramUBO = NULL;
 }
 
 // ***************************************************************************

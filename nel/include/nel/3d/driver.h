@@ -1153,6 +1153,12 @@ public:
 	  */
 	virtual bool			isVertexProgramEmulated() const = 0;
 
+	/** Return true if the driver supports builtin UBOs for vertex programs
+	  * (NlCamera, NlLightTable, NlModel). When true, user VPs can use
+	  * UsesObjectUBO/UsesLightTableUBO/UsesCameraUBO feature flags.
+	  */
+	virtual bool			supportBuiltinUBO() const { return false; }
+
 	/** Return true if the driver supports the specified vertex program profile.
 	  */
 	virtual bool			supportVertexProgram(CVertexProgram::TProfile profile) const = 0;

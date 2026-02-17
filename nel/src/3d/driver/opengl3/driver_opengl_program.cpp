@@ -962,6 +962,28 @@ void CDriverGL3::setupUniforms(TProgram program)
 		// Light table UBO still needs to be uploaded if dirty
 		if (m_VPUsesLightTableUBO)
 			uploadLightTableUBO();
+
+		// Material properties as individual uniforms when material UBO is not active
+		// (e.g. wind tree VP uses object UBO but not material UBO)
+		if (!m_VPUsesMaterialUBO)
+		{
+			NLMISC::CRGBAF matDiffuse = mat.isLightedVertexColor()
+				? NLMISC::CRGBAF(1.0f, 1.0f, 1.0f, 1.0f)
+				: NLMISC::CRGBAF(mat.getDiffuse());
+			NLMISC::CRGBAF matSpecular = NLMISC::CRGBAF(mat.getSpecular());
+
+			uint mdIdx = p->getUniformIndex(CProgramIndex::NlMaterialDiffuse);
+			if (mdIdx != ~0u)
+				nglProgramUniform4f(progId, mdIdx, matDiffuse.R, matDiffuse.G, matDiffuse.B, matDiffuse.A);
+
+			uint msIdx = p->getUniformIndex(CProgramIndex::NlMaterialSpecular);
+			if (msIdx != ~0u)
+				nglProgramUniform4f(progId, msIdx, matSpecular.R, matSpecular.G, matSpecular.B, matSpecular.A);
+
+			uint mshIdx = p->getUniformIndex(CProgramIndex::NlMaterialShininess);
+			if (mshIdx != ~0u)
+				nglProgramUniform1f(progId, mshIdx, mat.getShininess());
+		}
 	}
 	else if (program == IDriver::VertexProgram && m_VPUsesLightTableUBO)
 	{
