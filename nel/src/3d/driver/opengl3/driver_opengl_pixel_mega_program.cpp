@@ -100,6 +100,8 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	{
 		if (i == PrimaryColor || i == SecondaryColor)
 			continue;
+		if (fogOrPpl && i == VaryingLocationRawVertexColor)
+			continue; // Slot used by rawVertexColor
 		ss << "layout(location = " << i << ") smooth in vec4 " << g_AttribNames[i] << ";" << std::endl;
 	}
 	ss << std::endl;

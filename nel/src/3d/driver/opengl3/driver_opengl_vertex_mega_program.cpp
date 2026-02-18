@@ -225,6 +225,8 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	{
 		if (i == PrimaryColor || i == SecondaryColor)
 			continue;
+		if (fogOrPpl && i == VaryingLocationRawVertexColor)
+			continue; // Slot used by rawVertexColor
 		ss << "layout(location = " << i << ") smooth out vec4 " << g_AttribNames[i] << ";" << std::endl;
 	}
 	if (fogOrPpl)
@@ -300,6 +302,8 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	{
 		if (i == PrimaryColor || i == SecondaryColor)
 			continue;
+		if (fogOrPpl && i == VaryingLocationRawVertexColor)
+			continue; // Slot used by rawVertexColor
 		if (i == Normal)
 		{
 			ss << "  if ((nlVertexFormat & NL_VP_NORMAL_FLAG) != 0) {" << std::endl;
