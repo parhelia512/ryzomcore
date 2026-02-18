@@ -518,8 +518,12 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		// When lighting && !VertexColorLighted: vprimaryColor is ignored (matDiffuse pre-multiplied on CPU)
 	}
 	
-	// Diffuse (clamp before texture), specular passed separately (added post-texture in PP)
-	ss << "diffuseColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
+	// Diffuse: clamp before texture when no PPL, pass unclamped when PPL active
+	// (PP will sum PPL lights and clamp once at the end)
+	if (hasPPL)
+		ss << "diffuseColor = diffuseVertex;" << std::endl;
+	else
+		ss << "diffuseColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
 
 	// Raw vertex color for PPL: PP multiplies (diffuseColor + pplDiff) by rawVertexColor
 	if (hasPPL)

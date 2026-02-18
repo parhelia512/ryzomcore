@@ -449,8 +449,12 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	ss << "  }" << std::endl;
 	ss << std::endl;
 
-	// Combine diffuse (clamp before texture), specular passed separately (added post-texture in PP)
-	ss << "  diffuseColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
+	// Combine diffuse: clamp before texture when no PPL, pass unclamped when PPL active
+	// (PP will sum PPL lights and clamp once at the end)
+	if (fogOrPpl)
+		ss << "  diffuseColor = (nlNumPerPixelLights > 0) ? diffuseVertex : clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
+	else
+		ss << "  diffuseColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
 	ss << "  specularColor = clamp(vec4(specularVertex.rgb * specularVertex.a, 0.0), 0.0, 1.0);" << std::endl;
 	ss << std::endl;
 
