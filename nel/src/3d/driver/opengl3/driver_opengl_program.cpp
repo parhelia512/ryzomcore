@@ -1136,18 +1136,33 @@ void CDriverGL3::setupUniforms(TProgram program)
 			nglProgramUniform1i(progId, nlIdx, m_VPBuiltinCurrent.Lighting ? 1 : 0);
 
 		// Per-light modes (non-table variant — table reads from UBO)
-		// VP-only: mega PP does not declare nlLightMode uniforms
-		// VP lights are shifted: driver slot [_NumPerPixelLights..7] → VP slot [0..7-N]
-		if (program == VertexProgram && !m_ProgramUsesLightTableUBO[program])
+		if (!m_ProgramUsesLightTableUBO[program])
 		{
-			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			if (program == VertexProgram)
 			{
-				uint lmIdx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightMode0 + i));
-				if (lmIdx != ~0u)
+				// VP lights are shifted: driver slot [_NumPerPixelLights..7] → VP slot [0..7-N]
+				for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 				{
-					uint src = i + _NumPerPixelLights;
-					sint mode = (src < NL_OPENGL3_MAX_LIGHT && _LightEnable[src]) ? _LightMode[src] : -1;
-					nglProgramUniform1i(progId, lmIdx, mode);
+					uint lmIdx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightMode0 + i));
+					if (lmIdx != ~0u)
+					{
+						uint src = i + _NumPerPixelLights;
+						sint mode = (src < NL_OPENGL3_MAX_LIGHT && _LightEnable[src]) ? _LightMode[src] : -1;
+						nglProgramUniform1i(progId, lmIdx, mode);
+					}
+				}
+			}
+			else
+			{
+				// PP lights are direct: driver slot [0..N-1] → PP slot [0..N-1]
+				for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+				{
+					uint lmIdx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlPpLightMode0 + i));
+					if (lmIdx != ~0u)
+					{
+						sint mode = (_LightEnable[i]) ? _LightMode[i] : -1;
+						nglProgramUniform1i(progId, lmIdx, mode);
+					}
 				}
 			}
 		}

@@ -207,7 +207,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 			for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			{
 				if (!objectUBO)
-					ss << "uniform int nlLightMode" << i << ";" << std::endl;
+					ss << "uniform int nlPpLightMode" << i << ";" << std::endl;
 				ss << "uniform vec3 ppLight" << i << "DirOrPos;" << std::endl;
 				ss << "uniform vec4 ppLight" << i << "ColDiff;" << std::endl;
 				ss << "uniform vec4 ppLight" << i << "ColSpec;" << std::endl;
@@ -421,11 +421,11 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		else
 		{
 			// Non-table PPL: raw per-light values via pp-prefixed uniforms
-			// No index/factor indirection — nlLightMode{i} gates disabled lights (mode < 0)
+			// No index/factor indirection — nlPpLightMode{i} gates disabled lights (mode < 0)
 			for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			{
 				ss << "    if (" << i << " < nlNumPerPixelLights)" << std::endl;
-				ss << "      computeLightPP(nlLightMode" << i << ", ppLight" << i << "DirOrPos," << std::endl;
+				ss << "      computeLightPP(nlPpLightMode" << i << ", ppLight" << i << "DirOrPos," << std::endl;
 				ss << "        ppLight" << i << "ColDiff * " << matDiffStr << "," << std::endl;
 				ss << "        ppLight" << i << "ColSpec * " << matSpecStr << "," << std::endl;
 				ss << "        " << matShinStr << "," << std::endl;
@@ -649,7 +649,7 @@ bool CDriverGL3::initMegaPixelPrograms()
 									continue;
 
 								// objectUBO implies lightTableUBO when PPL code is active
-								// (non-table PPL references nlLightMode which isn't in NlModel UBO)
+								// (non-table PPL references nlPpLightMode which isn't in NlModel UBO)
 								if (objectUBO && !tableUBO && fogOrPpl)
 									continue;
 

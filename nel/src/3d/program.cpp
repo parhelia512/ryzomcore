@@ -392,6 +392,8 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"nlLightMapScale",
 
 	// Per-pixel lighting uniforms for pixel programs (raw values, not pre-multiplied)
+	"nlPpLightMode0", "nlPpLightMode1", "nlPpLightMode2", "nlPpLightMode3",
+	"nlPpLightMode4", "nlPpLightMode5", "nlPpLightMode6", "nlPpLightMode7",
 	"ppLight0DirOrPos", "ppLight1DirOrPos", "ppLight2DirOrPos", "ppLight3DirOrPos",
 	"ppLight4DirOrPos", "ppLight5DirOrPos", "ppLight6DirOrPos", "ppLight7DirOrPos",
 	"ppLight0ColDiff", "ppLight1ColDiff", "ppLight2ColDiff", "ppLight3ColDiff",

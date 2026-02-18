@@ -98,6 +98,10 @@ bool operator<(const CPPBuiltin &left, const CPPBuiltin &right)
 		return right.WorldSpacePosition;
 	if (left.LightMapScale != right.LightMapScale)
 		return right.LightMapScale;
+	if (left.PPL != right.PPL)
+		return right.PPL;
+	if (left.PPLVertexColor != right.PPLVertexColor)
+		return right.PPLVertexColor;
 
 	return false;
 }
@@ -132,6 +136,10 @@ bool operator==(const CPPBuiltin &left, const CPPBuiltin &right)
 		return false;
 	if (left.LightMapScale != right.LightMapScale)
 		return false;
+	if (left.PPL != right.PPL)
+		return false;
+	if (left.PPLVertexColor != right.PPLVertexColor)
+		return false;
 
 	return true;
 }
@@ -157,7 +165,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h32 = NLMISC::wangHash(h32 ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0)));
+	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0) | (v.PPL ? 1 << 22 : 0) | (v.PPLVertexColor ? 1 << 23 : 0)));
 
 	h64 = h64 ^ h32; // NLMISC::wangHash64(h64 ^ h32);
 	nlctassert(sizeof(size_t) >= sizeof(uint64));
@@ -177,7 +185,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h = NLMISC::wangHash(h ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0)));
+	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0) | (v.PPL ? 1 << 22 : 0) | (v.PPLVertexColor ? 1 << 23 : 0)));
 
 	nlctassert(sizeof(size_t) >= sizeof(uint32));
 	return (size_t)h;
@@ -537,6 +545,11 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 
 	for (int i = Weight; i < NumOffsets; i++)
 	{
+		// Skip locations used by PPL/fog varyings (declared separately below)
+		if (desc.PPLVertexColor && i == VaryingLocationRawVertexColor)
+			continue;
+		if (desc.PPL && i == VaryingLocationNormal)
+			continue;
 		if (hasFlag(desc.VertexFormat, g_VertexFlags[i]))
 		{
 			ss << "layout(location = " << i << ") smooth in vec4 ";
@@ -604,6 +617,69 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		ss << std::endl;
 	}
 
+	// ecPos varying (needed by fog and/or PPL)
+	if (desc.Fog || desc.PPL)
+		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
+
+	// PPL varyings and uniforms
+	if (desc.PPL)
+	{
+		ss << "layout(location = " << VaryingLocationNormal << ") smooth in vec4 normal;" << std::endl;
+		if (desc.PPLVertexColor)
+			ss << "layout(location = " << VaryingLocationRawVertexColor << ") smooth in vec4 rawVertexColor;" << std::endl;
+
+		ss << "uniform int nlNumPerPixelLights;" << std::endl;
+		ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
+		ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
+		ss << "uniform float nlMaterialShininess;" << std::endl;
+		ss << "uniform vec3 pzbCameraPos;" << std::endl;
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			ss << "uniform int nlPpLightMode" << i << ";" << std::endl;
+			ss << "uniform vec3 ppLight" << i << "DirOrPos;" << std::endl;
+			ss << "uniform vec4 ppLight" << i << "ColDiff;" << std::endl;
+			ss << "uniform vec4 ppLight" << i << "ColSpec;" << std::endl;
+			ss << "uniform float ppLight" << i << "ConstAttn;" << std::endl;
+			ss << "uniform float ppLight" << i << "LinAttn;" << std::endl;
+			ss << "uniform float ppLight" << i << "QuadAttn;" << std::endl;
+			ss << "uniform vec3 ppLight" << i << "SpotDir;" << std::endl;
+			ss << "uniform float ppLight" << i << "SpotCutoff;" << std::endl;
+			ss << "uniform float ppLight" << i << "SpotExp;" << std::endl;
+		}
+		ss << std::endl;
+
+		// computeLightPP function (world-space Blinn-Phong, matches mega PP)
+		ss << "void computeLightPP(int lightMode, vec3 dirOrPos, vec4 colDiff, vec4 colSpec," << std::endl;
+		ss << "                    float shininess, float constAttn, float linAttn, float quadAttn," << std::endl;
+		ss << "                    vec3 spotDir, float spotCutoff, float spotExp," << std::endl;
+		ss << "                    vec3 wsNormal, vec3 wsPos, vec3 eyeDir, vec3 pzbCamPos," << std::endl;
+		ss << "                    inout vec4 pplDiffuse, inout vec4 pplSpecular)" << std::endl;
+		ss << "{" << std::endl;
+		ss << "  if (lightMode < 0) return;" << std::endl;
+		ss << "  vec3 lightDir;" << std::endl;
+		ss << "  float attnFactor = 1.0;" << std::endl;
+		ss << "  if (lightMode == " << (int)CLight::DirectionalLight << ") {" << std::endl;
+		ss << "    lightDir = normalize(-dirOrPos);" << std::endl;
+		ss << "  } else {" << std::endl;
+		ss << "    vec3 lightPosRel = dirOrPos - pzbCamPos;" << std::endl;
+		ss << "    vec3 lightVec = lightPosRel - wsPos;" << std::endl;
+		ss << "    float d = length(lightVec);" << std::endl;
+		ss << "    lightDir = lightVec / d;" << std::endl;
+		ss << "    attnFactor = 1.0 / (constAttn + linAttn * d + quadAttn * d * d);" << std::endl;
+		ss << "    if (lightMode == " << (int)CLight::SpotLight << ") {" << std::endl;
+		ss << "      float sd = dot(-lightDir, normalize(spotDir));" << std::endl;
+		ss << "      attnFactor *= (sd >= spotCutoff) ? pow(sd, spotExp) : 0.0;" << std::endl;
+		ss << "    }" << std::endl;
+		ss << "  }" << std::endl;
+		ss << "  float diff = max(0.0, dot(lightDir, wsNormal));" << std::endl;
+		ss << "  pplDiffuse += diff * attnFactor * colDiff;" << std::endl;
+		ss << "  vec3 h = normalize(lightDir + eyeDir);" << std::endl;
+		ss << "  float spec = diff > 0.0 ? pow(max(0.0, dot(wsNormal, h)), shininess) : 0.0;" << std::endl;
+		ss << "  pplSpecular += spec * attnFactor * colSpec;" << std::endl;
+		ss << "}" << std::endl;
+		ss << std::endl;
+	}
+
 	// Fog
 	if (desc.Fog)
 	{
@@ -613,8 +689,6 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 			ss << "uniform float fogDensity;" << std::endl;
 		if (desc.WorldSpacePosition)
 			ss << "uniform vec3 cameraForward;" << std::endl;
-
-		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
 
 		ss << "vec4 applyFog(vec4 col)" << std::endl;
 		ss << "{" << std::endl;
@@ -651,6 +725,34 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 
 	// Vertex color (light or unlit diffuse, primary and secondary)
 	ss << "fragColor = diffuseColor;" << std::endl;
+
+	// Per-pixel lighting accumulation
+	if (desc.PPL)
+	{
+		ss << "vec4 pplSpecAccum = vec4(0.0);" << std::endl;
+		ss << "if (nlNumPerPixelLights > 0) {" << std::endl;
+		ss << "  vec3 wsPos = ecPos.xyz / ecPos.w;" << std::endl;
+		ss << "  vec3 wsNormal = normalize(normal.xyz);" << std::endl;
+		ss << "  vec3 eyeDir = normalize(-wsPos);" << std::endl;
+		ss << "  vec4 pplDiff = vec4(0.0);" << std::endl;
+		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		{
+			ss << "  if (" << i << " < nlNumPerPixelLights)" << std::endl;
+			ss << "    computeLightPP(nlPpLightMode" << i << ", ppLight" << i << "DirOrPos," << std::endl;
+			ss << "      ppLight" << i << "ColDiff * nlMaterialDiffuse," << std::endl;
+			ss << "      ppLight" << i << "ColSpec * nlMaterialSpecular," << std::endl;
+			ss << "      nlMaterialShininess," << std::endl;
+			ss << "      ppLight" << i << "ConstAttn, ppLight" << i << "LinAttn, ppLight" << i << "QuadAttn," << std::endl;
+			ss << "      ppLight" << i << "SpotDir, ppLight" << i << "SpotCutoff, ppLight" << i << "SpotExp," << std::endl;
+			ss << "      wsNormal, wsPos, eyeDir, pzbCameraPos," << std::endl;
+			ss << "      pplDiff, pplSpecAccum);" << std::endl;
+		}
+		if (desc.PPLVertexColor)
+			ss << "  fragColor.rgb = clamp((fragColor.rgb + pplDiff.rgb) * rawVertexColor.rgb, 0.0, 1.0);" << std::endl;
+		else
+			ss << "  fragColor.rgb = clamp(fragColor.rgb + pplDiff.rgb, 0.0, 1.0);" << std::endl;
+		ss << "}" << std::endl;
+	}
 
 	for (uint stage = 0; stage < maxSam; ++stage)
 	{
@@ -709,6 +811,8 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 	// Add specular post-texture (matches legacy GL_COLOR_SUM / GL_SEPARATE_SPECULAR_COLOR)
 	if (desc.SpecularSeparate)
 		ss << "fragColor.rgb += specularColor.rgb;" << std::endl;
+	if (desc.PPL)
+		ss << "fragColor.rgb += pplSpecAccum.rgb;" << std::endl;
 
 	if (desc.Flags & IDRV_MAT_ALPHA_TEST)
 	{
@@ -802,6 +906,18 @@ void CPPBuiltin::checkDriverStateTouched(CDriverGL3 *driver) // MUST NOT depend 
 	if (WorldSpacePosition != driver->m_VPWorldSpacePositionOutput)
 	{
 		WorldSpacePosition = driver->m_VPWorldSpacePositionOutput;
+		Touched = true;
+	}
+	bool ppl = driver->_NumPerPixelLights > 0;
+	if (PPL != ppl)
+	{
+		PPL = ppl;
+		Touched = true;
+	}
+	bool pplVertexColor = ppl && driver->m_VPBuiltinCurrent.VertexColorLighted;
+	if (PPLVertexColor != pplVertexColor)
+	{
+		PPLVertexColor = pplVertexColor;
 		Touched = true;
 	}
 }

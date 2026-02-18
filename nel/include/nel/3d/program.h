@@ -466,6 +466,8 @@ struct CProgramIndex
 		NlLightMapScale,
 
 		// Per-pixel lighting uniforms for pixel programs (raw values, not pre-multiplied)
+		NlPpLightMode0, NlPpLightMode1, NlPpLightMode2, NlPpLightMode3,
+		NlPpLightMode4, NlPpLightMode5, NlPpLightMode6, NlPpLightMode7,
 		PpLight0DirOrPos, PpLight1DirOrPos, PpLight2DirOrPos, PpLight3DirOrPos,
 		PpLight4DirOrPos, PpLight5DirOrPos, PpLight6DirOrPos, PpLight7DirOrPos,
 		PpLight0ColDiff, PpLight1ColDiff, PpLight2ColDiff, PpLight3ColDiff,
