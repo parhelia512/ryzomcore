@@ -289,7 +289,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	if (fogOrPpl)
 	{
 		ss << "  if (nlWorldSpacePosition != 0)" << std::endl;
-		ss << "    ecPos = vec4(transpose(mat3(viewMatrix)) * ecPos4.xyz, ecPos4.w);" << std::endl;
+		ss << "    ecPos = vec4(transpose(mat3(viewMatrix)) * (ecPos4.xyz - viewMatrix[3].xyz * ecPos4.w), ecPos4.w);" << std::endl;
 		ss << "  else" << std::endl;
 		ss << "    ecPos = ecPos4;" << std::endl;
 		// Default rawVertexColor to identity; overwritten when VertexColorLighted + PPL

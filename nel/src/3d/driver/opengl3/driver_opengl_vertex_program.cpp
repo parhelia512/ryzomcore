@@ -447,7 +447,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	if (needPositionOutput)
 	{
 		if (desc.WorldSpacePosition)
-			ss << "ecPos = vec4(transpose(mat3(viewMatrix)) * ecPos4.xyz, ecPos4.w);" << std::endl;
+			ss << "ecPos = vec4(transpose(mat3(viewMatrix)) * (ecPos4.xyz - viewMatrix[3].xyz * ecPos4.w), ecPos4.w);" << std::endl;
 		else
 			ss << "ecPos = ecPos4;" << std::endl;
 	}
