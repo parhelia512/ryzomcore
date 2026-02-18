@@ -323,13 +323,10 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	// Lighting requires normals in VB — fall back to unlit if missing
 	bool lighting = desc.Lighting && hasFlag(desc.VertexFormat, g_VertexFlags[Normal]);
 
-	// PPL + VertexColorLighted + VP lights: output vertexLight so PP can multiply PPL by vertex color
+	// When PPL is active, vertexLight carries the VP lighting result and vertexColor carries
+	// the raw vertex color (or vec4(1) identity). PP uses: vertexLight + pplDiff * vertexColor.
 	bool hasPPL = desc.NumPerPixelLights > 0;
-	bool hasVPLights = false;
-	if (lighting)
-		for (int d = desc.NumPerPixelLights; d < NL_OPENGL3_MAX_LIGHT; ++d)
-			if (desc.LightMode[d] != -1) { hasVPLights = true; break; }
-	bool needVertexLight = lighting && desc.VertexColorLighted && hasPPL && hasVPLights
+	bool splitVertexColor = lighting && desc.VertexColorLighted
 		&& hasFlag(desc.VertexFormat, g_VertexFlags[PrimaryColor]);
 
 	std::stringstream ss;
@@ -421,7 +418,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "uniform vec4 materialColor;" << std::endl; // Verify
 
 	bool specularVertex = lighting || (desc.VertexFormat & g_VertexFlags[SecondaryColor]);
-	if (needVertexLight)
+	if (hasPPL)
 		ss << "layout(location = " << VaryingLocationVertexLight << ") smooth out vec4 vertexLight;" << std::endl;
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
 	if (specularVertex)
@@ -510,14 +507,24 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	}
 	
 	// Diffuse (clamp before texture), specular passed separately (added post-texture in PP)
-	if (needVertexLight)
+	if (hasPPL && lighting)
 	{
-		// PPL active with vertex colors: split VP lighting into vertexLight,
-		// pass raw vertex color in vertexColor so PP can multiply PPL by it
+		// PPL active: vertexLight = VP result, vertexColor = raw vertex color (or vec4(1) identity).
+		// PP uses: vertexLight + pplDiff * vertexColor.
 		ss << "vertexLight = diffuseVertex;" << std::endl;
 		ss << "vertexLight.rgb = vertexLight.rgb + selfIllumination.rgb;" << std::endl;
 		ss << "vertexLight = clamp(vertexLight, 0.0, 1.0);" << std::endl;
-		ss << "vertexColor = vprimaryColor;" << std::endl;
+		if (splitVertexColor)
+			ss << "vertexColor = vprimaryColor;" << std::endl;
+		else
+			ss << "vertexColor = vec4(1.0);" << std::endl;
+	}
+	else if (hasPPL)
+	{
+		// PPL declared but no lighting: dummy vertexLight, normal vertexColor
+		ss << "vertexLight = vec4(0.0);" << std::endl;
+		ss << "vertexColor = diffuseVertex;" << std::endl;
+		ss << "vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
 	}
 	else
 	{
