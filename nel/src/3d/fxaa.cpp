@@ -136,6 +136,7 @@ CFXAA::CFXAA(NL3D::UDriver *driver) : m_Driver(driver), m_VP(NULL), m_PP(NULL), 
 		{
 			IProgram::CSource *source = new IProgram::CSource();
 			source->Features.MaterialFlags = CProgramFeatures::TextureStages;
+			source->Features.NoBuiltinUniforms = true;
 			source->Profile = IProgram::glsl330f;
 			source->setSourcePtr(a_glsl330f);
 			m_PP->addSource(source);

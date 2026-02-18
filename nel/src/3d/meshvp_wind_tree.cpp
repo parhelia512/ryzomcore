@@ -552,6 +552,7 @@ CVertexProgramWindTreeUBO::CVertexProgramWindTreeUBO()
 	// Single UBO-based VP (GL3-only, no assembly fallback)
 	CSource *source = new CSource();
 	source->Features.OutputsSpecularColor = true;
+	source->Features.OnlyUBOs = true;
 	source->Features.UsesLightTableUBO = true;
 	source->Features.UsesCameraUBO = true;
 	source->Features.UsesObjectUBO = true;

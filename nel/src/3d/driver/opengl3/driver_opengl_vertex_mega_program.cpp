@@ -619,6 +619,9 @@ bool CDriverGL3::setupMegaVertexProgram()
 	int objectUBO = m_UseMegaObjectUBO ? 1 : 0;
 	int materialUBO = m_UseMegaMaterialUBO ? 1 : 0;
 
+	m_ProgramNoUniforms[VertexProgram] = false; // Mega VP always has uniforms
+	m_ProgramNoBuiltinUniforms[VertexProgram] = false;
+	m_ProgramOnlyUBOs[VertexProgram] = false;
 	m_ProgramUsesLightTableUBO[VertexProgram] = tableUBO;
 	m_ProgramUsesCameraUBO[VertexProgram] = cameraUBO;
 	m_ProgramUsesObjectUBO[VertexProgram] = objectUBO;

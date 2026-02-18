@@ -438,6 +438,9 @@ bool CDriverGL3::activePixelProgram(CPixelProgram *program, bool driver)
 		nglUseProgramStages(ppoId, GL_FRAGMENT_SHADER_BIT, 0);
 		m_UserPixelProgram = NULL;
 		m_DriverPixelProgram = NULL;
+		m_ProgramNoUniforms[PixelProgram] = false;
+		m_ProgramNoBuiltinUniforms[PixelProgram] = false;
+		m_ProgramOnlyUBOs[PixelProgram] = false;
 		m_ProgramUsesLightTableUBO[PixelProgram] = false;
 		m_ProgramUsesCameraUBO[PixelProgram] = false;
 		m_ProgramUsesObjectUBO[PixelProgram] = false;
@@ -452,6 +455,9 @@ bool CDriverGL3::activePixelProgram(CPixelProgram *program, bool driver)
 		{
 			m_UserPixelProgram = NULL;
 			m_DriverPixelProgram = NULL;
+			m_ProgramNoUniforms[PixelProgram] = false;
+			m_ProgramNoBuiltinUniforms[PixelProgram] = false;
+			m_ProgramOnlyUBOs[PixelProgram] = false;
 			m_ProgramUsesLightTableUBO[PixelProgram] = false;
 			m_ProgramUsesCameraUBO[PixelProgram] = false;
 			m_ProgramUsesObjectUBO[PixelProgram] = false;
@@ -467,7 +473,10 @@ bool CDriverGL3::activePixelProgram(CPixelProgram *program, bool driver)
 	if (!driver) m_UserPixelProgram = program;
 	m_DriverPixelProgram = program;
 
-	// Set per-program UBO flags from the activated PP's features
+	// Set per-program flags from the activated PP's features
+	m_ProgramNoUniforms[PixelProgram] = program->features().NoUniforms;
+	m_ProgramNoBuiltinUniforms[PixelProgram] = program->features().NoBuiltinUniforms;
+	m_ProgramOnlyUBOs[PixelProgram] = program->features().OnlyUBOs;
 	m_ProgramUsesLightTableUBO[PixelProgram] = program->features().UsesLightTableUBO;
 	m_ProgramUsesCameraUBO[PixelProgram] = program->features().UsesCameraUBO;
 	m_ProgramUsesObjectUBO[PixelProgram] = program->features().UsesObjectUBO;
@@ -837,6 +846,9 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
 		m_VPWorldSpacePositionOutput = m_UserVertexProgram->features().OutputsWorldSpacePosition;
 		m_VPNormalOutput = false;
+		m_ProgramNoUniforms[VertexProgram] = m_UserVertexProgram->features().NoUniforms;
+		m_ProgramNoBuiltinUniforms[VertexProgram] = m_UserVertexProgram->features().NoBuiltinUniforms;
+		m_ProgramOnlyUBOs[VertexProgram] = m_UserVertexProgram->features().OnlyUBOs;
 		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO || m_UserVertexProgram->features().UsesObjectUBO;
 		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO || m_UserVertexProgram->features().UsesObjectUBO;
 		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO; // Object UBO implies table and camera UBO
@@ -885,7 +897,10 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 	m_VPNormalOutput = m_VPBuiltinCurrent.WorldSpaceNormal
 		&& (m_VPBuiltinCurrent.VertexFormat & g_VertexFlags[Normal]);
 	m_VPWorldSpacePositionOutput = m_VPBuiltinCurrent.WorldSpacePosition;
-	m_ProgramUsesLightTableUBO[VertexProgram] = false; // Builtin non-mega VP does not use UBOs
+	m_ProgramNoUniforms[VertexProgram] = false; // Builtin non-mega VP does not use UBOs
+	m_ProgramNoBuiltinUniforms[VertexProgram] = false;
+	m_ProgramOnlyUBOs[VertexProgram] = false;
+	m_ProgramUsesLightTableUBO[VertexProgram] = false;
 	m_ProgramUsesCameraUBO[VertexProgram] = false;
 	m_ProgramUsesObjectUBO[VertexProgram] = false;
 	m_ProgramUsesMaterialUBO[VertexProgram] = false;
@@ -900,6 +915,9 @@ bool CDriverGL3::setupBuiltinPixelProgram()
 {
 	if (m_UserPixelProgram)
 	{
+		m_ProgramNoUniforms[PixelProgram] = m_UserPixelProgram->features().NoUniforms;
+		m_ProgramNoBuiltinUniforms[PixelProgram] = m_UserPixelProgram->features().NoBuiltinUniforms;
+		m_ProgramOnlyUBOs[PixelProgram] = m_UserPixelProgram->features().OnlyUBOs;
 		m_ProgramUsesLightTableUBO[PixelProgram] = m_UserPixelProgram->features().UsesLightTableUBO || m_UserPixelProgram->features().UsesObjectUBO;
 		m_ProgramUsesCameraUBO[PixelProgram] = m_UserPixelProgram->features().UsesCameraUBO || m_UserPixelProgram->features().UsesObjectUBO;
 		m_ProgramUsesObjectUBO[PixelProgram] = m_UserPixelProgram->features().UsesObjectUBO;
@@ -935,7 +953,10 @@ bool CDriverGL3::setupBuiltinPixelProgram()
 		matDrv->PPBuiltin.MaterialUBOTouched = false;
 	}
 
-	m_ProgramUsesLightTableUBO[PixelProgram] = false; // Builtin non-mega PP does not use UBOs
+	m_ProgramNoUniforms[PixelProgram] = false; // Builtin non-mega PP does not use UBOs
+	m_ProgramNoBuiltinUniforms[PixelProgram] = false;
+	m_ProgramOnlyUBOs[PixelProgram] = false;
+	m_ProgramUsesLightTableUBO[PixelProgram] = false;
 	m_ProgramUsesCameraUBO[PixelProgram] = false;
 	m_ProgramUsesObjectUBO[PixelProgram] = false;
 	m_ProgramUsesMaterialUBO[PixelProgram] = false;
@@ -948,21 +969,31 @@ bool CDriverGL3::setupBuiltinPixelProgram()
 
 bool CDriverGL3::setupUniforms()
 {
-	// Upload UBOs based on union of all active programs' needs
-	if (m_ProgramUsesObjectUBO[VertexProgram] || m_ProgramUsesObjectUBO[PixelProgram])
-		uploadObjectUBO();
-	if (m_ProgramUsesMaterialUBO[VertexProgram] || m_ProgramUsesMaterialUBO[PixelProgram])
-		uploadMaterialUBO();
-	if (m_ProgramUsesCameraUBO[VertexProgram] || m_ProgramUsesCameraUBO[PixelProgram])
-		uploadCameraUBO();
-	if (m_ProgramUsesLightTableUBO[VertexProgram] || m_ProgramUsesLightTableUBO[PixelProgram])
-		uploadLightTableUBO();
+	bool vpSkipBuiltin = m_ProgramNoUniforms[VertexProgram] || m_ProgramNoBuiltinUniforms[VertexProgram];
+	bool ppSkipBuiltin = m_ProgramNoUniforms[PixelProgram] || m_ProgramNoBuiltinUniforms[PixelProgram];
 
-	// Flush user-bound UBOs (upload if dirty, bind to GL points)
-	flushUserUBOs();
+	// Upload builtin UBOs based on union of all active programs' needs
+	if (!vpSkipBuiltin || !ppSkipBuiltin)
+	{
+		if (m_ProgramUsesObjectUBO[VertexProgram] || m_ProgramUsesObjectUBO[PixelProgram])
+			uploadObjectUBO();
+		if (m_ProgramUsesMaterialUBO[VertexProgram] || m_ProgramUsesMaterialUBO[PixelProgram])
+			uploadMaterialUBO();
+		if (m_ProgramUsesCameraUBO[VertexProgram] || m_ProgramUsesCameraUBO[PixelProgram])
+			uploadCameraUBO();
+		if (m_ProgramUsesLightTableUBO[VertexProgram] || m_ProgramUsesLightTableUBO[PixelProgram])
+			uploadLightTableUBO();
+	}
 
-	setupUniforms(IDriver::VertexProgram);
-	setupUniforms(IDriver::PixelProgram);
+	// Flush user-bound UBOs (upload if dirty, bind to GL points) — only skip when truly no uniforms at all
+	if (!m_ProgramNoUniforms[VertexProgram] || !m_ProgramNoUniforms[PixelProgram])
+		flushUserUBOs();
+
+	// Skip per-program uniform setup when no builtin uniforms or OnlyUBOs is set
+	if (!vpSkipBuiltin && !m_ProgramOnlyUBOs[VertexProgram])
+		setupUniforms(IDriver::VertexProgram);
+	if (!ppSkipBuiltin && !m_ProgramOnlyUBOs[PixelProgram])
+		setupUniforms(IDriver::PixelProgram);
 	return true;
 }
 

@@ -754,6 +754,9 @@ bool CDriverGL3::setupMegaPixelProgram()
 	// fogOrPpl=0 + tableUBO=1 variant doesn't exist
 	if (!fogOrPpl) tableUBO = 0;
 
+	m_ProgramNoUniforms[PixelProgram] = false; // Mega PP always has uniforms
+	m_ProgramNoBuiltinUniforms[PixelProgram] = false;
+	m_ProgramOnlyUBOs[PixelProgram] = false;
 	m_ProgramUsesLightTableUBO[PixelProgram] = tableUBO;
 	m_ProgramUsesCameraUBO[PixelProgram] = cameraUBO;
 	m_ProgramUsesObjectUBO[PixelProgram] = objectUBO;

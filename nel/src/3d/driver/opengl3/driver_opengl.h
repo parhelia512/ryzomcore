@@ -1417,6 +1417,9 @@ private:
 
 	// Per-program UBO usage flags (indexed by IDriver::TProgram)
 	static const uint NumTProgram = IDriver::ProgramNb;
+	bool m_ProgramNoUniforms[NumTProgram];        // Program has no uniforms or UBOs — skip all setup
+	bool m_ProgramNoBuiltinUniforms[NumTProgram]; // Program has no driver-set uniforms/UBOs — skip builtin setup
+	bool m_ProgramOnlyUBOs[NumTProgram];          // Program has only UBOs, no individual uniforms
 	bool m_ProgramUsesLightTableUBO[NumTProgram]; // Program reads from NlLightTable UBO
 	bool m_ProgramUsesCameraUBO[NumTProgram];     // Program reads camera/fog/clip from NlCamera UBO
 	bool m_ProgramUsesObjectUBO[NumTProgram];     // Program reads from NlModel UBO

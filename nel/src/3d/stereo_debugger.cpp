@@ -239,6 +239,7 @@ void CStereoDebugger::setDriver(NL3D::UDriver *driver)
 		{
 			IProgram::CSource *source = new IProgram::CSource();
 			source->Features.MaterialFlags = CProgramFeatures::TextureStages;
+			source->Features.NoUniforms = true;
 			source->Profile = IProgram::glsl330f;
 			source->setSourcePtr(a_glsl330f);
 			m_PixelProgram->addSource(source);

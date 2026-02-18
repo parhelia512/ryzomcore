@@ -75,7 +75,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), OutputsWorldSpacePosition(false), InputsWorldSpaceNormal(false), InputsWorldSpacePosition(false), SupportPPL(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), OutputsWorldSpacePosition(false), InputsWorldSpaceNormal(false), InputsWorldSpacePosition(false), SupportPPL(false), NoUniforms(false), NoBuiltinUniforms(false), OnlyUBOs(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -132,6 +132,21 @@ struct CProgramFeatures
 	/// If this is false, per-pixel lighting will not be used while this program is active,
 	/// otherwise it depends on the availability of the Object UBO and world space varyings.
 	bool SupportPPL;
+
+	/// When set, the program has no uniforms or UBOs at all. The driver skips
+	/// the entire uniform setup pass for this program stage, including UBO uploads.
+	bool NoUniforms;
+
+	/// When set, the program does not use any driver-set builtin uniforms or UBOs,
+	/// but may have its own uniforms set by the application. The driver skips
+	/// the builtin uniform setup for this stage (same optimization as NoUniforms),
+	/// but the distinction matters for future shader priority/sorting decisions.
+	bool NoBuiltinUniforms;
+
+	/// When set, the program only uses UBOs and has no individual uniforms.
+	/// The driver skips the per-draw getUniformIndex/glProgramUniform calls
+	/// for this program stage but still uploads UBOs.
+	bool OnlyUBOs;
 
 	// UBO flags
 	/// Whether this VP reads lights from a UBO light table + per-object indices/factors.

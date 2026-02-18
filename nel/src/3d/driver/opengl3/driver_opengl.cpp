@@ -366,6 +366,9 @@ CDriverGL3::CDriverGL3()
 	m_VPSpecularOutput = true;
 	m_VPNormalOutput = false;
 	m_VPWorldSpacePositionOutput = false;
+	memset(m_ProgramNoUniforms, 0, sizeof(m_ProgramNoUniforms));
+	memset(m_ProgramNoBuiltinUniforms, 0, sizeof(m_ProgramNoBuiltinUniforms));
+	memset(m_ProgramOnlyUBOs, 0, sizeof(m_ProgramOnlyUBOs));
 	memset(m_ProgramUsesLightTableUBO, 0, sizeof(m_ProgramUsesLightTableUBO));
 	memset(m_ProgramUsesCameraUBO, 0, sizeof(m_ProgramUsesCameraUBO));
 	memset(m_ProgramUsesObjectUBO, 0, sizeof(m_ProgramUsesObjectUBO));

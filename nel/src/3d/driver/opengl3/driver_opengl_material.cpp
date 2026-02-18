@@ -1472,9 +1472,15 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 	// Water VP/PP use individual uniforms, not UBOs.
 	// Reset these flags since setupBuiltinPrograms() is not called for Water materials,
 	// so they may be stale from the previous draw call's mega shader.
+	m_ProgramNoUniforms[VertexProgram] = false;
+	m_ProgramNoBuiltinUniforms[VertexProgram] = false;
+	m_ProgramOnlyUBOs[VertexProgram] = false;
 	m_ProgramUsesCameraUBO[VertexProgram] = false;
 	m_ProgramUsesObjectUBO[VertexProgram] = false;
 	m_ProgramUsesMaterialUBO[VertexProgram] = false;
+	m_ProgramNoUniforms[PixelProgram] = false;
+	m_ProgramNoBuiltinUniforms[PixelProgram] = false;
+	m_ProgramOnlyUBOs[PixelProgram] = false;
 	m_ProgramUsesCameraUBO[PixelProgram] = false;
 	m_ProgramUsesObjectUBO[PixelProgram] = false;
 	m_ProgramUsesMaterialUBO[PixelProgram] = false;

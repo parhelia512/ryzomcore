@@ -251,6 +251,7 @@ public:
 			CSource *source = new CSource();
 			source->Profile = glsl330f;
 			source->Features.MaterialFlags = CProgramFeatures::TextureStages;
+			source->Features.NoBuiltinUniforms = true;
 			source->setSourcePtr(g_StereoOVR_glsl330f);
 			addSource(source);
 		}
