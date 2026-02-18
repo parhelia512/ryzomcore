@@ -37,6 +37,12 @@ static inline sint vpLightMode(const CVPBuiltin &desc, sint vpSlot)
 	return (drvSlot < NL_OPENGL3_MAX_LIGHT) ? desc.LightMode[drvSlot] : -1;
 }
 
+// Whether PPL is active — changes shader structure (vertexLight varying)
+static inline bool vpHasPPL(const CVPBuiltin &desc)
+{
+	return desc.NumPerPixelLights > 0;
+}
+
 bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 {
 	if (left.VertexFormat != right.VertexFormat)
@@ -53,6 +59,9 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 			if (lm != rm)
 				return lm < rm;
 		}
+		// PPL active changes shader structure (vertexLight varying output)
+		if (vpHasPPL(left) != vpHasPPL(right))
+			return vpHasPPL(right);
 	}
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
@@ -85,6 +94,9 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			if (vpLightMode(left, i) != vpLightMode(right, i))
 				return false;
+		// PPL active changes shader structure (vertexLight varying output)
+		if (vpHasPPL(left) != vpHasPPL(right))
+			return false;
 	}
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
@@ -114,7 +126,7 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 {
 	uint32 h;
 
-	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Fog ? (1 << 17) : 0) | (v.VertexColorLighted ? (1 << 18) : 0) | ((uint32)v.ClipPlaneMask << 19) | (v.Normalize ? (1 << 25) : 0) | (v.WorldSpaceNormal ? (1 << 26) : 0) | (v.WorldSpacePosition ? (1 << 27) : 0));
+	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Fog ? (1 << 17) : 0) | (v.VertexColorLighted ? (1 << 18) : 0) | ((uint32)v.ClipPlaneMask << 19) | (v.Normalize ? (1 << 25) : 0) | (v.WorldSpaceNormal ? (1 << 26) : 0) | (v.WorldSpacePosition ? (1 << 27) : 0) | (vpHasPPL(v) ? (1 << 28) : 0));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			h = NLMISC::wangHash(h ^ vpLightMode(v, i));
@@ -311,6 +323,15 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	// Lighting requires normals in VB — fall back to unlit if missing
 	bool lighting = desc.Lighting && hasFlag(desc.VertexFormat, g_VertexFlags[Normal]);
 
+	// PPL + VertexColorLighted + VP lights: output vertexLight so PP can multiply PPL by vertex color
+	bool hasPPL = desc.NumPerPixelLights > 0;
+	bool hasVPLights = false;
+	if (lighting)
+		for (int d = desc.NumPerPixelLights; d < NL_OPENGL3_MAX_LIGHT; ++d)
+			if (desc.LightMode[d] != -1) { hasVPLights = true; break; }
+	bool needVertexLight = lighting && desc.VertexColorLighted && hasPPL && hasVPLights
+		&& hasFlag(desc.VertexFormat, g_VertexFlags[PrimaryColor]);
+
 	std::stringstream ss;
 	ss << "// Builtin Vertex Shader" << std::endl;
 	ss << std::endl;
@@ -400,6 +421,8 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "uniform vec4 materialColor;" << std::endl; // Verify
 
 	bool specularVertex = lighting || (desc.VertexFormat & g_VertexFlags[SecondaryColor]);
+	if (needVertexLight)
+		ss << "layout(location = " << VaryingLocationVertexLight << ") smooth out vec4 vertexLight;" << std::endl;
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
 	if (specularVertex)
 		ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
@@ -487,10 +510,22 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	}
 	
 	// Diffuse (clamp before texture), specular passed separately (added post-texture in PP)
-	ss << "vertexColor = diffuseVertex;" << std::endl;
-	if (lighting)
-		ss << "vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl;
-	ss << "vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
+	if (needVertexLight)
+	{
+		// PPL active with vertex colors: split VP lighting into vertexLight,
+		// pass raw vertex color in vertexColor so PP can multiply PPL by it
+		ss << "vertexLight = diffuseVertex;" << std::endl;
+		ss << "vertexLight.rgb = vertexLight.rgb + selfIllumination.rgb;" << std::endl;
+		ss << "vertexLight = clamp(vertexLight, 0.0, 1.0);" << std::endl;
+		ss << "vertexColor = vprimaryColor;" << std::endl;
+	}
+	else
+	{
+		ss << "vertexColor = diffuseVertex;" << std::endl;
+		if (lighting)
+			ss << "vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl;
+		ss << "vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
+	}
 	if (specularVertex)
 		ss << "specularColor = clamp(vec4(specularVertex.rgb * specularVertex.a, 0.0), 0.0, 1.0);" << std::endl;
 	ss << std::endl;

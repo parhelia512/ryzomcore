@@ -198,8 +198,12 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	{
 		ss << "uniform int nlWorldSpaceNormal;" << std::endl;
 		if (fogOrPpl)
+		{
 			ss << "uniform int nlWorldSpacePosition;" << std::endl;
-		// nlNumPerPixelLights not needed in VP: upload path shifts VP lights to start at slot 0
+			// VP light upload is shifted to slot 0, but we still need the count
+			// to decide whether to split vertexLight/vertexColor for PPL vertex color correctness
+			ss << "uniform int nlNumPerPixelLights;" << std::endl;
+		}
 	}
 	ss << std::endl;
 
@@ -224,7 +228,10 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 		ss << "layout(location = " << i << ") smooth out vec4 " << g_AttribNames[i] << ";" << std::endl;
 	}
 	if (fogOrPpl)
+	{
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
+		ss << "layout(location = " << VaryingLocationVertexLight << ") smooth out vec4 vertexLight;" << std::endl;
+	}
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
 	ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
 	ss << std::endl;
@@ -419,10 +426,33 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	ss << std::endl;
 
 	// Combine diffuse (clamp before texture), specular passed separately (added post-texture in PP)
-	ss << "  vertexColor = diffuseVertex;" << std::endl;
-	ss << "  if (doLighting)" << std::endl;
-	ss << "    vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl;
-	ss << "  vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
+	if (fogOrPpl)
+	{
+		// When PPL is active, always split: vertexLight = VP result, vertexColor = raw vertex color
+		// (or vec4(1) identity when no vertex colors). PP uses: vertexLight + pplDiff * vertexColor.
+		ss << "  if (doLighting && nlNumPerPixelLights > 0) {" << std::endl;
+		ss << "    vertexLight = diffuseVertex;" << std::endl;
+		ss << "    vertexLight.rgb = vertexLight.rgb + selfIllumination.rgb;" << std::endl;
+		ss << "    vertexLight = clamp(vertexLight, 0.0, 1.0);" << std::endl;
+		ss << "    if ((nlVertexFormat & NL_VP_PRIMARY_COLOR_FLAG) != 0 && nlVertexColorLighted != 0)" << std::endl;
+		ss << "      vertexColor = vprimaryColor;" << std::endl;
+		ss << "    else" << std::endl;
+		ss << "      vertexColor = vec4(1.0);" << std::endl;
+		ss << "  } else {" << std::endl;
+		ss << "    vertexLight = vec4(0.0);" << std::endl;
+		ss << "    vertexColor = diffuseVertex;" << std::endl;
+		ss << "    if (doLighting)" << std::endl;
+		ss << "      vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl;
+		ss << "    vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
+		ss << "  }" << std::endl;
+	}
+	else
+	{
+		ss << "  vertexColor = diffuseVertex;" << std::endl;
+		ss << "  if (doLighting)" << std::endl;
+		ss << "    vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl;
+		ss << "  vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
+	}
 	ss << "  specularColor = clamp(vec4(specularVertex.rgb * specularVertex.a, 0.0), 0.0, 1.0);" << std::endl;
 	ss << std::endl;
 
