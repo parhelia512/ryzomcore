@@ -264,7 +264,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	ss << std::endl;
 	ss << "  vec3 halfVector = normalize(lightDir + eyeDir);" << std::endl;
 	ss << "  float specAngle = max(0.0, dot(normal3, halfVector));" << std::endl;
-	ss << "  float specPow = pow(specAngle, shininess);" << std::endl;
+	ss << "  float specPow = diffAngle > 0.0 ? pow(specAngle, shininess) : 0.0; // GL1.x LIT: no specular when surface faces away from light" << std::endl;
 	ss << "  lightSpecular += specPow * attnFactor * colSpec;" << std::endl;
 	ss << "}" << std::endl;
 	ss << std::endl;

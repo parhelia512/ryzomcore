@@ -200,8 +200,10 @@ void vpLightFunctions(std::stringstream &ss, sint mode, int i)
 		ss << "normal3 = normalize(normal3);" << std::endl;
 		ss << "vec3 eyeDir = normalize(-ecPos4.xyz);" << std::endl;
 
-		ss << "lightDiffuse = lightDiffuse + getIntensity" << i << "(normal3, lightDir) * light" << i << "ColDiff;" << std::endl;
-		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDir, eyeDir) * light" << i << "ColSpec;" << std::endl;
+		ss << "float di = getIntensity" << i << "(normal3, lightDir);" << std::endl;
+		ss << "lightDiffuse = lightDiffuse + di * light" << i << "ColDiff;" << std::endl;
+		// GL1.x LIT: no specular when surface faces away from light
+		ss << "lightSpecular = lightSpecular + (di > 0.0 ? getSpecIntensity" << i << "(normal3, lightDir, eyeDir) : 0.0) * light" << i << "ColSpec;" << std::endl;
 		ss << "}" << std::endl;
 		ss << std::endl;
 		break;
@@ -243,8 +245,10 @@ void vpLightFunctions(std::stringstream &ss, sint mode, int i)
 		ss << "vec3 eyeDir = normalize(-ecPos3);" << std::endl;
 
 		ss << "float invattn = 1.0 / attenuation;" << std::endl;
-		ss << "lightDiffuse = lightDiffuse + getIntensity" << i << "(normal3, lightDirection) * invattn * light" << i << "ColDiff;" << std::endl;
-		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) * invattn * light" << i << "ColSpec;" << std::endl;
+		ss << "float di = getIntensity" << i << "(normal3, lightDirection);" << std::endl;
+		ss << "lightDiffuse = lightDiffuse + di * invattn * light" << i << "ColDiff;" << std::endl;
+		// GL1.x LIT: no specular when surface faces away from light
+		ss << "lightSpecular = lightSpecular + (di > 0.0 ? getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) : 0.0) * invattn * light" << i << "ColSpec;" << std::endl;
 		ss << "}" << std::endl;
 		ss << std::endl;
 		break;
@@ -292,8 +296,10 @@ void vpLightFunctions(std::stringstream &ss, sint mode, int i)
 		ss << "vec3 eyeDir = normalize(-ecPos3);" << std::endl;
 
 		ss << "float invattn = spotAttn / attenuation;" << std::endl;
-		ss << "lightDiffuse = lightDiffuse + getIntensity" << i << "(normal3, lightDirection) * invattn * light" << i << "ColDiff;" << std::endl;
-		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) * invattn * light" << i << "ColSpec;" << std::endl;
+		ss << "float di = getIntensity" << i << "(normal3, lightDirection);" << std::endl;
+		ss << "lightDiffuse = lightDiffuse + di * invattn * light" << i << "ColDiff;" << std::endl;
+		// GL1.x LIT: no specular when surface faces away from light
+		ss << "lightSpecular = lightSpecular + (di > 0.0 ? getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) : 0.0) * invattn * light" << i << "ColSpec;" << std::endl;
 		ss << "}" << std::endl;
 		ss << std::endl;
 		break;
