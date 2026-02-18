@@ -107,7 +107,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	if (fogOrPpl)
 	{
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
-		ss << "layout(location = " << VaryingLocationVertexLight << ") smooth in vec4 vertexLight;" << std::endl;
+		ss << "layout(location = " << VaryingLocationRawVertexColor << ") smooth in vec4 rawVertexColor;" << std::endl;
 	}
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
 	if (specular)
@@ -432,10 +432,9 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 			}
 		}
 
-		// vertexLight carries VP-lit color when PPL splits vertex color;
-		// vertexColor carries raw vertex color (or vec4(1) when no vertex color).
-		// Multiply PPL by vertex color so it matches VP lighting behavior.
-		ss << "    fragColor.rgb = vertexLight.rgb + pplDiff.rgb * vertexColor.rgb;" << std::endl;
+		// rawVertexColor carries the raw vertex color when VertexColorLighted + PPL,
+		// vec4(1) otherwise. Multiply combined lighting by it for GL_COLOR_MATERIAL behavior.
+		ss << "    fragColor.rgb = (fragColor.rgb + pplDiff.rgb) * rawVertexColor.rgb;" << std::endl;
 		ss << "  }" << std::endl;
 		ss << std::endl;
 	}

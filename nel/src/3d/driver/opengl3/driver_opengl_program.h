@@ -123,7 +123,7 @@ enum TAttribOffset
 // VB-sourced varyings use their TAttribOffset index as the location.
 // ecPos and vertexColor reuse slots that are never occupied by VB varyings.
 static const int VaryingLocationEcPos = Position; // = 0, Position is never output as a varying
-static const int VaryingLocationVertexLight = Weight; // = 1, VP lighting when PPL splits vertexColor
+static const int VaryingLocationRawVertexColor = Weight; // = 1, raw vertex color for PPL modulation
 static const int VaryingLocationNormal = Normal; // = 2, world-space normal (when WorldSpaceNormal is set)
 static const int VaryingLocationVertexColor = PrimaryColor; // = 3, PrimaryColor is always skipped
 static const int VaryingLocationSpecularColor = SecondaryColor; // = 4, SecondaryColor is always skipped

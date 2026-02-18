@@ -37,7 +37,7 @@ static inline sint vpLightMode(const CVPBuiltin &desc, sint vpSlot)
 	return (drvSlot < NL_OPENGL3_MAX_LIGHT) ? desc.LightMode[drvSlot] : -1;
 }
 
-// Whether PPL is active — changes shader structure (vertexLight varying)
+// Whether PPL is active — changes shader structure (rawVertexColor varying)
 static inline bool vpHasPPL(const CVPBuiltin &desc)
 {
 	return desc.NumPerPixelLights > 0;
@@ -59,7 +59,7 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 			if (lm != rm)
 				return lm < rm;
 		}
-		// PPL active changes shader structure (vertexLight varying output)
+		// PPL active changes shader structure (rawVertexColor varying output)
 		if (vpHasPPL(left) != vpHasPPL(right))
 			return vpHasPPL(right);
 	}
@@ -94,7 +94,7 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			if (vpLightMode(left, i) != vpLightMode(right, i))
 				return false;
-		// PPL active changes shader structure (vertexLight varying output)
+		// PPL active changes shader structure (rawVertexColor varying output)
 		if (vpHasPPL(left) != vpHasPPL(right))
 			return false;
 	}
@@ -323,8 +323,8 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	// Lighting requires normals in VB — fall back to unlit if missing
 	bool lighting = desc.Lighting && hasFlag(desc.VertexFormat, g_VertexFlags[Normal]);
 
-	// When PPL is active, vertexLight carries the VP lighting result and vertexColor carries
-	// the raw vertex color (or vec4(1) identity). PP uses: vertexLight + pplDiff * vertexColor.
+	// When PPL is active, rawVertexColor carries the raw vertex color (or vec4(1) identity).
+	// PP uses: (vertexColor + pplDiff) * rawVertexColor.
 	bool hasPPL = desc.NumPerPixelLights > 0;
 	bool splitVertexColor = lighting && desc.VertexColorLighted
 		&& hasFlag(desc.VertexFormat, g_VertexFlags[PrimaryColor]);
@@ -419,7 +419,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 
 	bool specularVertex = lighting || (desc.VertexFormat & g_VertexFlags[SecondaryColor]);
 	if (hasPPL)
-		ss << "layout(location = " << VaryingLocationVertexLight << ") smooth out vec4 vertexLight;" << std::endl;
+		ss << "layout(location = " << VaryingLocationRawVertexColor << ") smooth out vec4 rawVertexColor;" << std::endl;
 	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
 	if (specularVertex)
 		ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
@@ -475,6 +475,10 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		{
 			ss << "specularVertex = specularVertex * vsecondaryColor;" << std::endl;
 		}
+
+		// Add selfIllumination before vertex color multiply so it's also modulated
+		// by vertex color (GL_COLOR_MATERIAL AMBIENT_AND_DIFFUSE behavior)
+		ss << "diffuseVertex.rgb = diffuseVertex.rgb + selfIllumination.rgb;" << std::endl;
 	}
 	else
 	{
@@ -494,9 +498,17 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	{
 		if (lighting && desc.VertexColorLighted)
 		{
-			// GL_COLOR_MATERIAL behavior: vertex color replaces material diffuse
-			// CPU doesn't pre-multiply by matDiffuse when VertexColorLighted is set
-			ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+			if (hasPPL)
+			{
+				// PPL active: don't multiply here — pass raw vertex color to PP via rawVertexColor
+				// so PP can multiply both VP and PPL lighting by vertex color
+			}
+			else
+			{
+				// GL_COLOR_MATERIAL behavior: vertex color replaces material diffuse
+				// CPU doesn't pre-multiply by matDiffuse when VertexColorLighted is set
+				ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+			}
 		}
 		else if (!lighting)
 		{
@@ -507,31 +519,15 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	}
 	
 	// Diffuse (clamp before texture), specular passed separately (added post-texture in PP)
-	if (hasPPL && lighting)
+	ss << "vertexColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
+
+	// Raw vertex color for PPL: PP multiplies (vertexColor + pplDiff) by rawVertexColor
+	if (hasPPL)
 	{
-		// PPL active: vertexLight = VP result, vertexColor = raw vertex color (or vec4(1) identity).
-		// PP uses: vertexLight + pplDiff * vertexColor.
-		ss << "vertexLight = diffuseVertex;" << std::endl;
-		ss << "vertexLight.rgb = vertexLight.rgb + selfIllumination.rgb;" << std::endl;
-		ss << "vertexLight = clamp(vertexLight, 0.0, 1.0);" << std::endl;
 		if (splitVertexColor)
-			ss << "vertexColor = vprimaryColor;" << std::endl;
+			ss << "rawVertexColor = vprimaryColor;" << std::endl;
 		else
-			ss << "vertexColor = vec4(1.0);" << std::endl;
-	}
-	else if (hasPPL)
-	{
-		// PPL declared but no lighting: dummy vertexLight, normal vertexColor
-		ss << "vertexLight = vec4(0.0);" << std::endl;
-		ss << "vertexColor = diffuseVertex;" << std::endl;
-		ss << "vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
-	}
-	else
-	{
-		ss << "vertexColor = diffuseVertex;" << std::endl;
-		if (lighting)
-			ss << "vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl;
-		ss << "vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
+			ss << "rawVertexColor = vec4(1.0);" << std::endl;
 	}
 	if (specularVertex)
 		ss << "specularColor = clamp(vec4(specularVertex.rgb * specularVertex.a, 0.0), 0.0, 1.0);" << std::endl;
