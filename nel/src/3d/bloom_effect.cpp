@@ -63,7 +63,7 @@ static const char *TextureOffset =
 	END \n";
 
 // GLSL 330 version of the same vertex program for the GL3 driver.
-// Varying locations follow TAttribOffset: vertexColor=3, texCoord0-3=8-11.
+// Varying locations follow TAttribOffset: diffuseColor=3, texCoord0-3=8-11.
 static const char *TextureOffsetGLSL =
 	"#version 330\n"
 	"#extension GL_ARB_separate_shader_objects : enable\n"
@@ -73,7 +73,7 @@ static const char *TextureOffsetGLSL =
 	"layout(location = 0) in vec4 vposition;\n"
 	"layout(location = 8) in vec4 vtexCoord0;\n"
 	"\n"
-	"layout(location = 3) smooth out vec4 vertexColor;\n"
+	"layout(location = 3) smooth out vec4 diffuseColor;\n"
 	"layout(location = 8) smooth out vec4 texCoord0;\n"
 	"layout(location = 9) smooth out vec4 texCoord1;\n"
 	"layout(location = 10) smooth out vec4 texCoord2;\n"
@@ -89,7 +89,7 @@ static const char *TextureOffsetGLSL =
 	"void main()\n"
 	"{\n"
 	"  gl_Position = vec4(vposition.xyz, posW.w);\n"
-	"  vertexColor = clamp(color, 0.0, 1.0);\n"
+	"  diffuseColor = clamp(color, 0.0, 1.0);\n"
 	"  texCoord0 = vec4(vtexCoord0.xy + offset0, 0.0, 0.0);\n"
 	"  texCoord1 = vec4(vtexCoord0.xy + offset1, 0.0, 0.0);\n"
 	"  texCoord2 = vec4(vtexCoord0.xy + offset2, 0.0, 0.0);\n"

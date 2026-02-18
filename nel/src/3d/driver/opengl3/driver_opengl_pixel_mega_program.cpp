@@ -109,7 +109,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
 		ss << "layout(location = " << VaryingLocationRawVertexColor << ") smooth in vec4 rawVertexColor;" << std::endl;
 	}
-	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
+	ss << "layout(location = " << VaryingLocationDiffuseColor << ") smooth in vec4 diffuseColor;" << std::endl;
 	if (specular)
 		ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth in vec4 specularColor;" << std::endl;
 	ss << std::endl;
@@ -366,7 +366,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 
 	// --- main ---
 	ss << "void main(void) {" << std::endl;
-	ss << "  fragColor = vertexColor;" << std::endl;
+	ss << "  fragColor = diffuseColor;" << std::endl;
 	ss << std::endl;
 
 	// Per-pixel lighting accumulation

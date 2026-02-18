@@ -232,7 +232,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
 		ss << "layout(location = " << VaryingLocationRawVertexColor << ") smooth out vec4 rawVertexColor;" << std::endl;
 	}
-	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
+	ss << "layout(location = " << VaryingLocationDiffuseColor << ") smooth out vec4 diffuseColor;" << std::endl;
 	ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
 	ss << std::endl;
 
@@ -446,7 +446,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	ss << std::endl;
 
 	// Combine diffuse (clamp before texture), specular passed separately (added post-texture in PP)
-	ss << "  vertexColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
+	ss << "  diffuseColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
 	ss << "  specularColor = clamp(vec4(specularVertex.rgb * specularVertex.a, 0.0), 0.0, 1.0);" << std::endl;
 	ss << std::endl;
 

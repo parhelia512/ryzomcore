@@ -627,7 +627,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		ss << std::endl;
 	}
 
-	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
+	ss << "layout(location = " << VaryingLocationDiffuseColor << ") smooth in vec4 diffuseColor;" << std::endl;
 	if (desc.SpecularSeparate)
 		ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth in vec4 specularColor;" << std::endl;
 	ss << std::endl;
@@ -636,7 +636,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 	ss << "{" << std::endl;
 
 	// Vertex color (light or unlit diffuse, primary and secondary)
-	ss << "fragColor = vertexColor;" << std::endl;
+	ss << "fragColor = diffuseColor;" << std::endl;
 
 	for (uint stage = 0; stage < maxSam; ++stage)
 	{

@@ -324,7 +324,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	bool lighting = desc.Lighting && hasFlag(desc.VertexFormat, g_VertexFlags[Normal]);
 
 	// When PPL is active, rawVertexColor carries the raw vertex color (or vec4(1) identity).
-	// PP uses: (vertexColor + pplDiff) * rawVertexColor.
+	// PP uses: (diffuseColor + pplDiff) * rawVertexColor.
 	bool hasPPL = desc.NumPerPixelLights > 0;
 	bool splitVertexColor = lighting && desc.VertexColorLighted
 		&& hasFlag(desc.VertexFormat, g_VertexFlags[PrimaryColor]);
@@ -420,7 +420,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	bool specularVertex = lighting || (desc.VertexFormat & g_VertexFlags[SecondaryColor]);
 	if (hasPPL)
 		ss << "layout(location = " << VaryingLocationRawVertexColor << ") smooth out vec4 rawVertexColor;" << std::endl;
-	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
+	ss << "layout(location = " << VaryingLocationDiffuseColor << ") smooth out vec4 diffuseColor;" << std::endl;
 	if (specularVertex)
 		ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
 	ss << std::endl;
@@ -519,9 +519,9 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	}
 	
 	// Diffuse (clamp before texture), specular passed separately (added post-texture in PP)
-	ss << "vertexColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
+	ss << "diffuseColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
 
-	// Raw vertex color for PPL: PP multiplies (vertexColor + pplDiff) by rawVertexColor
+	// Raw vertex color for PPL: PP multiplies (diffuseColor + pplDiff) by rawVertexColor
 	if (hasPPL)
 	{
 		if (splitVertexColor)
