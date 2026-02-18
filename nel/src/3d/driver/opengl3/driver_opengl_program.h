@@ -39,7 +39,6 @@ struct CVPBuiltin
 	bool Lighting;
 	sint LightMode[NL_OPENGL3_MAX_LIGHT]; // -1 when disabled
 	sint TexGenMode[IDRV_MAT_MAXTEXTURES]; // -1 when disabled
-	bool Specular; // Reflection
 	bool Fog;
 	bool VertexColorLighted;
 	bool Normalize; // Force-normalize normals (for MRM geomorphing, scaled models)

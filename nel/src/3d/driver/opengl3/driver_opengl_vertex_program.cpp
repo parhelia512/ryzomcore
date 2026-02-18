@@ -57,8 +57,6 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
 			return left.TexGenMode[i] < right.TexGenMode[i];
-	if (left.Specular != right.Specular)
-		return right.Specular;
 	if (left.Fog != right.Fog)
 		return right.Fog;
 	if (left.VertexColorLighted != right.VertexColorLighted)
@@ -91,8 +89,6 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
 			return false;
-	if (left.Specular != right.Specular)
-		return false;
 	if (left.Fog != right.Fog)
 		return false;
 	if (left.VertexColorLighted != right.VertexColorLighted)
@@ -118,7 +114,7 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 {
 	uint32 h;
 
-	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0) | ((uint32)v.ClipPlaneMask << 20) | (v.Normalize ? (1 << 26) : 0) | (v.WorldSpaceNormal ? (1 << 27) : 0) | (v.WorldSpacePosition ? (1 << 28) : 0));
+	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Fog ? (1 << 17) : 0) | (v.VertexColorLighted ? (1 << 18) : 0) | ((uint32)v.ClipPlaneMask << 19) | (v.Normalize ? (1 << 25) : 0) | (v.WorldSpaceNormal ? (1 << 26) : 0) | (v.WorldSpacePosition ? (1 << 27) : 0));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			h = NLMISC::wangHash(h ^ vpLightMode(v, i));
@@ -599,10 +595,9 @@ void CDriverGL3::generateBuiltinVertexProgram()
 
 	if (!compileVertexProgram(vertexProgram))
 	{
-		nlwarning("GL3: Builtin VP compilation failed (fmt=0x%x, lit=%d, fog=%d, spec=%d, vcl=%d)",
+		nlwarning("GL3: Builtin VP compilation failed (fmt=0x%x, lit=%d, fog=%d, vcl=%d)",
 			m_VPBuiltinCurrent.VertexFormat, (int)m_VPBuiltinCurrent.Lighting,
-			(int)m_VPBuiltinCurrent.Fog, (int)m_VPBuiltinCurrent.Specular,
-			(int)m_VPBuiltinCurrent.VertexColorLighted);
+			(int)m_VPBuiltinCurrent.Fog, (int)m_VPBuiltinCurrent.VertexColorLighted);
 		delete vertexProgram; vertexProgram = NULL;
 	}
 
