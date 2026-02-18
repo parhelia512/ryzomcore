@@ -174,6 +174,8 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		ss << "uniform int nlFogMode;" << std::endl;
 	if (fogOrPpl && !objectUBO)
 		ss << "uniform int nlWorldSpacePosition;" << std::endl;
+	if (fogOrPpl && !objectUBO)
+		ss << "uniform int nlVertexColorLighted;" << std::endl;
 
 	// fogOrPpl uniforms: fog enable (per-material), PPL data, and nlNumPerPixelLights
 	if (fogOrPpl)
@@ -387,6 +389,9 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		const char *matShinStr = materialUBO ? "materialShininess" : "nlMaterialShininess";
 
 		ss << "  vec4 pplSpecAccum = vec4(0.0);" << std::endl;
+		// When VertexColorLighted, vertex color is the diffuse source (multiplied via rawVertexColor below).
+		// Material diffuse must be skipped in the light equation, matching VP behavior (effectiveDiffuse = 1.0).
+		ss << "  vec4 pplMatDiff = (nlVertexColorLighted != 0) ? vec4(1.0) : " << matDiffStr << ";" << std::endl;
 		ss << "  if (nlNumPerPixelLights > 0) {" << std::endl;
 		ss << "    vec3 wsPos = ecPos.xyz / ecPos.w;" << std::endl;
 		ss << "    vec3 wsNormal = normalize(normal.xyz);" << std::endl;
@@ -415,7 +420,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 				else
 					ss << "        float factor = nlLightFactor" << i << ";" << std::endl;
 				ss << "        computeLightPP(li.mode, li.dirOrPos," << std::endl;
-				ss << "          li.diffuse * factor * " << matDiffStr << "," << std::endl;
+				ss << "          li.diffuse * factor * pplMatDiff," << std::endl;
 				ss << "          li.specular * factor * " << matSpecStr << "," << std::endl;
 				ss << "          " << matShinStr << "," << std::endl;
 				ss << "          li.constAttn, li.linAttn, li.quadAttn," << std::endl;
@@ -434,7 +439,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 			{
 				ss << "    if (" << i << " < nlNumPerPixelLights)" << std::endl;
 				ss << "      computeLightPP(nlPpLightMode" << i << ", ppLight" << i << "DirOrPos," << std::endl;
-				ss << "        ppLight" << i << "ColDiff * " << matDiffStr << "," << std::endl;
+				ss << "        ppLight" << i << "ColDiff * pplMatDiff," << std::endl;
 				ss << "        ppLight" << i << "ColSpec * " << matSpecStr << "," << std::endl;
 				ss << "        " << matShinStr << "," << std::endl;
 				ss << "        ppLight" << i << "ConstAttn, ppLight" << i << "LinAttn, ppLight" << i << "QuadAttn," << std::endl;

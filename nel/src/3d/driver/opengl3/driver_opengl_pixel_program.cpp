@@ -740,7 +740,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		{
 			ss << "  if (" << i << " < nlNumPerPixelLights)" << std::endl;
 			ss << "    computeLightPP(nlPpLightMode" << i << ", ppLight" << i << "DirOrPos," << std::endl;
-			ss << "      ppLight" << i << "ColDiff * nlMaterialDiffuse," << std::endl;
+			ss << "      ppLight" << i << "ColDiff * " << (desc.PPLVertexColor ? "vec4(1.0)" : "nlMaterialDiffuse") << "," << std::endl;
 			ss << "      ppLight" << i << "ColSpec * nlMaterialSpecular," << std::endl;
 			ss << "      nlMaterialShininess," << std::endl;
 			ss << "      ppLight" << i << "ConstAttn, ppLight" << i << "LinAttn, ppLight" << i << "QuadAttn," << std::endl;
