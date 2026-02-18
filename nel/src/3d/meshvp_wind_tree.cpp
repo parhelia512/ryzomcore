@@ -906,8 +906,10 @@ void	CMeshVPWindTree::setupForMaterial(const CMaterial &mat,
 	if (isUBOActive())
 	{
 		// UBO path: write material properties into user VP UBO
+		// When SpecularLighting is false, force specular to black (legacy path
+		// selected a non-specular VP variant; UBO path folds via material=black).
 		NLMISC::CRGBAF d(mat.getDiffuse());
-		NLMISC::CRGBAF s(mat.getSpecular());
+		NLMISC::CRGBAF s = SpecularLighting ? NLMISC::CRGBAF(mat.getSpecular()) : NLMISC::CRGBAF(0.f, 0.f, 0.f, 0.f);
 		_WindTreeUB->lock();
 		_WindTreeUB->set(_UBOOffsets.MaterialDiffuse, d.R, d.G, d.B, d.A);
 		_WindTreeUB->set(_UBOOffsets.MaterialSpecular, s.R, s.G, s.B, s.A);

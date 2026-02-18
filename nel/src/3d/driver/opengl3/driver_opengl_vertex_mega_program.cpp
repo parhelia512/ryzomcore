@@ -542,16 +542,10 @@ bool CDriverGL3::setupMegaVertexProgram()
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
 		m_VPWorldSpacePositionOutput = m_UserVertexProgram->features().OutputsWorldSpacePosition;
 		m_VPNormalOutput = false;
-		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO;
-		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO;
-		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO;
+		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO || m_UserVertexProgram->features().UsesObjectUBO;
+		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO || m_UserVertexProgram->features().UsesObjectUBO;
+		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO; // Object UBO implies table and camera UBO
 		m_ProgramUsesMaterialUBO[VertexProgram] = m_UserVertexProgram->features().UsesMaterialUBO;
-		// Object UBO implies table and camera UBO
-		if (m_ProgramUsesObjectUBO[VertexProgram])
-		{
-			m_ProgramUsesLightTableUBO[VertexProgram] = true;
-			m_ProgramUsesCameraUBO[VertexProgram] = true;
-		}
 		// If PPL requested and user VP has object UBO, force world-space outputs
 		// (UBO programs support PPL dynamically via nlWorldSpacePosition/Normal uniforms)
 		if (_NumPerPixelLights > 0 && m_ProgramUsesObjectUBO[VertexProgram])
@@ -600,24 +594,17 @@ bool CDriverGL3::setupMegaVertexProgram()
 		m_VPNormalOutput = true;
 	}
 
-	m_ProgramUsesLightTableUBO[VertexProgram] = m_UseMegaLightTableUBO;
-	m_ProgramUsesCameraUBO[VertexProgram] = m_UseMegaCameraUBO;
-	m_ProgramUsesObjectUBO[VertexProgram] = m_UseMegaObjectUBO;
-	m_ProgramUsesMaterialUBO[VertexProgram] = m_UseMegaMaterialUBO;
-
-	// Object UBO implies table and camera UBO
-	if (m_ProgramUsesObjectUBO[VertexProgram])
-	{
-		m_ProgramUsesLightTableUBO[VertexProgram] = true;
-		m_ProgramUsesCameraUBO[VertexProgram] = true;
-	}
-
 	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive) ? 1 : 0;
 	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
-	int tableUBO = m_ProgramUsesLightTableUBO[VertexProgram] ? 1 : 0;
-	int cameraUBO = m_ProgramUsesCameraUBO[VertexProgram] ? 1 : 0;
-	int objectUBO = m_ProgramUsesObjectUBO[VertexProgram] ? 1 : 0;
-	int materialUBO = m_ProgramUsesMaterialUBO[VertexProgram] ? 1 : 0;
+	int tableUBO = (m_UseMegaLightTableUBO || m_UseMegaObjectUBO) ? 1 : 0;
+	int cameraUBO = (m_UseMegaCameraUBO || m_UseMegaObjectUBO) ? 1 : 0;
+	int objectUBO = m_UseMegaObjectUBO ? 1 : 0;
+	int materialUBO = m_UseMegaMaterialUBO ? 1 : 0;
+
+	m_ProgramUsesLightTableUBO[PixelProgram] = tableUBO;
+	m_ProgramUsesCameraUBO[PixelProgram] = cameraUBO;
+	m_ProgramUsesObjectUBO[PixelProgram] = objectUBO;
+	m_ProgramUsesMaterialUBO[PixelProgram] = materialUBO;
 
 	CVertexProgram *vp = m_MegaVP[fogOrPpl][clip][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(vp);

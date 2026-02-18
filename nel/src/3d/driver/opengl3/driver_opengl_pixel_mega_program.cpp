@@ -724,12 +724,17 @@ bool CDriverGL3::setupMegaPixelProgram()
 	// Cube variant: any cubemap in the material's sampler modes
 	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
 	int specular = m_VPSpecularOutput ? 1 : 0;
-	int tableUBO = m_ProgramUsesLightTableUBO[VertexProgram] ? 1 : 0;
-	int cameraUBO = m_ProgramUsesCameraUBO[VertexProgram] ? 1 : 0;
-	int objectUBO = m_ProgramUsesObjectUBO[VertexProgram] ? 1 : 0;
-	int materialUBO = m_ProgramUsesMaterialUBO[VertexProgram] ? 1 : 0;
+	int tableUBO = (m_UseMegaLightTableUBO || m_UseMegaObjectUBO) ? 1 : 0;
+	int cameraUBO = (m_UseMegaCameraUBO || m_UseMegaObjectUBO) ? 1 : 0;
+	int objectUBO = m_UseMegaObjectUBO ? 1 : 0;
+	int materialUBO = m_UseMegaMaterialUBO ? 1 : 0;
 	// fogOrPpl=0 + tableUBO=1 variant doesn't exist
 	if (!fogOrPpl) tableUBO = 0;
+
+	m_ProgramUsesLightTableUBO[PixelProgram] = tableUBO;
+	m_ProgramUsesCameraUBO[PixelProgram] = cameraUBO;
+	m_ProgramUsesObjectUBO[PixelProgram] = objectUBO;
+	m_ProgramUsesMaterialUBO[PixelProgram] = materialUBO;
 
 	CPixelProgram *pp = m_MegaPP[fogOrPpl][cube][specular][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(pp);
