@@ -769,7 +769,7 @@ void CDriverGL3::uploadObjectUBO()
 	data.vertexFormat = (sint32)m_VPBuiltinCurrent.VertexFormat;
 	data.worldSpaceNormal = m_VPNormalOutput ? 1 : 0;
 	data.worldSpacePosition = m_VPWorldSpacePositionOutput ? 1 : 0;
-	data.numPerPixelLights = (sint32)_NumPerPixelLights;
+	data.numPerPixelLights = (sint32)m_VPBuiltinCurrent.NumPerPixelLights;
 	data.fogEnabled = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	data._pad[0] = 0;
 

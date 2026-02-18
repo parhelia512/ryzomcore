@@ -909,7 +909,7 @@ void CPPBuiltin::checkDriverStateTouched(CDriverGL3 *driver) // MUST NOT depend 
 		WorldSpacePosition = driver->m_VPWorldSpacePositionOutput;
 		Touched = true;
 	}
-	bool ppl = driver->_NumPerPixelLights > 0;
+	bool ppl = driver->m_VPBuiltinCurrent.NumPerPixelLights > 0;
 	if (PPL != ppl)
 	{
 		PPL = ppl;
