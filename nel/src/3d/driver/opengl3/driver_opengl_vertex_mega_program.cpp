@@ -30,7 +30,7 @@
  *     indices and factors. When off, lights use individual pre-multiplied uniforms.
  *     Different uniform sets, so a separate variant avoids dead declarations.
  *
- *   Result: 8 VP variants — m_MegaVP[fogOrPpl][clip][tableUBO]
+ *   Result: 8 VP variants — m_MegaVP[fogOrPpl][hwClip][tableUBO]
  *
  *   FOLDS (uniform-controlled branching — zero GPU cost):
  *   - VertexFormat: All 16 in attributes declared; unbound ones read GL default
@@ -77,14 +77,14 @@ static const char *s_TexGenAccess[4] = {
 	"nlTexGenMode.x", "nlTexGenMode.y", "nlTexGenMode.z", "nlTexGenMode.w"
 };
 
-void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO, bool cameraUBO, bool objectUBO, bool materialUBO)
+void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableUBO, bool cameraUBO, bool objectUBO, bool materialUBO)
 {
 	// Object UBO implies tableUBO and camera UBO
 	if (objectUBO) { tableUBO = true; cameraUBO = true; }
 
 	std::stringstream ss;
 	ss << "// Megashader Vertex Program";
-	ss << " (fogOrPpl=" << (int)fogOrPpl << ", clip=" << (int)clip << ", tableUBO=" << (int)tableUBO
+	ss << " (fogOrPpl=" << (int)fogOrPpl << ", hwClip=" << (int)hwClip << ", tableUBO=" << (int)tableUBO
 	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
 	   << ", materialUBO=" << (int)materialUBO << ")" << std::endl;
 	ss << std::endl;
@@ -96,7 +96,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	ss << "out gl_PerVertex" << std::endl;
 	ss << "{" << std::endl;
 	ss << "  vec4 gl_Position;" << std::endl;
-	if (clip)
+	if (hwClip)
 		ss << "  float gl_ClipDistance[6];" << std::endl;
 	ss << "};" << std::endl;
 	ss << std::endl;
@@ -171,7 +171,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	ss << std::endl;
 
 	// Clip plane uniforms (individual uniforms only when no camera UBO)
-	if (clip && !cameraUBO)
+	if (hwClip && !cameraUBO)
 	{
 		for (int i = 0; i < 6; ++i)
 			ss << "uniform vec4 clipPlane" << i << ";" << std::endl;
@@ -192,7 +192,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			ss << "uniform int nlLightMode" << i << ";" << std::endl;
 	}
-	if (clip && !cameraUBO)
+	if (hwClip && !cameraUBO)
 		ss << "uniform int nlClipPlaneMask;" << std::endl;
 	if (!objectUBO)
 	{
@@ -497,8 +497,8 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 		ss << std::endl;
 	}
 
-	// Clip planes (clip variant only)
-	if (clip)
+	// HW clip planes (gl_ClipDistance)
+	if (hwClip)
 	{
 		for (int i = 0; i < 6; ++i)
 		{
@@ -520,7 +520,7 @@ bool CDriverGL3::initMegaVertexPrograms()
 {
 	for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
 	{
-		for (int clip = 0; clip < 2; ++clip)
+		for (int hwClip = 0; hwClip < 2; ++hwClip)
 		{
 			for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
 			{
@@ -535,12 +535,12 @@ bool CDriverGL3::initMegaVertexPrograms()
 								continue;
 
 							std::string result;
-							megaVPGenerate(result, fogOrPpl != 0, clip != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
+							megaVPGenerate(result, fogOrPpl != 0, hwClip != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
 
 							CVertexProgram *vp = new CVertexProgram();
 							IProgram::CSource *src = new IProgram::CSource();
 							src->Profile = IProgram::glsl330v;
-							src->DisplayName = NLMISC::toString("Mega VP (fogOrPpl=%d, clip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", fogOrPpl, clip, tableUBO, cameraUBO, objectUBO, materialUBO);
+							src->DisplayName = NLMISC::toString("Mega VP (fogOrPpl=%d, hwClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", fogOrPpl, hwClip, tableUBO, cameraUBO, objectUBO, materialUBO);
 							src->Features.UsesLightTableUBO = (tableUBO != 0);
 							src->Features.UsesCameraUBO = (cameraUBO != 0);
 							src->Features.UsesObjectUBO = (objectUBO != 0);
@@ -557,7 +557,7 @@ bool CDriverGL3::initMegaVertexPrograms()
 								return false;
 							}
 
-							m_MegaVP[fogOrPpl][clip][tableUBO][cameraUBO][objectUBO][materialUBO] = vp;
+							m_MegaVP[fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO] = vp;
 						}
 					}
 				}
@@ -612,8 +612,9 @@ bool CDriverGL3::setupMegaVertexProgram()
 		m_VPNormalOutput = true;
 	}
 
-	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive) ? 1 : 0;
-	int clip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
+	bool ppClipActive = m_PPClipPlanes && (m_VPBuiltinCurrent.ClipPlaneMask != 0);
+	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive || ppClipActive) ? 1 : 0;
+	int hwClip = (ppClipActive ? 0 : (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0);
 	int tableUBO = (m_UseMegaLightTableUBO || m_UseMegaObjectUBO) ? 1 : 0;
 	int cameraUBO = (m_UseMegaCameraUBO || m_UseMegaObjectUBO) ? 1 : 0;
 	int objectUBO = m_UseMegaObjectUBO ? 1 : 0;
@@ -627,7 +628,7 @@ bool CDriverGL3::setupMegaVertexProgram()
 	m_ProgramUsesObjectUBO[VertexProgram] = objectUBO;
 	m_ProgramUsesMaterialUBO[VertexProgram] = materialUBO;
 
-	CVertexProgram *vp = m_MegaVP[fogOrPpl][clip][tableUBO][cameraUBO][objectUBO][materialUBO];
+	CVertexProgram *vp = m_MegaVP[fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(vp);
 
 	if (!activeVertexProgram(vp, true))

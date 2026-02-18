@@ -1391,17 +1391,19 @@ private:
 	bool m_VPBuiltinTouched;
 
 	// Megashader support:
-	// m_MegaVP[fogOrPpl][clip][tableUBO][cameraUBO][objectUBO][materialUBO]
-	// m_MegaPP[fogOrPpl][cube][specular][tableUBO][cameraUBO][objectUBO][materialUBO]
+	// m_MegaVP[fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO]
+	// m_MegaPP[fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO]
 	//   fogOrPpl: 0=no ecPos/fog/PPL (UI/sky); 1=has ecPos, fog+PPL runtime-gated
+	//   ppClip: 0=no PP clip; 1=PP-based clip plane discard (implies fogOrPpl=1)
 	//   tableUBO: 0=non-table lights; 1=light table UBO
+	bool m_PPClipPlanes;            // Use PP-based clip plane discard instead of native gl_ClipDistance
 	bool m_UseMegaShaders;          // Select mega VP/PP variants (false = per-material compiled shaders)
 	bool m_UseMegaLightTableUBO;    // Select mega VP/PP variants with light table UBO
 	bool m_UseMegaCameraUBO;        // Select mega VP/PP variants with camera state UBO
 	bool m_UseMegaObjectUBO;        // Select mega VP/PP variants with per-object UBO (implies table+camera)
 	bool m_UseMegaMaterialUBO;      // Select mega VP/PP variants with per-material UBO
 	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2][2][2];
-	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2][2];
+	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2][2][2];
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;

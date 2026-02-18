@@ -34,7 +34,11 @@
  *     Different uniform sets require separate variants. Only valid when
  *     fogOrPpl=1 (PPL needs ecPos).
  *
- *   Result: m_MegaPP[fogOrPpl][cube][specular][tableUBO] (max 12 base variants)
+ *   - ppClip (on/off): Whether PP does clip plane discard. ppClip=1 implies
+ *     fogOrPpl=1 (needs ecPos varying). Uses nlClipPlaneMask and clipPlane0-5
+ *     from camera UBO or individual uniforms. Free split.
+ *
+ *   Result: m_MegaPP[fogOrPpl][cube][specular][ppClip][tableUBO] (max 20 base variants)
  *
  *   FOLDS (uniform-controlled branching — zero GPU cost):
  *   - Shader type (Normal/UserColor/Specular/LightMap): 4 short paths in
@@ -76,15 +80,17 @@ static const char *s_LightFacAccess[8] = {
 	"nlLightFactors45.x", "nlLightFactors45.y", "nlLightFactors45.z", "nlLightFactors45.w"
 };
 
-void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular, bool tableUBO, bool cameraUBO, bool objectUBO, bool materialUBO)
+void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular, bool ppClip, bool tableUBO, bool cameraUBO, bool objectUBO, bool materialUBO)
 {
 	// Object UBO implies camera UBO
 	if (objectUBO) { cameraUBO = true; }
+	// ppClip implies fogOrPpl (needs ecPos varying)
+	if (ppClip) { fogOrPpl = true; }
 
 	std::stringstream ss;
 	ss << "// Megashader Pixel Program";
 	ss << " (fogOrPpl=" << (int)fogOrPpl << ", cube=" << (int)cube << ", specular=" << (int)specular
-	   << ", tableUBO=" << (int)tableUBO
+	   << ", ppClip=" << (int)ppClip << ", tableUBO=" << (int)tableUBO
 	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
 	   << ", materialUBO=" << (int)materialUBO << ")" << std::endl;
 	ss << std::endl;
@@ -154,6 +160,15 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		ss << "uniform vec4 fogColor;" << std::endl;
 		ss << "uniform float fogDensity;" << std::endl;
 		ss << "uniform vec3 cameraForward;" << std::endl;
+		ss << std::endl;
+	}
+
+	// PP clip plane uniforms (individual uniforms only when no camera UBO)
+	if (ppClip && !cameraUBO)
+	{
+		ss << "uniform int nlClipPlaneMask;" << std::endl;
+		for (int i = 0; i < 6; ++i)
+			ss << "uniform vec4 clipPlane" << i << ";" << std::endl;
 		ss << std::endl;
 	}
 
@@ -378,6 +393,25 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 
 	// --- main ---
 	ss << "void main(void) {" << std::endl;
+
+	// PP clip plane discard (early out before any texture work)
+	if (ppClip)
+	{
+		ss << "  {" << std::endl;
+		ss << "    vec4 clipPos;" << std::endl;
+		if (cameraUBO)
+		{
+			ss << "    if (nlWorldSpacePosition != 0)" << std::endl;
+			ss << "      clipPos = viewMatrix * vec4(ecPos.xyz / ecPos.w, 1.0);" << std::endl;
+			ss << "    else" << std::endl;
+		}
+		ss << "      clipPos = vec4(ecPos.xyz / ecPos.w, 1.0);" << std::endl;
+		for (int i = 0; i < 6; ++i)
+			ss << "    if ((nlClipPlaneMask & " << (1 << i) << ") != 0 && dot(clipPlane" << i << ", clipPos) < 0.0) discard;" << std::endl;
+		ss << "  }" << std::endl;
+		ss << std::endl;
+	}
+
 	ss << "  fragColor = diffuseColor;" << std::endl;
 	ss << std::endl;
 
@@ -646,51 +680,58 @@ bool CDriverGL3::initMegaPixelPrograms()
 		{
 			for (int specular = 0; specular < 2; ++specular)
 			{
-				for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
+				for (int ppClip = 0; ppClip < 2; ++ppClip)
 				{
-					// tableUBO only valid when fogOrPpl (PPL needs ecPos)
-					if (tableUBO && !fogOrPpl)
+					// ppClip only valid when fogOrPpl (needs ecPos varying)
+					if (ppClip && !fogOrPpl)
 						continue;
 
-					for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
+					for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
 					{
-						for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
+						// tableUBO only valid when fogOrPpl (PPL needs ecPos)
+						if (tableUBO && !fogOrPpl)
+							continue;
+
+						for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
 						{
-							for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
+							for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
 							{
-								// objectUBO implies cameraUBO
-								if (objectUBO && !cameraUBO)
-									continue;
-
-								// objectUBO implies lightTableUBO when PPL code is active
-								// (non-table PPL references nlPpLightMode which isn't in NlModel UBO)
-								if (objectUBO && !tableUBO && fogOrPpl)
-									continue;
-
-								std::string result;
-								megaPPGenerate(result, fogOrPpl != 0, cube != 0, specular != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
-
-								CPixelProgram *pp = new CPixelProgram();
-								IProgram::CSource *src = new IProgram::CSource();
-								src->Profile = IProgram::glsl330f;
-								src->DisplayName = NLMISC::toString("Mega PP (fogOrPpl=%d, cube=%d, spec=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", fogOrPpl, cube, specular, tableUBO, cameraUBO, objectUBO, materialUBO);
-								src->Features.UsesLightTableUBO = (tableUBO != 0);
-								src->Features.UsesCameraUBO = (cameraUBO != 0);
-								src->Features.UsesObjectUBO = (objectUBO != 0);
-								src->Features.UsesMaterialUBO = (materialUBO != 0);
-								src->setSource(result);
-								pp->addSource(src);
-
-								nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
-
-								if (!compilePixelProgram(pp))
+								for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
 								{
-									nlwarning("GL3: Mega PP compilation failed (%s)", src->DisplayName.c_str());
-									delete pp;
-									return false;
-								}
+									// objectUBO implies cameraUBO
+									if (objectUBO && !cameraUBO)
+										continue;
 
-								m_MegaPP[fogOrPpl][cube][specular][tableUBO][cameraUBO][objectUBO][materialUBO] = pp;
+									// objectUBO implies lightTableUBO when PPL code is active
+									// (non-table PPL references nlPpLightMode which isn't in NlModel UBO)
+									if (objectUBO && !tableUBO && fogOrPpl)
+										continue;
+
+									std::string result;
+									megaPPGenerate(result, fogOrPpl != 0, cube != 0, specular != 0, ppClip != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
+
+									CPixelProgram *pp = new CPixelProgram();
+									IProgram::CSource *src = new IProgram::CSource();
+									src->Profile = IProgram::glsl330f;
+									src->DisplayName = NLMISC::toString("Mega PP (fogOrPpl=%d, cube=%d, spec=%d, ppClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", fogOrPpl, cube, specular, ppClip, tableUBO, cameraUBO, objectUBO, materialUBO);
+									src->Features.UsesLightTableUBO = (tableUBO != 0);
+									src->Features.UsesCameraUBO = (cameraUBO != 0);
+									src->Features.UsesObjectUBO = (objectUBO != 0);
+									src->Features.UsesMaterialUBO = (materialUBO != 0);
+									src->setSource(result);
+									pp->addSource(src);
+
+									nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+									if (!compilePixelProgram(pp))
+									{
+										nlwarning("GL3: Mega PP compilation failed (%s)", src->DisplayName.c_str());
+										delete pp;
+										return false;
+									}
+
+									m_MegaPP[fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO] = pp;
+								}
 							}
 						}
 					}
@@ -743,7 +784,9 @@ bool CDriverGL3::setupMegaPixelProgram()
 			pplActive = true;
 		}
 	}
-	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive) ? 1 : 0;
+	bool ppClipActive = m_PPClipPlanes && (m_VPBuiltinCurrent.ClipPlaneMask != 0);
+	int ppClip = ppClipActive ? 1 : 0;
+	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive || ppClipActive) ? 1 : 0;
 	// Cube variant: any cubemap in the material's sampler modes
 	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
 	int specular = m_VPSpecularOutput ? 1 : 0;
@@ -762,7 +805,7 @@ bool CDriverGL3::setupMegaPixelProgram()
 	m_ProgramUsesObjectUBO[PixelProgram] = objectUBO;
 	m_ProgramUsesMaterialUBO[PixelProgram] = materialUBO;
 
-	CPixelProgram *pp = m_MegaPP[fogOrPpl][cube][specular][tableUBO][cameraUBO][objectUBO][materialUBO];
+	CPixelProgram *pp = m_MegaPP[fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(pp);
 
 	if (!activePixelProgram(pp, true))

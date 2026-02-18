@@ -615,10 +615,13 @@ void CDriverGL3::enableClipPlane(uint index, bool enable)
 	_ClipPlaneEnabled[index] = enable;
 
 	// Enable/disable GL clip distance (for builtin VPs that write gl_ClipDistance)
-	if (enable)
-		glEnable(GL_CLIP_DISTANCE0 + index);
-	else
-		glDisable(GL_CLIP_DISTANCE0 + index);
+	if (!m_PPClipPlanes)
+	{
+		if (enable)
+			glEnable(GL_CLIP_DISTANCE0 + index);
+		else
+			glDisable(GL_CLIP_DISTANCE0 + index);
+	}
 
 	// Trigger VP regeneration to include/exclude gl_ClipDistance output
 	touchClipPlaneVP(index, enable);
