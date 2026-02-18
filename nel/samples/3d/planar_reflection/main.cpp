@@ -568,6 +568,16 @@ void CPlanarReflectionDemo::run()
 			if (viewScr.y > viewAabbMaxY) viewAabbMaxY = viewScr.y;
 		}
 
+		// Clamp to visible screen area before margin/snapping
+		reflAabbMinX = max(0.f, reflAabbMinX);
+		reflAabbMaxX = min(1.f, reflAabbMaxX);
+		reflAabbMinY = max(0.f, reflAabbMinY);
+		reflAabbMaxY = min(1.f, reflAabbMaxY);
+		viewAabbMinX = max(0.f, viewAabbMinX);
+		viewAabbMaxX = min(1.f, viewAabbMaxX);
+		viewAabbMinY = max(0.f, viewAabbMinY);
+		viewAabbMaxY = min(1.f, viewAabbMaxY);
+
 		// Add margin (configurable, in grid cells)
 		float marginScreen = rtMargin / float(gridN);
 		reflAabbMinX -= marginScreen;
