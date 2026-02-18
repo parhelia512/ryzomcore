@@ -1004,79 +1004,108 @@ bool CDriverGL3::setupTextureEx (ITexture& tex, bool bUpload, bool &bAllUploaded
 		}
 		// b. Load part of the texture case.
 		//==================================
-		// Replace parts of a compressed image. Maybe don't work with the actual system of invalidateRect()...
+		// Uses a PBO (Pixel Buffer Object) for async upload. Each rect is orphaned+mapped into
+		// the PBO, then glTexSubImage2D reads from the PBO asynchronously via DMA, avoiding
+		// pipeline stalls that occur with raw CPU pointer uploads.
 		else if (mustLoadPart && !gltext->Compressed)
 		{
 			// Regenerate wanted part of the texture.
 			tex.generate();
 
-			if (tex.getSize()>0)
+			if (tex.getSize() > 0)
 			{
 				// Get the correct texture format from texture...
 				//===============================================
-				bool	dummy;
-				GLint	glfmt= getGlTextureFormat(tex, dummy);
-				GLint	glSrcFmt= getGlSrcTextureFormat(tex, glfmt);
-				GLenum  glSrcType= getGlSrcTextureComponentType(tex,glSrcFmt);
+				bool dummy;
+				GLint glfmt = getGlTextureFormat(tex, dummy);
+				GLint glSrcFmt = getGlSrcTextureFormat(tex, glfmt);
+				GLenum glSrcType = getGlSrcTextureComponentType(tex, glSrcFmt);
 
-				sint	nMipMaps;
-				if (glSrcFmt==GL_RGBA && tex.getPixelFormat()!=CBitmap::RGBA)
+				sint nMipMaps;
+				if (glSrcFmt == GL_RGBA && tex.getPixelFormat() != CBitmap::RGBA)
 					tex.convertToType(CBitmap::RGBA);
 				if (tex.mipMapOn())
 				{
-					bool	hadMipMap= tex.getMipMapCount()>1;
+					bool hadMipMap = tex.getMipMapCount() > 1;
 					tex.buildMipMaps();
-					nMipMaps= tex.getMipMapCount();
-					// If the texture had no mipmap before, release them.
+					nMipMaps = tex.getMipMapCount();
 					if (!hadMipMap)
-					{
 						tex.releaseMipMaps();
-					}
 				}
 				else
-					nMipMaps= 1;
+					nMipMaps = 1;
+
+				// Bind PBO for async upload
+				nglBindBuffer(GL_PIXEL_UNPACK_BUFFER, _PixelUploadPBO);
 
 				// For all rect, update the texture/mipmap.
 				//===============================================
-				list<NLMISC::CRect>::iterator	itRect;
-				for (itRect=tex._ListInvalidRect.begin(); itRect!=tex._ListInvalidRect.end(); itRect++)
+				list<NLMISC::CRect>::iterator itRect;
+				for (itRect = tex._ListInvalidRect.begin(); itRect != tex._ListInvalidRect.end(); itRect++)
 				{
-					CRect	&rect= *itRect;
-					sint	x0= rect.X;
-					sint	y0= rect.Y;
-					sint	x1= rect.X+rect.Width;
-					sint	y1= rect.Y+rect.Height;
+					CRect &rect = *itRect;
+					sint x0 = rect.X;
+					sint y0 = rect.Y;
+					sint x1 = rect.X + rect.Width;
+					sint y1 = rect.Y + rect.Height;
 
 					// Fill mipmaps.
-					for (sint i=0;i<nMipMaps;i++)
+					for (sint i = 0; i < nMipMaps; i++)
 					{
-						void	*ptr= tex.getPixels(i).getPtr();
-						sint	w= tex.getWidth(i);
-						sint	h= tex.getHeight(i);
+						void *ptr = tex.getPixels(i).getPtr();
+						sint w = tex.getWidth(i);
+						sint h = tex.getHeight(i);
 						clamp(x0, 0, w);
 						clamp(y0, 0, h);
 						clamp(x1, x0, w);
 						clamp(y1, y0, h);
-						glPixelStorei(GL_UNPACK_ROW_LENGTH, w);
-						glPixelStorei(GL_UNPACK_SKIP_ROWS, y0);
-						glPixelStorei(GL_UNPACK_SKIP_PIXELS, x0);
+
+						sint rectW = x1 - x0;
+						sint rectH = y1 - y0;
+						if (rectW <= 0 || rectH <= 0)
+							goto next_mipmap;
+
 						if (bUpload)
-							glTexSubImage2D (GL_TEXTURE_2D, i, x0, y0, x1-x0, y1-y0, glSrcFmt,glSrcType, ptr);
-						else
-							glTexSubImage2D (GL_TEXTURE_2D, i, x0, y0, x1-x0, y1-y0, glSrcFmt,glSrcType, NULL);
+						{
+							sint pixelSize = (sint)(tex.getPixels(i).size() / (w * h));
+							sint rectBytes = rectW * rectH * pixelSize;
 
+							// Orphan PBO (driver allocates fresh storage, no sync needed)
+							nglBufferData(GL_PIXEL_UNPACK_BUFFER, rectBytes, NULL, GL_STREAM_DRAW);
 
+							// Map and copy rect rows into packed PBO
+							void *pboPtr = nglMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, rectBytes,
+								GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+							if (pboPtr)
+							{
+								uint8 *src = (uint8 *)ptr + y0 * w * pixelSize + x0 * pixelSize;
+								sint srcStride = w * pixelSize;
+								sint dstStride = rectW * pixelSize;
+								for (sint row = 0; row < rectH; ++row)
+									memcpy((uint8 *)pboPtr + row * dstStride, src + row * srcStride, dstStride);
+								nglUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+							}
+
+							// Async upload from PBO (data is packed, no row padding)
+							glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+							glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+							glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+							glTexSubImage2D(GL_TEXTURE_2D, i, x0, y0, rectW, rectH, glSrcFmt, glSrcType, NULL);
+						}
+
+					next_mipmap:
 						// Next mipmap!!
 						// floor .
-						x0= x0/2;
-						y0= y0/2;
+						x0 = x0 / 2;
+						y0 = y0 / 2;
 						// ceil.
-						x1= (x1+1)/2;
-						y1= (y1+1)/2;
+						x1 = (x1 + 1) / 2;
+						y1 = (y1 + 1) / 2;
 					}
 				}
 
-				// Reset the transfer mode...
+				// Unbind PBO, reset pixel store state
+				nglBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 				glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 				glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
 				glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);

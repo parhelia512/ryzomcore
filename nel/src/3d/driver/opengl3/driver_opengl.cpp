@@ -320,6 +320,7 @@ CDriverGL3::CDriverGL3()
 	_SwapBufferInFlight = 0;
 	for (size_t i = 0; i < NL3D_GL3_FRAME_QUEUE_MAX; ++i)
 		_SwapBufferSync[i] = 0;
+	_PixelUploadPBO = 0;
 
 	_LightMapDynamicLightEnabled = false;
 	_LightMapDynamicLightDirty= false;
@@ -513,6 +514,7 @@ bool CDriverGL3::setupDisplay()
 	nglGenBuffers(1, &_CameraUBOId);
 	nglGenBuffers(1, &_ObjectUBOId);
 	nglGenBuffers(1, &_OverrideMaterialUBOId);
+	nglGenBuffers(1, &_PixelUploadPBO);
 
 	if (m_UseMegaShaders)
 	{
@@ -858,6 +860,11 @@ bool CDriverGL3::release()
 	{
 		nglDeleteBuffers(1, &_OverrideMaterialUBOId);
 		_OverrideMaterialUBOId = 0;
+	}
+	if (_PixelUploadPBO)
+	{
+		nglDeleteBuffers(1, &_PixelUploadPBO);
+		_PixelUploadPBO = 0;
 	}
 
 	// Call IDriver::release() before, to destroy textures, shaders and VBs...

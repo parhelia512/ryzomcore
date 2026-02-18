@@ -1479,6 +1479,7 @@ protected:
 private:
 	uint64					_SwapBufferInFlight;
 	GLsync					_SwapBufferSync[NL3D_GL3_FRAME_QUEUE_MAX];
+	GLuint					_PixelUploadPBO;
 public:
 	void incrementResetCounter() { ++_ResetCounter; }
 	bool isWndActive() const { return _WndActive; }
