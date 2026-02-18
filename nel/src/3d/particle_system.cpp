@@ -41,7 +41,7 @@
 // tmp
 #include "nel/3d/particle_system_model.h"
 #include "nel/3d/scene.h"
-#include "nel/3d/ps_attrib_maker_iterators.h" // for lowbias32
+#include "nel/misc/wang_hash.h" // for lowbias32
 
 
 #ifdef NL_DEBUG
@@ -58,6 +58,8 @@
 
 namespace NL3D
 {
+
+using NLMISC::lowbias32;
 
 uint32										CParticleSystem::NbParticlesDrawn = 0;
 UPSSoundServer *							CParticleSystem::_SoundServer = NULL;

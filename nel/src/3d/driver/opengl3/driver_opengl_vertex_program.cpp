@@ -130,12 +130,12 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 {
 	uint32 h;
 
-	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Fog ? (1 << 17) : 0) | (v.VertexColorLighted ? (1 << 18) : 0) | ((uint32)v.ClipPlaneMask << 19) | (v.Normalize ? (1 << 25) : 0) | (v.WorldSpaceNormal ? (1 << 26) : 0) | (v.WorldSpacePosition ? (1 << 27) : 0) | (vpHasPPL(v) ? (1 << 28) : 0) | (v.PPClipPlane ? (1 << 29) : 0));
+	h = NLMISC::lowbias32(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Fog ? (1 << 17) : 0) | (v.VertexColorLighted ? (1 << 18) : 0) | ((uint32)v.ClipPlaneMask << 19) | (v.Normalize ? (1 << 25) : 0) | (v.WorldSpaceNormal ? (1 << 26) : 0) | (v.WorldSpacePosition ? (1 << 27) : 0) | (vpHasPPL(v) ? (1 << 28) : 0) | (v.PPClipPlane ? (1 << 29) : 0));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			h = NLMISC::wangHash(h ^ vpLightMode(v, i));
+			h = NLMISC::lowbias32(h ^ vpLightMode(v, i));
 	for (sint i = 0; i < NL3D::IDRV_MAT_MAXTEXTURES; ++i)
-		h = NLMISC::wangHash(h ^ v.TexGenMode[i]);
+		h = NLMISC::lowbias32(h ^ v.TexGenMode[i]);
 
 	nlctassert(sizeof(size_t) >= sizeof(uint32));
 	return (size_t)h;

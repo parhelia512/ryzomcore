@@ -160,16 +160,16 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 	uint64 h64;
 
 	// Material state
-	h32 = NLMISC::wangHash((uint32)v.Shader);
+	h32 = NLMISC::lowbias32((uint32)v.Shader);
 	h64 = NLMISC::wangHash64(((uint64)v.Flags) | ((uint64)v.TextureActive << 32));
 	h64 = NLMISC::wangHash64(h64 ^ (uint64)v.TexSamplerMode);
 	uint maxTex = NL3D::NLDRIVERGL3::maxTextures(v.Shader);
 	if (NL3D::NLDRIVERGL3::useTexEnv(v.Shader))
 		for (uint stage = 0; stage < maxTex; ++stage)
-			h32 = NLMISC::wangHash(h32 ^ (uint32)v.TexEnvMode[stage]);
+			h32 = NLMISC::lowbias32(h32 ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0) | (v.PPL ? 1 << 22 : 0) | (v.PPLVertexColor ? 1 << 23 : 0) | (v.PPClipPlane ? 1 << 24 : 0)));
+	h32 = NLMISC::lowbias32(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0) | (v.PPL ? 1 << 22 : 0) | (v.PPLVertexColor ? 1 << 23 : 0) | (v.PPClipPlane ? 1 << 24 : 0)));
 
 	h64 = h64 ^ h32; // NLMISC::wangHash64(h64 ^ h32);
 	nlctassert(sizeof(size_t) >= sizeof(uint64));
@@ -178,18 +178,18 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 	uint32 h;
 
 	// Material state
-	h = NLMISC::wangHash((uint32)v.Shader);
-	h = NLMISC::wangHash(h ^ (uint32)v.Flags);
-	h = NLMISC::wangHash(h ^ (uint32)v.TextureActive);
-	h = NLMISC::wangHash(h ^ (uint32)(v.TexSamplerMode & 0xFFFFFFFF));
-	h = NLMISC::wangHash(h ^ (uint32)(v.TexSamplerMode >> 32));
+	h = NLMISC::lowbias32((uint32)v.Shader);
+	h = NLMISC::lowbias32(h ^ (uint32)v.Flags);
+	h = NLMISC::lowbias32(h ^ (uint32)v.TextureActive);
+	h = NLMISC::lowbias32(h ^ (uint32)(v.TexSamplerMode & 0xFFFFFFFF));
+	h = NLMISC::lowbias32(h ^ (uint32)(v.TexSamplerMode >> 32));
 	uint maxTex = NL3D::NLDRIVERGL3::maxTextures(v.Shader);
 	if (NL3D::NLDRIVERGL3::useTexEnv(v.Shader))
 		for (uint stage = 0; stage < maxTex; ++stage)
-			h = NLMISC::wangHash(h ^ (uint32)v.TexEnvMode[stage]);
+			h = NLMISC::lowbias32(h ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0) | (v.PPL ? 1 << 22 : 0) | (v.PPLVertexColor ? 1 << 23 : 0) | (v.PPClipPlane ? 1 << 24 : 0)));
+	h = NLMISC::lowbias32(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0) | (v.PPL ? 1 << 22 : 0) | (v.PPLVertexColor ? 1 << 23 : 0) | (v.PPClipPlane ? 1 << 24 : 0)));
 
 	nlctassert(sizeof(size_t) >= sizeof(uint32));
 	return (size_t)h;

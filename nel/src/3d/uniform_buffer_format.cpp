@@ -113,8 +113,8 @@ sint CUniformBufferFormat::push(const std::string &name, TType type, sint count)
 #if (HAVE_X86_64)
 	m_Hash = NLMISC::wangHash64(m_Hash ^ ((uint64)type | ((uint64)count << 32)));
 #else
-	m_Hash = NLMISC::wangHash(m_Hash ^ (uint32)type);
-	m_Hash = NLMISC::wangHash(m_Hash ^ (uint32)count);
+	m_Hash = NLMISC::lowbias32(m_Hash ^ (uint32)type);
+	m_Hash = NLMISC::lowbias32(m_Hash ^ (uint32)count);
 #endif
 	return alignOffset;
 }
@@ -164,8 +164,8 @@ sint CUniformBufferFormat::pushStruct(const std::string &name, const std::string
 #if (HAVE_X86_64)
 	m_Hash = NLMISC::wangHash64(m_Hash ^ ((uint64)structFormat.hash() | ((uint64)count << 32)));
 #else
-	m_Hash = NLMISC::wangHash(m_Hash ^ (uint32)structFormat.hash());
-	m_Hash = NLMISC::wangHash(m_Hash ^ (uint32)count);
+	m_Hash = NLMISC::lowbias32(m_Hash ^ (uint32)structFormat.hash());
+	m_Hash = NLMISC::lowbias32(m_Hash ^ (uint32)count);
 #endif
 
 	return alignOffset;
