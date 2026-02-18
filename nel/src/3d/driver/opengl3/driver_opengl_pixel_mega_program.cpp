@@ -100,8 +100,8 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	{
 		if (i == PrimaryColor || i == SecondaryColor)
 			continue;
-		if (fogOrPpl && i == VaryingLocationRawVertexColor)
-			continue; // Slot used by rawVertexColor
+		if (fogOrPpl && i == VaryingLocationVertexColor)
+			continue; // Slot used by vertexColor
 		ss << "layout(location = " << i << ") smooth in vec4 " << g_AttribNames[i] << ";" << std::endl;
 	}
 	ss << std::endl;
@@ -109,7 +109,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	if (fogOrPpl)
 	{
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
-		ss << "layout(location = " << VaryingLocationRawVertexColor << ") smooth in vec4 rawVertexColor;" << std::endl;
+		ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
 	}
 	ss << "layout(location = " << VaryingLocationDiffuseColor << ") smooth in vec4 diffuseColor;" << std::endl;
 	if (specular)
@@ -389,7 +389,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		const char *matShinStr = materialUBO ? "materialShininess" : "nlMaterialShininess";
 
 		ss << "  vec4 pplSpecAccum = vec4(0.0);" << std::endl;
-		// When VertexColorLighted, vertex color is the diffuse source (multiplied via rawVertexColor below).
+		// When VertexColorLighted, vertex color is the diffuse source (multiplied via vertexColor below).
 		// Material diffuse must be skipped in the light equation, matching VP behavior (effectiveDiffuse = 1.0).
 		ss << "  vec4 pplMatDiff = (nlVertexColorLighted != 0) ? vec4(1.0) : " << matDiffStr << ";" << std::endl;
 		ss << "  if (nlNumPerPixelLights > 0) {" << std::endl;
@@ -449,9 +449,10 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 			}
 		}
 
-		// rawVertexColor carries the raw vertex color when VertexColorLighted + PPL,
-		// vec4(1) otherwise. Multiply combined lighting by it for GL_COLOR_MATERIAL behavior.
-		ss << "    fragColor.rgb = clamp((fragColor.rgb + pplDiff.rgb) * rawVertexColor.rgb, 0.0, 1.0);" << std::endl;
+		// vertexColor carries the vertex color when VertexColorLighted + PPL,
+		// vec4(1) otherwise. VP already multiplied its lights by vertex color;
+		// multiply only the PPL term here (distributes over addition).
+		ss << "    fragColor.rgb = clamp(fragColor.rgb + pplDiff.rgb * vertexColor.rgb, 0.0, 1.0);" << std::endl;
 		ss << "  }" << std::endl;
 		ss << std::endl;
 	}

@@ -75,7 +75,7 @@ struct CPPBuiltin
 	bool WorldSpacePosition; // Whether VP outputs world-space position (affects fog calculation)
 	bool LightMapScale; // Whether PP uses nlLightMapScale uniform (lightmap x2 mode)
 	bool PPL; // Whether PP has per-pixel lighting code (computeLightPP, ecPos/normal varyings)
-	bool PPLVertexColor; // Whether PP declares rawVertexColor varying and multiplies by it (PPL + VertexColorLighted)
+	bool PPLVertexColor; // Whether PP declares vertexColor varying and multiplies PPL by it (PPL + VertexColorLighted)
 
 	// Material-derived state (packed into material UBO when active)
 	CMaterial::TShader Shader;
@@ -126,7 +126,7 @@ enum TAttribOffset
 // VB-sourced varyings use their TAttribOffset index as the location.
 // ecPos and diffuseColor reuse slots that are never occupied by VB varyings.
 static const int VaryingLocationEcPos = Position; // = 0, Position is never output as a varying
-static const int VaryingLocationRawVertexColor = Weight; // = 1, raw vertex color for PPL modulation
+static const int VaryingLocationVertexColor = Weight; // = 1, vertex color for PPL modulation
 static const int VaryingLocationNormal = Normal; // = 2, world-space normal (when WorldSpaceNormal is set)
 static const int VaryingLocationDiffuseColor = PrimaryColor; // = 3, PrimaryColor is always skipped
 static const int VaryingLocationSpecularColor = SecondaryColor; // = 4, SecondaryColor is always skipped

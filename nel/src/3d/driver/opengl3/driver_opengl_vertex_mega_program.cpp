@@ -201,7 +201,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 		{
 			ss << "uniform int nlWorldSpacePosition;" << std::endl;
 			// VP light upload is shifted to slot 0, but we still need the count
-			// to decide whether to split rawVertexColor for PPL vertex color correctness
+			// to decide whether to split vertexColor for PPL vertex color correctness
 			ss << "uniform int nlNumPerPixelLights;" << std::endl;
 		}
 	}
@@ -225,14 +225,14 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	{
 		if (i == PrimaryColor || i == SecondaryColor)
 			continue;
-		if (fogOrPpl && i == VaryingLocationRawVertexColor)
-			continue; // Slot used by rawVertexColor
+		if (fogOrPpl && i == VaryingLocationVertexColor)
+			continue; // Slot used by vertexColor
 		ss << "layout(location = " << i << ") smooth out vec4 " << g_AttribNames[i] << ";" << std::endl;
 	}
 	if (fogOrPpl)
 	{
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
-		ss << "layout(location = " << VaryingLocationRawVertexColor << ") smooth out vec4 rawVertexColor;" << std::endl;
+		ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
 	}
 	ss << "layout(location = " << VaryingLocationDiffuseColor << ") smooth out vec4 diffuseColor;" << std::endl;
 	ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
@@ -292,8 +292,8 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 		ss << "    ecPos = vec4(transpose(mat3(viewMatrix)) * (ecPos4.xyz - viewMatrix[3].xyz * ecPos4.w), ecPos4.w);" << std::endl;
 		ss << "  else" << std::endl;
 		ss << "    ecPos = ecPos4;" << std::endl;
-		// Default rawVertexColor to identity; overwritten when VertexColorLighted + PPL
-		ss << "  rawVertexColor = vec4(1.0);" << std::endl;
+		// Default vertexColor to identity; overwritten when VertexColorLighted + PPL
+		ss << "  vertexColor = vec4(1.0);" << std::endl;
 	}
 	ss << std::endl;
 
@@ -302,8 +302,8 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	{
 		if (i == PrimaryColor || i == SecondaryColor)
 			continue;
-		if (fogOrPpl && i == VaryingLocationRawVertexColor)
-			continue; // Slot used by rawVertexColor
+		if (fogOrPpl && i == VaryingLocationVertexColor)
+			continue; // Slot used by vertexColor
 		if (i == Normal)
 		{
 			ss << "  if ((nlVertexFormat & NL_VP_NORMAL_FLAG) != 0) {" << std::endl;
@@ -421,15 +421,15 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	ss << "    diffuseVertex.rgb = diffuseVertex.rgb + selfIllumination.rgb;" << std::endl;
 	ss << std::endl;
 
-	// Primary color × lighting interaction
+	// Primary color × lighting interaction (GL_COLOR_MATERIAL behavior)
+	// When VertexColorLighted: vertex color replaces material diffuse, multiply here.
+	// When PPL active: also pass vertex color to PP via vertexColor for PPL term.
 	if (fogOrPpl)
 	{
-		// When PPL active: don't multiply here — pass raw vertex color to PP via rawVertexColor
 		ss << "    if ((nlVertexFormat & NL_VP_PRIMARY_COLOR_FLAG) != 0 && nlVertexColorLighted != 0) {" << std::endl;
+		ss << "      diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
 		ss << "      if (nlNumPerPixelLights > 0)" << std::endl;
-		ss << "        rawVertexColor = vprimaryColor;" << std::endl;
-		ss << "      else" << std::endl;
-		ss << "        diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+		ss << "        vertexColor = vprimaryColor;" << std::endl;
 		ss << "    }" << std::endl;
 	}
 	else
@@ -449,12 +449,8 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 	ss << "  }" << std::endl;
 	ss << std::endl;
 
-	// Combine diffuse: clamp before texture when no PPL, pass unclamped when PPL active
-	// (PP will sum PPL lights and clamp once at the end)
-	if (fogOrPpl)
-		ss << "  diffuseColor = (nlNumPerPixelLights > 0) ? diffuseVertex : clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
-	else
-		ss << "  diffuseColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
+	// Combine diffuse (clamp before texture), specular passed separately (added post-texture in PP)
+	ss << "  diffuseColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
 	ss << "  specularColor = clamp(vec4(specularVertex.rgb * specularVertex.a, 0.0), 0.0, 1.0);" << std::endl;
 	ss << std::endl;
 

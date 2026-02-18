@@ -546,7 +546,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 	for (int i = Weight; i < NumOffsets; i++)
 	{
 		// Skip locations used by PPL/fog varyings (declared separately below)
-		if (desc.PPLVertexColor && i == VaryingLocationRawVertexColor)
+		if (desc.PPLVertexColor && i == VaryingLocationVertexColor)
 			continue;
 		if (desc.PPL && i == VaryingLocationNormal)
 			continue;
@@ -626,7 +626,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 	{
 		ss << "layout(location = " << VaryingLocationNormal << ") smooth in vec4 normal;" << std::endl;
 		if (desc.PPLVertexColor)
-			ss << "layout(location = " << VaryingLocationRawVertexColor << ") smooth in vec4 rawVertexColor;" << std::endl;
+			ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
 
 		ss << "uniform int nlNumPerPixelLights;" << std::endl;
 		ss << "uniform vec4 nlMaterialDiffuse;" << std::endl;
@@ -749,7 +749,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 			ss << "      pplDiff, pplSpecAccum);" << std::endl;
 		}
 		if (desc.PPLVertexColor)
-			ss << "  fragColor.rgb = clamp((fragColor.rgb + pplDiff.rgb) * rawVertexColor.rgb, 0.0, 1.0);" << std::endl;
+			ss << "  fragColor.rgb = clamp(fragColor.rgb + pplDiff.rgb * vertexColor.rgb, 0.0, 1.0);" << std::endl;
 		else
 			ss << "  fragColor.rgb = clamp(fragColor.rgb + pplDiff.rgb, 0.0, 1.0);" << std::endl;
 		ss << "}" << std::endl;
