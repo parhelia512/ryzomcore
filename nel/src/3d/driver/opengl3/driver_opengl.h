@@ -630,6 +630,7 @@ public:
 		const sint16 *tableIndices,
 		const uint8 *factors,
 		uint numLights,
+		uint numPerPixelLights,
 		NLMISC::CRGBA ambient);
 
 	virtual void			setAmbientColor (CRGBA color);
@@ -974,6 +975,7 @@ private:
 	sint16						_LightTableObjIndices[MaxLight];
 	float						_LightTableObjFactors[MaxLight];
 	uint						_LightTableObjCount;
+	uint						_NumPerPixelLights; // First N lights evaluated per-pixel in PP (0 = all VP)
 
 	// Camera/global state UBO (viewMatrix, fog, clipPlanes, pzbCameraPos)
 	GLuint						_CameraUBOId;
@@ -1388,15 +1390,18 @@ private:
 	CVPBuiltin m_VPBuiltinCurrent;
 	bool m_VPBuiltinTouched;
 
-	// Megashader support: m_MegaVP[fog][clip][table][cameraUBO][objectUBO][materialUBO]
-	//                     m_MegaPP[fog][cube][specular][cameraUBO][objectUBO][materialUBO]
+	// Megashader support:
+	// m_MegaVP[fogOrPpl][clip][tableUBO][cameraUBO][objectUBO][materialUBO]
+	// m_MegaPP[fogOrPpl][cube][specular][tableUBO][cameraUBO][objectUBO][materialUBO]
+	//   fogOrPpl: 0=no ecPos/fog/PPL (UI/sky); 1=has ecPos, fog+PPL runtime-gated
+	//   tableUBO: 0=non-table lights; 1=light table UBO
 	bool m_UseMegaShaders;          // Select mega VP/PP variants (false = per-material compiled shaders)
 	bool m_UseMegaLightTableUBO;    // Select mega VP/PP variants with light table UBO
 	bool m_UseMegaCameraUBO;        // Select mega VP/PP variants with camera state UBO
 	bool m_UseMegaObjectUBO;        // Select mega VP/PP variants with per-object UBO (implies table+camera)
 	bool m_UseMegaMaterialUBO;      // Select mega VP/PP variants with per-material UBO
 	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2][2][2];
-	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2];
+	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2][2];
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;
@@ -1408,7 +1413,7 @@ private:
 	bool m_VPWorldSpacePositionOutput;
 
 	// Per-program UBO usage flags (indexed by IDriver::TProgram)
-	static const uint NumTProgram = 3;
+	static const uint NumTProgram = IDriver::ProgramNb;
 	bool m_ProgramUsesLightTableUBO[NumTProgram]; // Program reads from NlLightTable UBO
 	bool m_ProgramUsesCameraUBO[NumTProgram];     // Program reads camera/fog/clip from NlCamera UBO
 	bool m_ProgramUsesObjectUBO[NumTProgram];     // Program reads from NlModel UBO
@@ -1434,6 +1439,7 @@ private:
 		bool  ZeroLightFactors;       // Zero all light factors (pass > 0)
 		float MaterialDiffuse[4];
 		float MaterialSpecular[4];
+		float LightMapScale;          // x2 mode scale factor (1.0 or 2.0)
 	} _LightMapUBOOverride;
 
 	// EMBM support

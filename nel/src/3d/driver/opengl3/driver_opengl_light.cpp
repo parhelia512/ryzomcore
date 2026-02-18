@@ -191,6 +191,7 @@ void	CDriverGL3::setLights(
 	const sint16 *tableIndices,
 	const uint8 *factors,
 	uint numLights,
+	uint numPerPixelLights,
 	NLMISC::CRGBA ambient)
 {
 	H_AUTO_OGL(CDriverGL3_setLights)
@@ -206,6 +207,7 @@ void	CDriverGL3::setLights(
 	// Process each light (up to MaxLight)
 	uint count = std::min(numLights, (uint)MaxLight);
 	_LightTableObjCount = count;
+	_NumPerPixelLights = std::min(numPerPixelLights, count);
 	for (uint i = 0; i < count; ++i)
 	{
 		sint16 tableIndex = tableIndices[i];
@@ -658,7 +660,9 @@ struct CObjectUBOData
 	sint32 vertexFormat;           // 4
 	sint32 worldSpaceNormal;       // 4
 	sint32 worldSpacePosition;     // 4
-	sint32 _pad[3];                // 12 (pad to 16-byte std140 alignment)
+	sint32 numPerPixelLights;      // 4
+	sint32 fogEnabled;             // 4
+	sint32 _pad[1];                // 4 (pad to 16-byte std140 alignment)
 };                                 // 304
 static_assert(sizeof(CObjectUBOData) == 304, "Object UBO layout mismatch");
 
@@ -751,9 +755,9 @@ void CDriverGL3::uploadObjectUBO()
 	data.vertexFormat = (sint32)m_VPBuiltinCurrent.VertexFormat;
 	data.worldSpaceNormal = m_VPNormalOutput ? 1 : 0;
 	data.worldSpacePosition = m_VPWorldSpacePositionOutput ? 1 : 0;
+	data.numPerPixelLights = (sint32)_NumPerPixelLights;
+	data.fogEnabled = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	data._pad[0] = 0;
-	data._pad[1] = 0;
-	data._pad[2] = 0;
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CObjectUBOData);
@@ -787,8 +791,9 @@ struct CMaterialUBOData
 	sint32 nlShader;               // 4
 	sint32 nlTextureActive;        // 4
 	sint32 nlAlphaTest;            // 4
-	uint32 nlTexEnvMode[4];        // 16
-	sint32 _pad[3];               // 12
+	uint32 nlTexEnvMode[4];        // 16 (4 separate uint in GLSL, not an array — avoids std140 vec4 padding)
+	float nlLightMapScale;         // 4
+	sint32 _pad[2];               // 8
 };                                 // 96
 static_assert(sizeof(CMaterialUBOData) == 96, "Material UBO layout mismatch");
 
@@ -836,7 +841,8 @@ void CDriverGL3::uploadMaterialUBO()
 		data.nlAlphaTest = (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0;
 		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 			data.nlTexEnvMode[i] = matDrv->PPBuiltin.TexEnvMode[i];
-		data._pad[0] = 0; data._pad[1] = 0; data._pad[2] = 0;
+		data.nlLightMapScale = _LightMapUBOOverride.LightMapScale;
+		data._pad[0] = 0; data._pad[1] = 0;
 
 		const GLsizeiptr dataSize = sizeof(CMaterialUBOData);
 		nglBindBuffer(GL_UNIFORM_BUFFER, _OverrideMaterialUBOId);
@@ -911,10 +917,12 @@ void CDriverGL3::uploadMaterialUBO()
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		data.nlTexEnvMode[i] = matDrv->PPBuiltin.TexEnvMode[i];
 
+	// Lightmap scale (1.0 default; override path sets per-pass value)
+	data.nlLightMapScale = 1.0f;
+
 	// Padding
 	data._pad[0] = 0;
 	data._pad[1] = 0;
-	data._pad[2] = 0;
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CMaterialUBOData);

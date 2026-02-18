@@ -30,6 +30,19 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
+// Helper: get effective VP light mode at VP slot (shifted by NumPerPixelLights)
+static inline sint vpLightMode(const CVPBuiltin &desc, sint vpSlot)
+{
+	sint drvSlot = vpSlot + desc.NumPerPixelLights;
+	return (drvSlot < NL_OPENGL3_MAX_LIGHT) ? desc.LightMode[drvSlot] : -1;
+}
+
+// Whether PPL is active — changes shader structure (rawVertexColor varying)
+static inline bool vpHasPPL(const CVPBuiltin &desc)
+{
+	return desc.NumPerPixelLights > 0;
+}
+
 bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 {
 	if (left.VertexFormat != right.VertexFormat)
@@ -37,14 +50,22 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 	if (left.Lighting != right.Lighting)
 		return right.Lighting;
 	if (left.Lighting)
+	{
+		// Compare shifted VP light layout (NumPerPixelLights is implicit, not part of key)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			if (left.LightMode[i] != right.LightMode[i])
-				return left.LightMode[i] < right.LightMode[i];
+		{
+			sint lm = vpLightMode(left, i);
+			sint rm = vpLightMode(right, i);
+			if (lm != rm)
+				return lm < rm;
+		}
+		// PPL active changes shader structure (rawVertexColor varying output)
+		if (vpHasPPL(left) != vpHasPPL(right))
+			return vpHasPPL(right);
+	}
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
 			return left.TexGenMode[i] < right.TexGenMode[i];
-	if (left.Specular != right.Specular)
-		return right.Specular;
 	if (left.Fog != right.Fog)
 		return right.Fog;
 	if (left.VertexColorLighted != right.VertexColorLighted)
@@ -68,14 +89,18 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 	if (left.Lighting != right.Lighting)
 		return false;
 	if (left.Lighting)
+	{
+		// Compare shifted VP light layout (NumPerPixelLights is implicit, not part of key)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			if (left.LightMode[i] != right.LightMode[i])
+			if (vpLightMode(left, i) != vpLightMode(right, i))
 				return false;
+		// PPL active changes shader structure (rawVertexColor varying output)
+		if (vpHasPPL(left) != vpHasPPL(right))
+			return false;
+	}
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
 			return false;
-	if (left.Specular != right.Specular)
-		return false;
 	if (left.Fog != right.Fog)
 		return false;
 	if (left.VertexColorLighted != right.VertexColorLighted)
@@ -101,10 +126,10 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 {
 	uint32 h;
 
-	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0) | ((uint32)v.ClipPlaneMask << 20) | (v.Normalize ? (1 << 26) : 0) | (v.WorldSpaceNormal ? (1 << 27) : 0) | (v.WorldSpacePosition ? (1 << 28) : 0));
+	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Fog ? (1 << 17) : 0) | (v.VertexColorLighted ? (1 << 18) : 0) | ((uint32)v.ClipPlaneMask << 19) | (v.Normalize ? (1 << 25) : 0) | (v.WorldSpaceNormal ? (1 << 26) : 0) | (v.WorldSpacePosition ? (1 << 27) : 0) | (vpHasPPL(v) ? (1 << 28) : 0));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			h = NLMISC::wangHash(h ^ v.LightMode[i]);
+			h = NLMISC::wangHash(h ^ vpLightMode(v, i));
 	for (sint i = 0; i < NL3D::IDRV_MAT_MAXTEXTURES; ++i)
 		h = NLMISC::wangHash(h ^ v.TexGenMode[i]);
 
@@ -119,9 +144,9 @@ namespace NLDRIVERGL3 {
 
 namespace /* anonymous */ {
 
-void vpLightUniforms(std::stringstream &ss, const CVPBuiltin &desc, int i)
+void vpLightUniforms(std::stringstream &ss, sint mode, int i)
 {
-	switch (desc.LightMode[i])
+	switch (mode)
 	{
 	case CLight::DirectionalLight:
 		ss << "uniform vec3 light" << i << "DirOrPos;" << std::endl;
@@ -155,9 +180,9 @@ void vpLightUniforms(std::stringstream &ss, const CVPBuiltin &desc, int i)
 	}
 }
 
-void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
+void vpLightFunctions(std::stringstream &ss, sint mode, int i)
 {
-	switch (desc.LightMode[i])
+	switch (mode)
 	{
 	case CLight::DirectionalLight:
 		ss << "float getIntensity" << i << "(vec3 normal3, vec3 lightDir)" << std::endl;
@@ -187,8 +212,10 @@ void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
 		ss << "normal3 = normalize(normal3);" << std::endl;
 		ss << "vec3 eyeDir = normalize(-ecPos4.xyz);" << std::endl;
 
-		ss << "lightDiffuse = lightDiffuse + getIntensity" << i << "(normal3, lightDir) * light" << i << "ColDiff;" << std::endl;
-		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDir, eyeDir) * light" << i << "ColSpec;" << std::endl;
+		ss << "float di = getIntensity" << i << "(normal3, lightDir);" << std::endl;
+		ss << "lightDiffuse = lightDiffuse + di * light" << i << "ColDiff;" << std::endl;
+		// GL1.x LIT: no specular when surface faces away from light
+		ss << "lightSpecular = lightSpecular + (di > 0.0 ? getSpecIntensity" << i << "(normal3, lightDir, eyeDir) : 0.0) * light" << i << "ColSpec;" << std::endl;
 		ss << "}" << std::endl;
 		ss << std::endl;
 		break;
@@ -230,8 +257,10 @@ void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
 		ss << "vec3 eyeDir = normalize(-ecPos3);" << std::endl;
 
 		ss << "float invattn = 1.0 / attenuation;" << std::endl;
-		ss << "lightDiffuse = lightDiffuse + getIntensity" << i << "(normal3, lightDirection) * invattn * light" << i << "ColDiff;" << std::endl;
-		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) * invattn * light" << i << "ColSpec;" << std::endl;
+		ss << "float di = getIntensity" << i << "(normal3, lightDirection);" << std::endl;
+		ss << "lightDiffuse = lightDiffuse + di * invattn * light" << i << "ColDiff;" << std::endl;
+		// GL1.x LIT: no specular when surface faces away from light
+		ss << "lightSpecular = lightSpecular + (di > 0.0 ? getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) : 0.0) * invattn * light" << i << "ColSpec;" << std::endl;
 		ss << "}" << std::endl;
 		ss << std::endl;
 		break;
@@ -279,8 +308,10 @@ void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
 		ss << "vec3 eyeDir = normalize(-ecPos3);" << std::endl;
 
 		ss << "float invattn = spotAttn / attenuation;" << std::endl;
-		ss << "lightDiffuse = lightDiffuse + getIntensity" << i << "(normal3, lightDirection) * invattn * light" << i << "ColDiff;" << std::endl;
-		ss << "lightSpecular = lightSpecular + getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) * invattn * light" << i << "ColSpec;" << std::endl;
+		ss << "float di = getIntensity" << i << "(normal3, lightDirection);" << std::endl;
+		ss << "lightDiffuse = lightDiffuse + di * invattn * light" << i << "ColDiff;" << std::endl;
+		// GL1.x LIT: no specular when surface faces away from light
+		ss << "lightSpecular = lightSpecular + (di > 0.0 ? getSpecIntensity" << i << "(normal3, lightDirection, eyeDir) : 0.0) * invattn * light" << i << "ColSpec;" << std::endl;
 		ss << "}" << std::endl;
 		ss << std::endl;
 		break;
@@ -291,6 +322,12 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 {
 	// Lighting requires normals in VB — fall back to unlit if missing
 	bool lighting = desc.Lighting && hasFlag(desc.VertexFormat, g_VertexFlags[Normal]);
+
+	// When PPL is active, rawVertexColor carries the raw vertex color (or vec4(1) identity).
+	// PP uses: (diffuseColor + pplDiff) * rawVertexColor.
+	bool hasPPL = desc.NumPerPixelLights > 0;
+	bool splitVertexColor = lighting && desc.VertexColorLighted
+		&& hasFlag(desc.VertexFormat, g_VertexFlags[PrimaryColor]);
 
 	std::stringstream ss;
 	ss << "// Builtin Vertex Shader" << std::endl;
@@ -381,7 +418,9 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "uniform vec4 materialColor;" << std::endl; // Verify
 
 	bool specularVertex = lighting || (desc.VertexFormat & g_VertexFlags[SecondaryColor]);
-	ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
+	if (hasPPL)
+		ss << "layout(location = " << VaryingLocationRawVertexColor << ") smooth out vec4 rawVertexColor;" << std::endl;
+	ss << "layout(location = " << VaryingLocationDiffuseColor << ") smooth out vec4 diffuseColor;" << std::endl;
 	if (specularVertex)
 		ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
 	ss << std::endl;
@@ -389,11 +428,12 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	if (lighting)
 	{
 		ss << "uniform mat3 normalMatrix;" << std::endl;
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			vpLightUniforms(ss, desc, i);
-		
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			vpLightFunctions(ss, desc, i);
+		// VP lights are shifted: driver slot [NumPerPixelLights..7] → VP slot [0..7-N]
+		for (int vpSlot = 0, drvSlot = desc.NumPerPixelLights; drvSlot < NL_OPENGL3_MAX_LIGHT; ++vpSlot, ++drvSlot)
+			vpLightUniforms(ss, desc.LightMode[drvSlot], vpSlot);
+
+		for (int vpSlot = 0, drvSlot = desc.NumPerPixelLights; drvSlot < NL_OPENGL3_MAX_LIGHT; ++vpSlot, ++drvSlot)
+			vpLightFunctions(ss, desc.LightMode[drvSlot], vpSlot);
 		ss << std::endl;
 	}
 
@@ -424,9 +464,9 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "specularVertex = vec4(0.0, 0.0, 0.0, 0.0);" << std::endl;
 		ss << "vec4 diffuseLight;" << std::endl;
 		ss << "vec4 specularLight;" << std::endl;
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; i++)
-			if (desc.LightMode[i] == CLight::DirectionalLight || desc.LightMode[i] == CLight::PointLight || desc.LightMode[i] == CLight::SpotLight)
-				ss << "addLight" << i << "Color(diffuseVertex, specularVertex);" << std::endl;
+		for (int vpSlot = 0, drvSlot = desc.NumPerPixelLights; drvSlot < NL_OPENGL3_MAX_LIGHT; ++vpSlot, ++drvSlot)
+			if (desc.LightMode[drvSlot] == CLight::DirectionalLight || desc.LightMode[drvSlot] == CLight::PointLight || desc.LightMode[drvSlot] == CLight::SpotLight)
+				ss << "addLight" << vpSlot << "Color(diffuseVertex, specularVertex);" << std::endl;
 		ss << "diffuseVertex.a = 1.0;" << std::endl;
 		ss << "specularVertex.a = 1.0;" << std::endl;
 
@@ -435,6 +475,10 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		{
 			ss << "specularVertex = specularVertex * vsecondaryColor;" << std::endl;
 		}
+
+		// Add selfIllumination before vertex color multiply so it's also modulated
+		// by vertex color (GL_COLOR_MATERIAL AMBIENT_AND_DIFFUSE behavior)
+		ss << "diffuseVertex.rgb = diffuseVertex.rgb + selfIllumination.rgb;" << std::endl;
 	}
 	else
 	{
@@ -454,9 +498,17 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	{
 		if (lighting && desc.VertexColorLighted)
 		{
-			// GL_COLOR_MATERIAL behavior: vertex color replaces material diffuse
-			// CPU doesn't pre-multiply by matDiffuse when VertexColorLighted is set
-			ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+			if (hasPPL)
+			{
+				// PPL active: don't multiply here — pass raw vertex color to PP via rawVertexColor
+				// so PP can multiply both VP and PPL lighting by vertex color
+			}
+			else
+			{
+				// GL_COLOR_MATERIAL behavior: vertex color replaces material diffuse
+				// CPU doesn't pre-multiply by matDiffuse when VertexColorLighted is set
+				ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+			}
 		}
 		else if (!lighting)
 		{
@@ -467,10 +519,16 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	}
 	
 	// Diffuse (clamp before texture), specular passed separately (added post-texture in PP)
-	ss << "vertexColor = diffuseVertex;" << std::endl;
-	if (lighting)
-		ss << "vertexColor.rgb = vertexColor.rgb + selfIllumination.rgb;" << std::endl;
-	ss << "vertexColor = clamp(vertexColor, 0.0, 1.0);" << std::endl;
+	ss << "diffuseColor = clamp(diffuseVertex, 0.0, 1.0);" << std::endl;
+
+	// Raw vertex color for PPL: PP multiplies (diffuseColor + pplDiff) by rawVertexColor
+	if (hasPPL)
+	{
+		if (splitVertexColor)
+			ss << "rawVertexColor = vprimaryColor;" << std::endl;
+		else
+			ss << "rawVertexColor = vec4(1.0);" << std::endl;
+	}
 	if (specularVertex)
 		ss << "specularColor = clamp(vec4(specularVertex.rgb * specularVertex.a, 0.0), 0.0, 1.0);" << std::endl;
 	ss << std::endl;
@@ -581,10 +639,9 @@ void CDriverGL3::generateBuiltinVertexProgram()
 
 	if (!compileVertexProgram(vertexProgram))
 	{
-		nlwarning("GL3: Builtin VP compilation failed (fmt=0x%x, lit=%d, fog=%d, spec=%d, vcl=%d)",
+		nlwarning("GL3: Builtin VP compilation failed (fmt=0x%x, lit=%d, fog=%d, vcl=%d)",
 			m_VPBuiltinCurrent.VertexFormat, (int)m_VPBuiltinCurrent.Lighting,
-			(int)m_VPBuiltinCurrent.Fog, (int)m_VPBuiltinCurrent.Specular,
-			(int)m_VPBuiltinCurrent.VertexColorLighted);
+			(int)m_VPBuiltinCurrent.Fog, (int)m_VPBuiltinCurrent.VertexColorLighted);
 		delete vertexProgram; vertexProgram = NULL;
 	}
 

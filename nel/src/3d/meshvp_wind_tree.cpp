@@ -68,7 +68,7 @@ static const char* WindTreeVPCodeGLSL_Body =
 	"layout (location = 3) in vec4 vprimaryColor;\n"
 	"layout (location = 8) in vec4 vtexCoord0;\n"
 	"out gl_PerVertex { vec4 gl_Position; };\n"
-	"layout(location = 3) smooth out vec4 vertexColor;\n"
+	"layout(location = 3) smooth out vec4 diffuseColor;\n"
 	"#ifdef USE_SPECULAR\n"
 	"layout(location = 4) smooth out vec4 specularColor;\n"
 	"#endif\n"
@@ -182,7 +182,7 @@ static const char* WindTreeVPCodeGLSL_Body =
 	"    specAccum += specPow * specular3.xyz;\n"
 	"  }\n"
 	"  #endif\n"
-	"  vertexColor = clamp(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw, 0.0, 1.0);\n"
+	"  diffuseColor = clamp(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw, 0.0, 1.0);\n"
 	"  specularColor = clamp(vec4(specAccum, 0.0), 0.0, 1.0);\n"
 	"#else\n"
 	"  litColor += max(dot(N, dirOrPos0), 0.0) * diffuse0;\n"
@@ -195,7 +195,7 @@ static const char* WindTreeVPCodeGLSL_Body =
 	"  #if NUM_POINT_LIGHTS >= 3\n"
 	"  litColor += max(dot(N, normalize(dirOrPos3 - pos.xyz)), 0.0) * diffuse3;\n"
 	"  #endif\n"
-	"  vertexColor = clamp(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw, 0.0, 1.0);\n"
+	"  diffuseColor = clamp(litColor * diffuseAlpha.zzzx + diffuseAlpha.xxxw, 0.0, 1.0);\n"
 	"#endif\n"
 	"  gl_Position = modelViewProjection * pos;\n"
 	"  texCoord0 = vtexCoord0;\n"
@@ -210,7 +210,7 @@ static const char* WindTreeVPCodeGLSL_UBO_Body =
 	"layout (location = 3) in vec4 vprimaryColor;\n"
 	"layout (location = 8) in vec4 vtexCoord0;\n"
 	"out gl_PerVertex { vec4 gl_Position; };\n"
-	"layout(location = 3) smooth out vec4 vertexColor;\n"
+	"layout(location = 3) smooth out vec4 diffuseColor;\n"
 	"layout(location = 4) smooth out vec4 specularColor;\n"
 	"layout(location = 8) smooth out vec4 texCoord0;\n"
 	"layout(location = 0) smooth out vec4 ecPos;\n"
@@ -333,7 +333,7 @@ static const char* WindTreeVPCodeGLSL_UBO_Body =
 	"  diffuseVertex.rgb += selfIllumination.rgb;\n"
 	"  diffuseVertex.a = 1.0;\n"
 	"\n"
-	"  vertexColor = clamp(diffuseVertex, 0.0, 1.0);\n"
+	"  diffuseColor = clamp(diffuseVertex, 0.0, 1.0);\n"
 	"  specularColor = clamp(vec4(specularVertex.rgb, 0.0), 0.0, 1.0);\n"
 	"  texCoord0 = vtexCoord0;\n"
 	"}\n";
@@ -906,8 +906,10 @@ void	CMeshVPWindTree::setupForMaterial(const CMaterial &mat,
 	if (isUBOActive())
 	{
 		// UBO path: write material properties into user VP UBO
+		// When SpecularLighting is false, force specular to black (legacy path
+		// selected a non-specular VP variant; UBO path folds via material=black).
 		NLMISC::CRGBAF d(mat.getDiffuse());
-		NLMISC::CRGBAF s(mat.getSpecular());
+		NLMISC::CRGBAF s = SpecularLighting ? NLMISC::CRGBAF(mat.getSpecular()) : NLMISC::CRGBAF(0.f, 0.f, 0.f, 0.f);
 		_WindTreeUB->lock();
 		_WindTreeUB->set(_UBOOffsets.MaterialDiffuse, d.R, d.G, d.B, d.A);
 		_WindTreeUB->set(_UBOOffsets.MaterialSpecular, s.R, s.G, s.B, s.A);

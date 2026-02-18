@@ -33,18 +33,18 @@ static sint TexGenEyeLinear = 3; // GL_EYE_LINEAR
 /// Builtin vertex program description
 struct CVPBuiltin
 {
-	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), WorldSpaceNormal(false), WorldSpacePosition(false), ClipPlaneMask(0) { }
+	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), WorldSpaceNormal(false), WorldSpacePosition(false), NumPerPixelLights(0), ClipPlaneMask(0) { }
 
 	uint16 VertexFormat;
 	bool Lighting;
 	sint LightMode[NL_OPENGL3_MAX_LIGHT]; // -1 when disabled
 	sint TexGenMode[IDRV_MAT_MAXTEXTURES]; // -1 when disabled
-	bool Specular; // Reflection
 	bool Fog;
 	bool VertexColorLighted;
 	bool Normalize; // Force-normalize normals (for MRM geomorphing, scaled models)
 	bool WorldSpaceNormal; // Output world-space normal at VaryingLocationNormal
 	bool WorldSpacePosition; // Output world-space position at VaryingLocationEcPos (instead of eye-space)
+	uint8 NumPerPixelLights; // First N lights evaluated per-pixel in PP (VP skips these)
 	uint8 ClipPlaneMask; // Bitmask of enabled clip planes (0-5)
 
 	NLMISC::CRefPtr<CVertexProgram> VertexProgram;
@@ -65,7 +65,7 @@ static const uint64 SamplerCube = 1;
 /// are read by uploadMaterialUBO() to pack the NlMaterial UBO.
 struct CPPBuiltin
 {
-	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false), WorldSpacePosition(false) { }
+	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false), WorldSpacePosition(false), LightMapScale(false), PPL(false), PPLVertexColor(false) { }
 
 	// Driver state (per-draw-call, not in material UBO)
 	uint16 VertexFormat;
@@ -73,6 +73,9 @@ struct CPPBuiltin
 	uint8 FogMode;
 	bool SpecularSeparate; // Whether VP outputs specularColor varying
 	bool WorldSpacePosition; // Whether VP outputs world-space position (affects fog calculation)
+	bool LightMapScale; // Whether PP uses nlLightMapScale uniform (lightmap x2 mode)
+	bool PPL; // Whether PP has per-pixel lighting code (computeLightPP, ecPos/normal varyings)
+	bool PPLVertexColor; // Whether PP declares rawVertexColor varying and multiplies by it (PPL + VertexColorLighted)
 
 	// Material-derived state (packed into material UBO when active)
 	CMaterial::TShader Shader;
@@ -107,7 +110,7 @@ enum TAttribOffset
 	SecondaryColor,
 	Fog,
 	PaletteSkin,
-	Empty,
+	Tangent,
 	TexCoord0,
 	TexCoord1,
 	TexCoord2,
@@ -121,11 +124,13 @@ enum TAttribOffset
 
 // Varying locations for VP/PP interface matching (GL_ARB_separate_shader_objects).
 // VB-sourced varyings use their TAttribOffset index as the location.
-// ecPos and vertexColor reuse slots that are never occupied by VB varyings.
+// ecPos and diffuseColor reuse slots that are never occupied by VB varyings.
 static const int VaryingLocationEcPos = Position; // = 0, Position is never output as a varying
+static const int VaryingLocationRawVertexColor = Weight; // = 1, raw vertex color for PPL modulation
 static const int VaryingLocationNormal = Normal; // = 2, world-space normal (when WorldSpaceNormal is set)
-static const int VaryingLocationVertexColor = PrimaryColor; // = 3, PrimaryColor is always skipped
+static const int VaryingLocationDiffuseColor = PrimaryColor; // = 3, PrimaryColor is always skipped
 static const int VaryingLocationSpecularColor = SecondaryColor; // = 4, SecondaryColor is always skipped
+static const int VaryingLocationTangent = Tangent; // = 7, world-space tangent (vec4: xyz = tangent, w = bitangent sign)
 
 extern const uint16 g_VertexFlags[CVertexBuffer::NumValue];
 extern const char *g_AttribNames[CVertexBuffer::NumValue];

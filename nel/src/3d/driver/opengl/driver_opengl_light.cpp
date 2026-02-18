@@ -234,6 +234,7 @@ void	CDriverGL::setLights(
 	const sint16 *tableIndices,
 	const uint8 *factors,
 	uint numLights,
+	uint numPerPixelLights,
 	NLMISC::CRGBA ambient)
 {
 	H_AUTO_OGL(CDriverGL_setLights)

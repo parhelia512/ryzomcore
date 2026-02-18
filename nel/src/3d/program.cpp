@@ -360,6 +360,8 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"nlFogMode",
 	"nlWorldSpaceNormal",
 	"nlWorldSpacePosition",
+	"nlNumPerPixelLights",
+	"nlFogEnabled",
 	"cameraForward",
 	"samplerCube0",
 	"samplerCube1",
@@ -386,7 +388,30 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"nlMaterialDiffuse",
 	"nlMaterialSpecular",
 	"nlMaterialShininess",
-	"pzbCameraPos"
+	"pzbCameraPos",
+	"nlLightMapScale",
+
+	// Per-pixel lighting uniforms for pixel programs (raw values, not pre-multiplied)
+	"nlPpLightMode0", "nlPpLightMode1", "nlPpLightMode2", "nlPpLightMode3",
+	"nlPpLightMode4", "nlPpLightMode5", "nlPpLightMode6", "nlPpLightMode7",
+	"ppLight0DirOrPos", "ppLight1DirOrPos", "ppLight2DirOrPos", "ppLight3DirOrPos",
+	"ppLight4DirOrPos", "ppLight5DirOrPos", "ppLight6DirOrPos", "ppLight7DirOrPos",
+	"ppLight0ColDiff", "ppLight1ColDiff", "ppLight2ColDiff", "ppLight3ColDiff",
+	"ppLight4ColDiff", "ppLight5ColDiff", "ppLight6ColDiff", "ppLight7ColDiff",
+	"ppLight0ColSpec", "ppLight1ColSpec", "ppLight2ColSpec", "ppLight3ColSpec",
+	"ppLight4ColSpec", "ppLight5ColSpec", "ppLight6ColSpec", "ppLight7ColSpec",
+	"ppLight0ConstAttn", "ppLight1ConstAttn", "ppLight2ConstAttn", "ppLight3ConstAttn",
+	"ppLight4ConstAttn", "ppLight5ConstAttn", "ppLight6ConstAttn", "ppLight7ConstAttn",
+	"ppLight0LinAttn", "ppLight1LinAttn", "ppLight2LinAttn", "ppLight3LinAttn",
+	"ppLight4LinAttn", "ppLight5LinAttn", "ppLight6LinAttn", "ppLight7LinAttn",
+	"ppLight0QuadAttn", "ppLight1QuadAttn", "ppLight2QuadAttn", "ppLight3QuadAttn",
+	"ppLight4QuadAttn", "ppLight5QuadAttn", "ppLight6QuadAttn", "ppLight7QuadAttn",
+	"ppLight0SpotDir", "ppLight1SpotDir", "ppLight2SpotDir", "ppLight3SpotDir",
+	"ppLight4SpotDir", "ppLight5SpotDir", "ppLight6SpotDir", "ppLight7SpotDir",
+	"ppLight0SpotCutoff", "ppLight1SpotCutoff", "ppLight2SpotCutoff", "ppLight3SpotCutoff",
+	"ppLight4SpotCutoff", "ppLight5SpotCutoff", "ppLight6SpotCutoff", "ppLight7SpotCutoff",
+	"ppLight0SpotExp", "ppLight1SpotExp", "ppLight2SpotExp", "ppLight3SpotExp",
+	"ppLight4SpotExp", "ppLight5SpotExp", "ppLight6SpotExp", "ppLight7SpotExp"
 };
 
 void IProgram::buildInfo(CSource *source)

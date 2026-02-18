@@ -84,6 +84,8 @@ const char *GLSLObjectHeader =
 	"    int   nlVertexFormat;\n"
 	"    int   nlWorldSpaceNormal;\n"
 	"    int   nlWorldSpacePosition;\n"
+	"    int   nlNumPerPixelLights;\n"
+	"    int   nlFogEnabled;\n"
 	"};\n";
 
 const char *GLSLMaterialHeader =
@@ -102,9 +104,9 @@ const char *GLSLMaterialHeader =
 	"    uint  nlTexEnvMode1;\n"
 	"    uint  nlTexEnvMode2;\n"
 	"    uint  nlTexEnvMode3;\n"
+	"    float nlLightMapScale;\n"
 	"    int   _matPad0;\n"
 	"    int   _matPad1;\n"
-	"    int   _matPad2;\n"
 	"};\n";
 
 static const char *s_TypeKeyword[] = {
