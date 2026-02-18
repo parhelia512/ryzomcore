@@ -1396,6 +1396,7 @@ private:
 	//   fogOrPpl: 0=no ecPos/fog/PPL (UI/sky); 1=has ecPos, fog+PPL runtime-gated
 	//   ppClip: 0=no PP clip; 1=PP-based clip plane discard (implies fogOrPpl=1)
 	//   tableUBO: 0=non-table lights; 1=light table UBO
+	bool m_BuildUnusedPrograms;
 	bool m_PPClipPlanes;            // Use PP-based clip plane discard instead of native gl_ClipDistance
 	bool m_UseMegaShaders;          // Select mega VP/PP variants (false = per-material compiled shaders)
 	bool m_UseMegaLightTableUBO;    // Select mega VP/PP variants with light table UBO

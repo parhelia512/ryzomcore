@@ -102,6 +102,8 @@ bool operator<(const CPPBuiltin &left, const CPPBuiltin &right)
 		return right.PPL;
 	if (left.PPLVertexColor != right.PPLVertexColor)
 		return right.PPLVertexColor;
+	if (left.PPClipPlane != right.PPClipPlane)
+		return right.PPClipPlane;
 
 	return false;
 }
@@ -140,6 +142,8 @@ bool operator==(const CPPBuiltin &left, const CPPBuiltin &right)
 		return false;
 	if (left.PPLVertexColor != right.PPLVertexColor)
 		return false;
+	if (left.PPClipPlane != right.PPClipPlane)
+		return false;
 
 	return true;
 }
@@ -165,7 +169,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h32 = NLMISC::wangHash(h32 ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0) | (v.PPL ? 1 << 22 : 0) | (v.PPLVertexColor ? 1 << 23 : 0)));
+	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0) | (v.PPL ? 1 << 22 : 0) | (v.PPLVertexColor ? 1 << 23 : 0) | (v.PPClipPlane ? 1 << 24 : 0)));
 
 	h64 = h64 ^ h32; // NLMISC::wangHash64(h64 ^ h32);
 	nlctassert(sizeof(size_t) >= sizeof(uint64));
@@ -185,7 +189,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h = NLMISC::wangHash(h ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0) | (v.PPL ? 1 << 22 : 0) | (v.PPLVertexColor ? 1 << 23 : 0)));
+	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0) | (v.PPL ? 1 << 22 : 0) | (v.PPLVertexColor ? 1 << 23 : 0) | (v.PPClipPlane ? 1 << 24 : 0)));
 
 	nlctassert(sizeof(size_t) >= sizeof(uint32));
 	return (size_t)h;
@@ -617,9 +621,20 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		ss << std::endl;
 	}
 
-	// ecPos varying (needed by fog and/or PPL)
-	if (desc.Fog || desc.PPL)
+	// ecPos varying (needed by fog, PPL, and/or PP clip planes)
+	if (desc.Fog || desc.PPL || desc.PPClipPlane)
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
+
+	// PP clip plane uniforms
+	if (desc.PPClipPlane)
+	{
+		ss << "uniform int nlClipPlaneMask;" << std::endl;
+		for (int i = 0; i < 6; ++i)
+			ss << "uniform vec4 clipPlane" << i << ";" << std::endl;
+		if (desc.WorldSpacePosition)
+			ss << "uniform mat4 viewMatrix;" << std::endl;
+		ss << std::endl;
+	}
 
 	// PPL varyings and uniforms
 	if (desc.PPL)
@@ -723,6 +738,24 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 	
 	ss << "void main(void)" << std::endl;
 	ss << "{" << std::endl;
+
+	// PP clip plane discard (early out before any texture work)
+	if (desc.PPClipPlane)
+	{
+		ss << "{" << std::endl;
+		ss << "  vec4 clipPos;" << std::endl;
+		if (desc.WorldSpacePosition)
+		{
+			ss << "  clipPos = viewMatrix * vec4(ecPos.xyz / ecPos.w, 1.0);" << std::endl;
+		}
+		else
+		{
+			ss << "  clipPos = vec4(ecPos.xyz / ecPos.w, 1.0);" << std::endl;
+		}
+		for (int i = 0; i < 6; ++i)
+			ss << "  if ((nlClipPlaneMask & " << (1 << i) << ") != 0 && dot(clipPlane" << i << ", clipPos) < 0.0) discard;" << std::endl;
+		ss << "}" << std::endl;
+	}
 
 	// Vertex color (light or unlit diffuse, primary and secondary)
 	ss << "fragColor = diffuseColor;" << std::endl;
@@ -919,6 +952,12 @@ void CPPBuiltin::checkDriverStateTouched(CDriverGL3 *driver) // MUST NOT depend 
 	if (PPLVertexColor != pplVertexColor)
 	{
 		PPLVertexColor = pplVertexColor;
+		Touched = true;
+	}
+	bool ppClipPlane = driver->m_VPBuiltinCurrent.PPClipPlane;
+	if (PPClipPlane != ppClipPlane)
+	{
+		PPClipPlane = ppClipPlane;
 		Touched = true;
 	}
 }

@@ -565,7 +565,14 @@ void CDriverGL3::uploadCameraUBO()
 
 	// Fog mode and clip plane mask
 	data.fogMode = (sint32)_FogMode;
-	data.clipPlaneMask = (sint32)m_VPBuiltinCurrent.ClipPlaneMask;
+	// Compute real mask from _ClipPlaneEnabled[] — m_VPBuiltinCurrent.ClipPlaneMask
+	// may be zeroed when PP clip planes are active (VP doesn't use it in that mode).
+	{
+		sint32 mask = 0;
+		for (uint i = 0; i < MaxClipPlanes; ++i)
+			if (_ClipPlaneEnabled[i]) mask |= (1 << i);
+		data.clipPlaneMask = mask;
+	}
 
 	// Clip planes
 	for (uint i = 0; i < MaxClipPlanes; ++i)

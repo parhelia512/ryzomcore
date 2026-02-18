@@ -518,6 +518,12 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 
 bool CDriverGL3::initMegaVertexPrograms()
 {
+	// Determine which UBO/ppClip splits are active at init time
+	int activeTableUBO = (m_UseMegaLightTableUBO || m_UseMegaObjectUBO) ? 1 : 0;
+	int activeCameraUBO = (m_UseMegaCameraUBO || m_UseMegaObjectUBO) ? 1 : 0;
+	int activeObjectUBO = m_UseMegaObjectUBO ? 1 : 0;
+	int activeMaterialUBO = m_UseMegaMaterialUBO ? 1 : 0;
+
 	for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
 	{
 		for (int hwClip = 0; hwClip < 2; ++hwClip)
@@ -533,6 +539,17 @@ bool CDriverGL3::initMegaVertexPrograms()
 							// objectUBO implies tableUBO and cameraUBO
 							if (objectUBO && (!tableUBO || !cameraUBO))
 								continue;
+
+							// Skip variants that won't be selected at runtime
+							if (!m_BuildUnusedPrograms)
+							{
+								// m_PPClipPlanes zeroes ClipPlaneMask on VP, so hwClip=1 is never selected
+								if (hwClip && m_PPClipPlanes) continue;
+								if (tableUBO != activeTableUBO) continue;
+								if (cameraUBO != activeCameraUBO) continue;
+								if (objectUBO != activeObjectUBO) continue;
+								if (materialUBO != activeMaterialUBO) continue;
+							}
 
 							std::string result;
 							megaVPGenerate(result, fogOrPpl != 0, hwClip != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
@@ -612,9 +629,8 @@ bool CDriverGL3::setupMegaVertexProgram()
 		m_VPNormalOutput = true;
 	}
 
-	bool ppClipActive = m_PPClipPlanes && (m_VPBuiltinCurrent.ClipPlaneMask != 0);
-	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive || ppClipActive) ? 1 : 0;
-	int hwClip = (ppClipActive ? 0 : (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0);
+	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive || m_VPBuiltinCurrent.PPClipPlane) ? 1 : 0;
+	int hwClip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
 	int tableUBO = (m_UseMegaLightTableUBO || m_UseMegaObjectUBO) ? 1 : 0;
 	int cameraUBO = (m_UseMegaCameraUBO || m_UseMegaObjectUBO) ? 1 : 0;
 	int objectUBO = m_UseMegaObjectUBO ? 1 : 0;

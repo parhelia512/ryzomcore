@@ -357,8 +357,15 @@ CDriverGL3::CDriverGL3()
 	m_DriverPixelProgram = NULL;
 
 	m_VPBuiltinTouched = true;
-
+	
+	// for GL ES 3.0 compatibility
 	m_PPClipPlanes = false;
+
+#if !FINAL_VERSION && defined(NL_DEBUG)
+	m_BuildUnusedPrograms = true;
+#else
+	m_BuildUnusedPrograms = false;
+#endif
 	m_UseMegaShaders = true;
 	m_UseMegaLightTableUBO = true;  // implied by m_UseMegaObjectUBO
 	m_UseMegaCameraUBO = true;      // implied by m_UseMegaObjectUBO

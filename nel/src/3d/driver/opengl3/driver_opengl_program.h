@@ -33,7 +33,7 @@ static sint TexGenEyeLinear = 3; // GL_EYE_LINEAR
 /// Builtin vertex program description
 struct CVPBuiltin
 {
-	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), WorldSpaceNormal(false), WorldSpacePosition(false), NumPerPixelLights(0), ClipPlaneMask(0) { }
+	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), WorldSpaceNormal(false), WorldSpacePosition(false), NumPerPixelLights(0), ClipPlaneMask(0), PPClipPlane(false) { }
 
 	uint16 VertexFormat;
 	bool Lighting;
@@ -46,6 +46,7 @@ struct CVPBuiltin
 	bool WorldSpacePosition; // Output world-space position at VaryingLocationEcPos (instead of eye-space)
 	uint8 NumPerPixelLights; // First N lights evaluated per-pixel in PP (VP skips these)
 	uint8 ClipPlaneMask; // Bitmask of enabled clip planes (0-5)
+	bool PPClipPlane; // PP handles clip planes (output ecPos, skip gl_ClipDistance)
 
 	NLMISC::CRefPtr<CVertexProgram> VertexProgram;
 };
@@ -65,7 +66,7 @@ static const uint64 SamplerCube = 1;
 /// are read by uploadMaterialUBO() to pack the NlMaterial UBO.
 struct CPPBuiltin
 {
-	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false), WorldSpacePosition(false), LightMapScale(false), PPL(false), PPLVertexColor(false) { }
+	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false), WorldSpacePosition(false), LightMapScale(false), PPL(false), PPLVertexColor(false), PPClipPlane(false) { }
 
 	// Driver state (per-draw-call, not in material UBO)
 	uint16 VertexFormat;
@@ -76,6 +77,7 @@ struct CPPBuiltin
 	bool LightMapScale; // Whether PP uses nlLightMapScale uniform (lightmap x2 mode)
 	bool PPL; // Whether PP has per-pixel lighting code (computeLightPP, ecPos/normal varyings)
 	bool PPLVertexColor; // Whether PP declares vertexColor varying and multiplies PPL by it (PPL + VertexColorLighted)
+	bool PPClipPlane; // PP handles clip plane discard (declares ecPos, clipPlane uniforms)
 
 	// Material-derived state (packed into material UBO when active)
 	CMaterial::TShader Shader;

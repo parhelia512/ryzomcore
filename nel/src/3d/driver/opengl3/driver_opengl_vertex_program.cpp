@@ -78,6 +78,8 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 		return right.WorldSpacePosition;
 	if (left.ClipPlaneMask != right.ClipPlaneMask)
 		return left.ClipPlaneMask < right.ClipPlaneMask;
+	if (left.PPClipPlane != right.PPClipPlane)
+		return right.PPClipPlane;
 
 	return false;
 }
@@ -113,6 +115,8 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 		return false;
 	if (left.ClipPlaneMask != right.ClipPlaneMask)
 		return false;
+	if (left.PPClipPlane != right.PPClipPlane)
+		return false;
 
 	return true;
 }
@@ -126,7 +130,7 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 {
 	uint32 h;
 
-	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Fog ? (1 << 17) : 0) | (v.VertexColorLighted ? (1 << 18) : 0) | ((uint32)v.ClipPlaneMask << 19) | (v.Normalize ? (1 << 25) : 0) | (v.WorldSpaceNormal ? (1 << 26) : 0) | (v.WorldSpacePosition ? (1 << 27) : 0) | (vpHasPPL(v) ? (1 << 28) : 0));
+	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Fog ? (1 << 17) : 0) | (v.VertexColorLighted ? (1 << 18) : 0) | ((uint32)v.ClipPlaneMask << 19) | (v.Normalize ? (1 << 25) : 0) | (v.WorldSpaceNormal ? (1 << 26) : 0) | (v.WorldSpacePosition ? (1 << 27) : 0) | (vpHasPPL(v) ? (1 << 28) : 0) | (v.PPClipPlane ? (1 << 29) : 0));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			h = NLMISC::wangHash(h ^ vpLightMode(v, i));
@@ -399,7 +403,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "uniform vec4 selfIllumination;" << std::endl;
 
 	bool normalVarying = desc.WorldSpaceNormal && hasFlag(desc.VertexFormat, g_VertexFlags[Normal]);
-	bool needPositionOutput = desc.Fog || desc.WorldSpacePosition;
+	bool needPositionOutput = desc.Fog || desc.WorldSpacePosition || desc.PPClipPlane;
 	bool needEcPos = needPositionOutput || lighting || needEyeLinear || needReflection || needClipPlanes;
 	bool needNormalMatrix = lighting || needReflection || normalVarying;
 	if (needEcPos)
@@ -709,14 +713,22 @@ void CDriverGL3::setTexGenModeVP(uint stage, sint mode)
 void CDriverGL3::touchClipPlaneVP(uint index, bool enable)
 {
 	H_AUTO_OGL(CDriverGL3_touchClipPlaneVP)
-	uint8 mask = m_VPBuiltinCurrent.ClipPlaneMask;
-	if (enable)
-		mask |= (1 << index);
-	else
-		mask &= ~(1 << index);
-	if (m_VPBuiltinCurrent.ClipPlaneMask != mask)
+
+	// Compute true mask from _ClipPlaneEnabled[]
+	uint8 realMask = 0;
+	for (uint i = 0; i < MaxClipPlanes; ++i)
+		if (_ClipPlaneEnabled[i]) realMask |= (1 << i);
+
+	// When PP clip planes are active, VP doesn't write gl_ClipDistance.
+	// Zero ClipPlaneMask so the VP skips clip distance code,
+	// and set PPClipPlane to trigger ecPos output instead.
+	uint8 vpMask = m_PPClipPlanes ? 0 : realMask;
+	bool ppClip = m_PPClipPlanes && (realMask != 0);
+
+	if (m_VPBuiltinCurrent.ClipPlaneMask != vpMask || m_VPBuiltinCurrent.PPClipPlane != ppClip)
 	{
-		m_VPBuiltinCurrent.ClipPlaneMask = mask;
+		m_VPBuiltinCurrent.ClipPlaneMask = vpMask;
+		m_VPBuiltinCurrent.PPClipPlane = ppClip;
 		m_VPBuiltinTouched = true;
 	}
 }

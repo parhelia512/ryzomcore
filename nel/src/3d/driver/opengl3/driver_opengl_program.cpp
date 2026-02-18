@@ -1247,10 +1247,16 @@ void CDriverGL3::setupUniforms(TProgram program)
 		if (fmIdx != ~0u)
 			nglProgramUniform1i(progId, fmIdx, (int)_FogMode);
 
-		// Clip plane mask
+		// Clip plane mask (compute from _ClipPlaneEnabled[], not from VP descriptor
+		// which may be zeroed when PP clip planes are active)
 		uint cpmIdx = p->getUniformIndex(CProgramIndex::NlClipPlaneMask);
 		if (cpmIdx != ~0u)
-			nglProgramUniform1i(progId, cpmIdx, (sint32)m_VPBuiltinCurrent.ClipPlaneMask);
+		{
+			sint32 clipMask = 0;
+			for (uint ci = 0; ci < MaxClipPlanes; ++ci)
+				if (_ClipPlaneEnabled[ci]) clipMask |= (1 << ci);
+			nglProgramUniform1i(progId, cpmIdx, clipMask);
+		}
 	}
 
 	// nlFogEnabled: per-object fog enable state (in NlModel UBO when objectUBO is active)

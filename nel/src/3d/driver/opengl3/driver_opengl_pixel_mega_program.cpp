@@ -674,6 +674,13 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 
 bool CDriverGL3::initMegaPixelPrograms()
 {
+	// Determine which UBO/ppClip splits are active at init time
+	int activeTableUBO = (m_UseMegaLightTableUBO || m_UseMegaObjectUBO) ? 1 : 0;
+	int activeCameraUBO = (m_UseMegaCameraUBO || m_UseMegaObjectUBO) ? 1 : 0;
+	int activeObjectUBO = m_UseMegaObjectUBO ? 1 : 0;
+	int activeMaterialUBO = m_UseMegaMaterialUBO ? 1 : 0;
+	int activePPClip = m_PPClipPlanes ? 1 : 0;
+
 	for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
 	{
 		for (int cube = 0; cube < 2; ++cube)
@@ -706,6 +713,17 @@ bool CDriverGL3::initMegaPixelPrograms()
 									// (non-table PPL references nlPpLightMode which isn't in NlModel UBO)
 									if (objectUBO && !tableUBO && fogOrPpl)
 										continue;
+
+									// Skip variants that won't be selected at runtime
+									if (!m_BuildUnusedPrograms)
+									{
+										// ppClip=1 is never selected when m_PPClipPlanes is off
+										if (ppClip && !m_PPClipPlanes) continue;
+										if (tableUBO != activeTableUBO) continue;
+										if (cameraUBO != activeCameraUBO) continue;
+										if (objectUBO != activeObjectUBO) continue;
+										if (materialUBO != activeMaterialUBO) continue;
+									}
 
 									std::string result;
 									megaPPGenerate(result, fogOrPpl != 0, cube != 0, specular != 0, ppClip != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
@@ -784,9 +802,8 @@ bool CDriverGL3::setupMegaPixelProgram()
 			pplActive = true;
 		}
 	}
-	bool ppClipActive = m_PPClipPlanes && (m_VPBuiltinCurrent.ClipPlaneMask != 0);
-	int ppClip = ppClipActive ? 1 : 0;
-	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive || ppClipActive) ? 1 : 0;
+	int ppClip = m_VPBuiltinCurrent.PPClipPlane ? 1 : 0;
+	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive || ppClip) ? 1 : 0;
 	// Cube variant: any cubemap in the material's sampler modes
 	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
 	int specular = m_VPSpecularOutput ? 1 : 0;
