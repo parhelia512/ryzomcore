@@ -1439,6 +1439,7 @@ private:
 		bool  ZeroLightFactors;       // Zero all light factors (pass > 0)
 		float MaterialDiffuse[4];
 		float MaterialSpecular[4];
+		float LightMapScale;          // x2 mode scale factor (1.0 or 2.0)
 	} _LightMapUBOOverride;
 
 	// EMBM support

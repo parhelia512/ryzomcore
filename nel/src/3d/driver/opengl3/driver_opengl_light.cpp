@@ -791,8 +791,9 @@ struct CMaterialUBOData
 	sint32 nlShader;               // 4
 	sint32 nlTextureActive;        // 4
 	sint32 nlAlphaTest;            // 4
-	uint32 nlTexEnvMode[4];        // 16
-	sint32 _pad[3];               // 12
+	uint32 nlTexEnvMode[4];        // 16 (4 separate uint in GLSL, not an array — avoids std140 vec4 padding)
+	float nlLightMapScale;         // 4
+	sint32 _pad[2];               // 8
 };                                 // 96
 static_assert(sizeof(CMaterialUBOData) == 96, "Material UBO layout mismatch");
 
@@ -840,7 +841,8 @@ void CDriverGL3::uploadMaterialUBO()
 		data.nlAlphaTest = (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0;
 		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 			data.nlTexEnvMode[i] = matDrv->PPBuiltin.TexEnvMode[i];
-		data._pad[0] = 0; data._pad[1] = 0; data._pad[2] = 0;
+		data.nlLightMapScale = _LightMapUBOOverride.LightMapScale;
+		data._pad[0] = 0; data._pad[1] = 0;
 
 		const GLsizeiptr dataSize = sizeof(CMaterialUBOData);
 		nglBindBuffer(GL_UNIFORM_BUFFER, _OverrideMaterialUBOId);
@@ -915,10 +917,12 @@ void CDriverGL3::uploadMaterialUBO()
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		data.nlTexEnvMode[i] = matDrv->PPBuiltin.TexEnvMode[i];
 
+	// Lightmap scale (1.0 default; override path sets per-pass value)
+	data.nlLightMapScale = 1.0f;
+
 	// Padding
 	data._pad[0] = 0;
 	data._pad[1] = 0;
-	data._pad[2] = 0;
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CMaterialUBOData);

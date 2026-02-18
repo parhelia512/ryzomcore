@@ -96,6 +96,8 @@ bool operator<(const CPPBuiltin &left, const CPPBuiltin &right)
 		return right.SpecularSeparate;
 	if (left.WorldSpacePosition != right.WorldSpacePosition)
 		return right.WorldSpacePosition;
+	if (left.LightMapScale != right.LightMapScale)
+		return right.LightMapScale;
 
 	return false;
 }
@@ -128,6 +130,8 @@ bool operator==(const CPPBuiltin &left, const CPPBuiltin &right)
 		return false;
 	if (left.WorldSpacePosition != right.WorldSpacePosition)
 		return false;
+	if (left.LightMapScale != right.LightMapScale)
+		return false;
 
 	return true;
 }
@@ -153,7 +157,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h32 = NLMISC::wangHash(h32 ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0)));
+	h32 = NLMISC::wangHash(h32 ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0)));
 
 	h64 = h64 ^ h32; // NLMISC::wangHash64(h64 ^ h32);
 	nlctassert(sizeof(size_t) >= sizeof(uint64));
@@ -173,7 +177,7 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h = NLMISC::wangHash(h ^ (uint32)v.TexEnvMode[stage]);
 
 	// Driver state
-	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0)));
+	h = NLMISC::wangHash(h ^ (((uint32)v.VertexFormat) | (v.Fog ? 1 << 16 : 0) | ((uint32)v.FogMode << 17) | (v.SpecularSeparate ? 1 << 19 : 0) | (v.WorldSpacePosition ? 1 << 20 : 0) | (v.LightMapScale ? 1 << 21 : 0)));
 
 	nlctassert(sizeof(size_t) >= sizeof(uint32));
 	return (size_t)h;
@@ -500,7 +504,10 @@ void ppLightmap(std::stringstream &ss, const CPPBuiltin &desc, CGlExtensions &gl
 	else if (nstages == 1)
 	{
 		// Diffuse texture only (no lightmaps this pass), modulated by vertex lighting
-		ss << "fragColor = texel0 * fragColor;" << std::endl;
+		if (desc.LightMapScale)
+			ss << "fragColor = texel0 * nlLightMapScale * fragColor;" << std::endl;
+		else
+			ss << "fragColor = texel0 * fragColor;" << std::endl;
 	}
 	else
 	{
@@ -508,7 +515,10 @@ void ppLightmap(std::stringstream &ss, const CPPBuiltin &desc, CGlExtensions &gl
 		ss << "vec4 lightmapop = vec4(0.0, 0.0, 0.0, 0.0);" << std::endl;
 		for (uint stage = 0; stage < (nstages - 1); ++stage)
 			ss << "lightmapop += texel" << stage << " * constant" << stage << ";" << std::endl;
-		ss << "fragColor.rgb = texel" << (nstages - 1) << ".rgb * (fragColor.rgb + lightmapop.rgb);" << std::endl;
+		if (desc.LightMapScale)
+			ss << "fragColor.rgb = texel" << (nstages - 1) << ".rgb * nlLightMapScale * (fragColor.rgb + lightmapop.rgb);" << std::endl;
+		else
+			ss << "fragColor.rgb = texel" << (nstages - 1) << ".rgb * (fragColor.rgb + lightmapop.rgb);" << std::endl;
 		ss << "fragColor.a = texel" << (nstages - 1) << ".a;" << std::endl;
 	}
 }
@@ -582,6 +592,10 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		}
 		break;
 	}
+
+	// Lightmap scale (x2 mode: legacy halve-then-double)
+	if (desc.LightMapScale)
+		ss << "uniform float nlLightMapScale;" << std::endl;
 
 	// Alpha test
 	if (desc.Flags & IDRV_MAT_ALPHA_TEST)

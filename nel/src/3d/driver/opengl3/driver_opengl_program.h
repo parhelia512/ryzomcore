@@ -65,7 +65,7 @@ static const uint64 SamplerCube = 1;
 /// are read by uploadMaterialUBO() to pack the NlMaterial UBO.
 struct CPPBuiltin
 {
-	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false), WorldSpacePosition(false) { }
+	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false), WorldSpacePosition(false), LightMapScale(false) { }
 
 	// Driver state (per-draw-call, not in material UBO)
 	uint16 VertexFormat;
@@ -73,6 +73,7 @@ struct CPPBuiltin
 	uint8 FogMode;
 	bool SpecularSeparate; // Whether VP outputs specularColor varying
 	bool WorldSpacePosition; // Whether VP outputs world-space position (affects fog calculation)
+	bool LightMapScale; // Whether PP uses nlLightMapScale uniform (lightmap x2 mode)
 
 	// Material-derived state (packed into material UBO when active)
 	CMaterial::TShader Shader;

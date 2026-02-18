@@ -738,6 +738,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 
 	H_AUTO_OGL(CDriverGL3_setupLightMapPass)
 	const CMaterial &mat= *_CurrentMaterial;
+	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
 
 	// No lightmap or all blacks??, just setup "black texture" for stage 0.
 	if (_NLightMaps == 0)
@@ -771,6 +772,14 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		_LightMapUBOOverride.MaterialDiffuse[3] = 1.0f;
 		// Zero specular (lightmaps have no specular)
 		memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
+		// No x2 scale when no lightmaps
+		_LightMapUBOOverride.LightMapScale = 1.0f;
+
+		if (matDrv && matDrv->PPBuiltin.LightMapScale)
+		{
+			matDrv->PPBuiltin.LightMapScale = false;
+			matDrv->PPBuiltin.Touched = true;
+		}
 
 		// Setup the programs now
 		setupBuiltinPrograms();
@@ -937,22 +946,12 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		}
 	}
 
-	// For x2 mode, double selfIllumination and lightmap constants on CPU side.
-	// This is equivalent to D3D9's MODULATE2X / old GL's GL_RGB_SCALE_EXT=2,
-	// combined with halving the dynamic light diffuse (which we skip since we
-	// keep light at full and double the other terms instead).
-	if (mat._LightMapsMulx2)
-	{
-		selfIllumination.R *= 2.0f;
-		selfIllumination.G *= 2.0f;
-		selfIllumination.B *= 2.0f;
-		for (uint stage = 0; stage < nstages - 1; ++stage)
-		{
-			constant[stage].R *= 2.0f;
-			constant[stage].G *= 2.0f;
-			constant[stage].B *= 2.0f;
-		}
-	}
+	// For x2 mode (legacy MODULATE2X / GL_RGB_SCALE=2):
+	// Dynamic light is halved in the VP (via material diffuse 0.5 or halved light colors),
+	// selfIllumination and lightmap constants stay at normal scale, and the PP applies
+	// a 2x scale to the entire (vertexLighting + lightmapSum) result. This matches the
+	// legacy clamping behavior: 2 * clamp(dynLight/2 + lmcAmb, 0, 1) gives effective [0,2].
+	float lightMapScale = mat._LightMapsMulx2 ? 2.0f : 1.0f;
 
 	// setup blend / lighting.
 	//=========================
@@ -1013,6 +1012,14 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		_CameraUBODirty = true;
 	}
 
+	// Set CPPBuiltin.LightMapScale flag for small PP (gates nlLightMapScale uniform declaration)
+	bool needLmScale = (lightMapScale != 1.0f);
+	if (matDrv && matDrv->PPBuiltin.LightMapScale != needLmScale)
+	{
+		matDrv->PPBuiltin.LightMapScale = needLmScale;
+		matDrv->PPBuiltin.Touched = true;
+	}
+
 	// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up.
 	// Always set unconditionally (see _NLightMaps==0 path above for rationale).
 	_LightMapUBOOverride.Active = true;
@@ -1021,13 +1028,16 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	_LightMapUBOOverride.SelfIllumination[2] = selfIllumination.B;
 	_LightMapUBOOverride.SelfIllumination[3] = 0.0f;
 	_LightMapUBOOverride.ZeroLightFactors = (pass > 0);
-	// White diffuse (material diffuse not applied to dynamic light for lightmaps)
-	_LightMapUBOOverride.MaterialDiffuse[0] = 1.0f;
-	_LightMapUBOOverride.MaterialDiffuse[1] = 1.0f;
-	_LightMapUBOOverride.MaterialDiffuse[2] = 1.0f;
+	// Material diffuse: white normally, halved for x2 (halves dynamic light in VP)
+	float lmDiffuse = 1.0f / lightMapScale;
+	_LightMapUBOOverride.MaterialDiffuse[0] = lmDiffuse;
+	_LightMapUBOOverride.MaterialDiffuse[1] = lmDiffuse;
+	_LightMapUBOOverride.MaterialDiffuse[2] = lmDiffuse;
 	_LightMapUBOOverride.MaterialDiffuse[3] = 1.0f;
 	// Zero specular (lightmaps have no specular contribution)
 	memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
+	// Lightmap scale factor (x2 mode: 2.0, normal: 1.0)
+	_LightMapUBOOverride.LightMapScale = lightMapScale;
 
 	// Setup the programs now
 	setupBuiltinPrograms();
@@ -1038,7 +1048,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	if (pass > 0 && _FogEnabled)
 		memcpy(_CurrentFogColor, savedFogColor, sizeof(savedFogColor));
 
-	// Set PP constants (lightmap factors, possibly x2 scaled)
+	// Set PP constants (lightmap factors)
 	for (uint stage = 0; stage < std::min(_Extensions.MaxFragmentTextureImageUnits, (GLint)IDRV_PROGRAM_MAXSAMPLERS); ++stage)
 	{
 		uint constantIdx = m_DriverPixelProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::Constant0 + stage));
@@ -1051,7 +1061,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	// Override VP uniforms for per-pass lightmap rendering (non-UBO paths)
 	if (m_DriverVertexProgram)
 	{
-		// Override selfIllumination with per-pass LMC ambient (possibly x2 scaled)
+		// Override selfIllumination with per-pass LMC ambient
 		if (!m_ProgramUsesObjectUBO[VertexProgram])
 		{
 			int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
@@ -1064,9 +1074,9 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		{
 			// Non-table path: override individual light color uniforms
 			// setupUniforms() pre-multiplied Light0ColDiff by mat.getDiffuse(), but for
-			// lightmap materials the legacy GL driver uses material diffuse white (or grey
-			// for x2 mode). We override here: pass 0 gets the actual light diffuse (not
-			// multiplied by material diffuse), pass 1+ gets zero (light added only once).
+			// lightmap materials the legacy GL driver uses material diffuse white (or halved
+			// for x2 mode). We override here: pass 0 gets the actual light diffuse (scaled
+			// by 1/lightMapScale), pass 1+ gets zero (light added only once).
 			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			{
 				if (!_LightEnable[i]) continue;
@@ -1077,6 +1087,9 @@ void CDriverGL3::setupLightMapPass(uint pass)
 					if (pass == 0)
 					{
 						NLMISC::CRGBAF diffuse = NLMISC::CRGBAF(_UserLight[i].getDiffuse());
+						diffuse.R *= lmDiffuse;
+						diffuse.G *= lmDiffuse;
+						diffuse.B *= lmDiffuse;
 						setUniform4f(IDriver::VertexProgram, ldc, diffuse.R, diffuse.G, diffuse.B, 0.0f);
 					}
 					else
@@ -1101,10 +1114,10 @@ void CDriverGL3::setupLightMapPass(uint pass)
 			// Table path without object UBO: light factors are individual uniforms
 			if (!m_ProgramUsesMaterialUBO[VertexProgram])
 			{
-				// Override individual material uniforms: white diffuse, zero specular
+				// Override individual material uniforms: diffuse halved for x2, zero specular
 				int mdIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialDiffuse));
 				if (mdIdx != -1)
-					setUniform4f(IDriver::VertexProgram, mdIdx, 1.0f, 1.0f, 1.0f, 1.0f);
+					setUniform4f(IDriver::VertexProgram, mdIdx, lmDiffuse, lmDiffuse, lmDiffuse, 1.0f);
 				int msIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialSpecular));
 				if (msIdx != -1)
 					setUniform4f(IDriver::VertexProgram, msIdx, 0.0f, 0.0f, 0.0f, 0.0f);

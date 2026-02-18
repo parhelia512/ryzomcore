@@ -1092,6 +1092,10 @@ void CDriverGL3::setupUniforms(TProgram program)
 			if (atIdx != ~0u)
 				nglProgramUniform1i(progId, atIdx, (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0);
 		}
+
+		uint lmsIdx = p->getUniformIndex(CProgramIndex::NlLightMapScale);
+		if (lmsIdx != ~0u)
+			nglProgramUniform1f(progId, lmsIdx, _LightMapUBOOverride.Active ? _LightMapUBOOverride.LightMapScale : 1.0f);
 	}
 
 	if (!m_ProgramUsesObjectUBO[program])

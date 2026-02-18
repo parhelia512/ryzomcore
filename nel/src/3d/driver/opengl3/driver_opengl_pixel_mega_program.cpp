@@ -143,6 +143,8 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		ss << "uniform vec4 constant" << i << ";" << std::endl;
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		ss << "uniform vec4 embmMatrix" << i << ";" << std::endl;
+	if (!materialUBO)
+		ss << "uniform float nlLightMapScale;" << std::endl;
 	ss << std::endl;
 
 	// Fog uniforms (individual uniforms only when no camera UBO)
@@ -579,7 +581,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	for (int i = MEGA_PP_MAX_SAMPLERS - 1; i >= 0; --i)
 		ss << "    if (lastStage < 0 && (nlTextureActive & " << (1 << i) << ") != 0) lastStage = " << i << ";" << std::endl;
 	ss << "    if (lastStage <= 0) {" << std::endl;
-	ss << "      if (lastStage == 0) fragColor = texel0 * fragColor;" << std::endl;
+	ss << "      if (lastStage == 0) fragColor = texel0 * nlLightMapScale * fragColor;" << std::endl;
 	ss << "    } else {" << std::endl;
 	ss << "      vec4 lmAccum = vec4(0.0);" << std::endl;
 	for (int i = 0; i < MEGA_PP_MAX_SAMPLERS; ++i)
@@ -591,7 +593,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	for (int i = 0; i < MEGA_PP_MAX_SAMPLERS; ++i)
 	{
 		ss << "      if (lastStage == " << i << ") {" << std::endl;
-		ss << "        fragColor.rgb = texel" << i << ".rgb * (fragColor.rgb + lmAccum.rgb);" << std::endl;
+		ss << "        fragColor.rgb = texel" << i << ".rgb * nlLightMapScale * (fragColor.rgb + lmAccum.rgb);" << std::endl;
 		ss << "        fragColor.a = texel" << i << ".a;" << std::endl;
 		ss << "      }" << std::endl;
 	}
