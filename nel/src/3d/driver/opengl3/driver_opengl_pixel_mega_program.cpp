@@ -680,7 +680,7 @@ bool CDriverGL3::initMegaPixelPrograms()
 
 bool CDriverGL3::setupMegaPixelProgram()
 {
-	if (m_UserPixelProgram) return true;
+	nlassert(!m_UserPixelProgram); // See setupBuiltinPixelProgram
 
 	nlassert(_CurrentMaterial);
 	CMaterial &mat = *_CurrentMaterial;

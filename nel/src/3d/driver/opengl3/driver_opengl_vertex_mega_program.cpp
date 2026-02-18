@@ -537,24 +537,7 @@ bool CDriverGL3::setupMegaVertexProgram()
 {
 	// Note: touchVertexFormatVP() already called by setupBuiltinVertexProgram()
 
-	if (m_UserVertexProgram)
-	{
-		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
-		m_VPWorldSpacePositionOutput = m_UserVertexProgram->features().OutputsWorldSpacePosition;
-		m_VPNormalOutput = false;
-		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO || m_UserVertexProgram->features().UsesObjectUBO;
-		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO || m_UserVertexProgram->features().UsesObjectUBO;
-		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO; // Object UBO implies table and camera UBO
-		m_ProgramUsesMaterialUBO[VertexProgram] = m_UserVertexProgram->features().UsesMaterialUBO;
-		// If PPL requested and user VP has object UBO, force world-space outputs
-		// (UBO programs support PPL dynamically via nlWorldSpacePosition/Normal uniforms)
-		if (_NumPerPixelLights > 0 && m_ProgramUsesObjectUBO[VertexProgram])
-		{
-			m_VPWorldSpacePositionOutput = true;
-			m_VPNormalOutput = true;
-		}
-		return true;
-	}
+	nlassert(!m_UserVertexProgram); // See setupBuiltinVertexProgram
 
 	m_VPSpecularOutput = true; // Mega VP always outputs specularColor
 

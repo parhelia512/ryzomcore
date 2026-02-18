@@ -816,24 +816,26 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 {
 	touchVertexFormatVP(); // Always update — PP builtin depends on vertex format
 
-	if (m_UseMegaShaders) return setupMegaVertexProgram();
-
 	if (m_UserVertexProgram)
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
 		m_VPWorldSpacePositionOutput = m_UserVertexProgram->features().OutputsWorldSpacePosition;
-		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO;
-		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO;
-		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO;
+		m_VPNormalOutput = false;
+		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO || m_UserVertexProgram->features().UsesObjectUBO;
+		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO || m_UserVertexProgram->features().UsesObjectUBO;
+		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO; // Object UBO implies table and camera UBO
 		m_ProgramUsesMaterialUBO[VertexProgram] = m_UserVertexProgram->features().UsesMaterialUBO;
-		// Object UBO implies table and camera UBO
-		if (m_ProgramUsesObjectUBO[VertexProgram])
+		// If PPL requested and user VP has object UBO, force world-space outputs
+		// (UBO programs support PPL dynamically via nlWorldSpacePosition/Normal uniforms)
+		if (_NumPerPixelLights > 0 && m_ProgramUsesObjectUBO[VertexProgram])
 		{
-			m_ProgramUsesLightTableUBO[VertexProgram] = true;
-			m_ProgramUsesCameraUBO[VertexProgram] = true;
+			m_VPWorldSpacePositionOutput = true;
+			m_VPNormalOutput = true;
 		}
 		return true;
 	}
+
+	if (m_UseMegaShaders) return setupMegaVertexProgram();
 
 	// Check if PP needs world-space normal varying
 	bool needNormal = false;
@@ -867,16 +869,24 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 	if (!activeVertexProgram(m_VPBuiltinCurrent.VertexProgram, true))
 		return false;
 
-	// GL3 TODO: Here we set the uniforms of the vertex program!
-
 	return true;
 }
 
 bool CDriverGL3::setupBuiltinPixelProgram()
 {
-	if (m_UseMegaShaders) return setupMegaPixelProgram();
+	if (m_UserPixelProgram)
+	{
+		m_ProgramUsesLightTableUBO[PixelProgram] = m_UserPixelProgram->features().UsesLightTableUBO || m_UserPixelProgram->features().UsesObjectUBO;
+		m_ProgramUsesCameraUBO[PixelProgram] = m_UserPixelProgram->features().UsesCameraUBO || m_UserPixelProgram->features().UsesObjectUBO;
+		m_ProgramUsesObjectUBO[PixelProgram] = m_UserPixelProgram->features().UsesObjectUBO;
+		m_ProgramUsesMaterialUBO[PixelProgram] = m_UserPixelProgram->features().UsesMaterialUBO;
+		return true;
+	}
 
-	if (m_UserPixelProgram) return true;
+	if (m_UseMegaShaders)
+	{
+		return setupMegaPixelProgram();
+	}
 
 	nlassert(_CurrentMaterial);
 	CMaterial &mat = *_CurrentMaterial;
@@ -903,8 +913,6 @@ bool CDriverGL3::setupBuiltinPixelProgram()
 
 	if (!activePixelProgram(matDrv->PPBuiltin.PixelProgram, true))
 		return false;
-
-	// GL3 TODO: Here we set the uniforms of the vertex program!
 
 	return true;
 }
