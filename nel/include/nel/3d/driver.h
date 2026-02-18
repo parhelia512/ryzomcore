@@ -164,7 +164,15 @@ public:
 
 	enum TProgram
 	{
-		ShaderProgram = 0, // Monolithic shader program, must contain a matching VP/PP pair at minimum
+		ShaderProgram = 0, // Monolithic shader program, must contain a matching VP/PP pair at minimum.
+		// Monolithic shaders only support UBOs, not individual uniforms. The driver light
+		// list is split between per-vertex lights (VP) and per-pixel lights (PP). With
+		// individual uniforms on separate shader objects, each stage has its own namespace,
+		// so the VP and PP declare their light slots independently with separate numbering
+		// (light0..N in VP, ppLight0..N in PP). UBOs make this unnecessary — both stages
+		// just share the full light table and a split index. This is simpler in general
+		// and essential for monolithic programs sharing one namespace, as well as for
+		// modern APIs (Vulkan, Metal, D3D12) which don't have individual uniforms.
 
 		VertexProgram = 1,
 		PixelProgram = 2,
