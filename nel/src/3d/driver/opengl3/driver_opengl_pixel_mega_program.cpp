@@ -171,8 +171,8 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	// fogOrPpl uniforms: fog enable (per-material), PPL data, and nlNumPerPixelLights
 	if (fogOrPpl)
 	{
-		// nlFogEnabled: always individual uniform (per-material, not in any UBO)
-		ss << "uniform int nlFogEnabled;" << std::endl;
+		if (!objectUBO)
+			ss << "uniform int nlFogEnabled;" << std::endl;
 
 		if (tableUBO)
 		{

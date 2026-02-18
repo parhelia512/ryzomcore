@@ -661,7 +661,8 @@ struct CObjectUBOData
 	sint32 worldSpaceNormal;       // 4
 	sint32 worldSpacePosition;     // 4
 	sint32 numPerPixelLights;      // 4
-	sint32 _pad[2];                // 8 (pad to 16-byte std140 alignment)
+	sint32 fogEnabled;             // 4
+	sint32 _pad[1];                // 4 (pad to 16-byte std140 alignment)
 };                                 // 304
 static_assert(sizeof(CObjectUBOData) == 304, "Object UBO layout mismatch");
 
@@ -755,8 +756,8 @@ void CDriverGL3::uploadObjectUBO()
 	data.worldSpaceNormal = m_VPNormalOutput ? 1 : 0;
 	data.worldSpacePosition = m_VPWorldSpacePositionOutput ? 1 : 0;
 	data.numPerPixelLights = (sint32)_NumPerPixelLights;
+	data.fogEnabled = m_VPBuiltinCurrent.Fog ? 1 : 0;
 	data._pad[0] = 0;
-	data._pad[1] = 0;
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CObjectUBOData);

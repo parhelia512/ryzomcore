@@ -1012,7 +1012,8 @@ void CDriverGL3::setupUniforms(TProgram program)
 		if (fogDensityIdx != ~0)
 			nglProgramUniform1f(progId, fogDensityIdx, _FogDensity);
 
-		// Camera forward for world-space fog (second row of view matrix, NeL Y = forward)
+		// Camera forward for world-space fog (second row of view matrix, NeL Y = forward).
+		// When cameraUBO is active, the PP derives this from viewMatrix in the UBO instead.
 		uint camFwdIdx = p->getUniformIndex(CProgramIndex::CameraForward);
 		if (camFwdIdx != ~0)
 		{
@@ -1175,8 +1176,8 @@ void CDriverGL3::setupUniforms(TProgram program)
 			nglProgramUniform1i(progId, cpmIdx, (sint32)m_VPBuiltinCurrent.ClipPlaneMask);
 	}
 
-	// nlFogEnabled: per-material fog enable state — always individual uniform (not in any UBO,
-	// since nlFogMode is in the per-frame NlCamera UBO, but fog enable is per-material)
+	// nlFogEnabled: per-object fog enable state (in NlModel UBO when objectUBO is active)
+	if (!m_ProgramUsesObjectUBO[program])
 	{
 		uint fogEnIdx = p->getUniformIndex(CProgramIndex::NlFogEnabled);
 		if (fogEnIdx != ~0u)
