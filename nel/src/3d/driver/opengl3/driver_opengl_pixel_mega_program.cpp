@@ -326,7 +326,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		ss << "  if (nlWorldSpacePosition != 0) {" << std::endl;
 		if (cameraUBO)
 			ss << "    vec3 camFwd = vec3(viewMatrix[0].y, viewMatrix[1].y, viewMatrix[2].y);" << std::endl;
-		ss << "    z = abs(dot(ecPos.xyz, " << (cameraUBO ? "camFwd" : "cameraForward") << "));" << std::endl;
+		ss << "    z = abs(dot(ecPos.xyz / ecPos.w - cameraWorldPos, " << (cameraUBO ? "camFwd" : "cameraForward") << "));" << std::endl;
 		ss << "  } else" << std::endl;
 		ss << "    z = abs(ecPos.y / ecPos.w);" << std::endl;
 		ss << "  float fogFactor;" << std::endl;
@@ -720,7 +720,7 @@ bool CDriverGL3::setupMegaPixelProgram()
 
 	// Activate PPL only if the paired VP supports it
 	bool pplActive = false;
-	if (_NumPerPixelLights > 0)
+	if (m_VPBuiltinCurrent.NumPerPixelLights > 0)
 	{
 		if (m_UserVertexProgram)
 		{

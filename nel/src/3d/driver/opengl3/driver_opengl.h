@@ -1412,6 +1412,9 @@ private:
 	// Whether the currently active VP outputs world-space position at VaryingLocationEcPos
 	bool m_VPWorldSpacePositionOutput;
 
+	// Whether the currently active VP supports PPL
+	bool m_ProgramSupportsPPL;
+
 	// Per-program UBO usage flags (indexed by IDriver::TProgram)
 	static const uint NumTProgram = IDriver::ProgramNb;
 	bool m_ProgramUsesLightTableUBO[NumTProgram]; // Program reads from NlLightTable UBO

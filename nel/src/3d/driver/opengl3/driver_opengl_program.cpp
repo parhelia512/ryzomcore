@@ -816,6 +816,22 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 {
 	touchVertexFormatVP(); // Always update — PP builtin depends on vertex format
 
+	// Resolve PPL support: both VP and PP must support it
+	m_ProgramSupportsPPL = m_UserPixelProgram ? m_UserPixelProgram->features().SupportPPL : true;
+	if (m_UserVertexProgram)
+		m_ProgramSupportsPPL = m_ProgramSupportsPPL && m_UserVertexProgram->features().SupportPPL;
+
+	// Set canonical PPL count — single source of truth for all paths
+	{
+		uint8 numPpl = (uint8)(m_ProgramSupportsPPL ? _NumPerPixelLights : 0);
+		if (m_VPBuiltinCurrent.NumPerPixelLights != numPpl)
+		{
+			m_VPBuiltinCurrent.NumPerPixelLights = numPpl;
+			if (m_VPBuiltinCurrent.Lighting)
+				m_VPBuiltinTouched = true;
+		}
+	}
+
 	if (m_UserVertexProgram)
 	{
 		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
@@ -827,7 +843,7 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 		m_ProgramUsesMaterialUBO[VertexProgram] = m_UserVertexProgram->features().UsesMaterialUBO;
 		// If PPL requested and user VP has object UBO, force world-space outputs
 		// (UBO programs support PPL dynamically via nlWorldSpacePosition/Normal uniforms)
-		if (_NumPerPixelLights > 0 && m_ProgramUsesObjectUBO[VertexProgram])
+		if (m_VPBuiltinCurrent.NumPerPixelLights > 0 && m_ProgramUsesObjectUBO[VertexProgram])
 		{
 			m_VPWorldSpacePositionOutput = true;
 			m_VPNormalOutput = true;
@@ -848,7 +864,7 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 		needWorldPos = m_UserPixelProgram->features().InputsWorldSpacePosition;
 
 	// Force world-space outputs when per-pixel lighting is active
-	if (_NumPerPixelLights > 0)
+	if (m_VPBuiltinCurrent.NumPerPixelLights > 0)
 	{
 		needNormal = true;
 		needWorldPos = true;
@@ -856,15 +872,6 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 
 	setWorldSpaceNormalVP(needNormal);
 	setWorldSpacePositionVP(needWorldPos);
-
-	// Set PPL count on desc — vpGenerate shifts lights internally,
-	// and the cache key ignores light modes below this threshold.
-	if (m_VPBuiltinCurrent.NumPerPixelLights != (uint8)_NumPerPixelLights)
-	{
-		m_VPBuiltinCurrent.NumPerPixelLights = (uint8)_NumPerPixelLights;
-		if (m_VPBuiltinCurrent.Lighting)
-			m_VPBuiltinTouched = true;
-	}
 
 	if (m_VPBuiltinTouched)
 	{
@@ -1128,7 +1135,7 @@ void CDriverGL3::setupUniforms(TProgram program)
 		// Per-pixel lighting count
 		uint pplIdx = p->getUniformIndex(CProgramIndex::NlNumPerPixelLights);
 		if (pplIdx != ~0u)
-			nglProgramUniform1i(progId, pplIdx, (sint32)_NumPerPixelLights);
+			nglProgramUniform1i(progId, pplIdx, (sint32)m_VPBuiltinCurrent.NumPerPixelLights);
 
 		// Lighting mode
 		uint nlIdx = p->getUniformIndex(CProgramIndex::NlLighting);
@@ -1140,13 +1147,13 @@ void CDriverGL3::setupUniforms(TProgram program)
 		{
 			if (program == VertexProgram)
 			{
-				// VP lights are shifted: driver slot [_NumPerPixelLights..7] → VP slot [0..7-N]
+				// VP lights are shifted: driver slot [m_VPBuiltinCurrent.NumPerPixelLights..7] → VP slot [0..7-N]
 				for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 				{
 					uint lmIdx = p->getUniformIndex((CProgramIndex::TName)(CProgramIndex::NlLightMode0 + i));
 					if (lmIdx != ~0u)
 					{
-						uint src = i + _NumPerPixelLights;
+						uint src = i + m_VPBuiltinCurrent.NumPerPixelLights;
 						sint mode = (src < NL_OPENGL3_MAX_LIGHT && _LightEnable[src]) ? _LightMode[src] : -1;
 						nglProgramUniform1i(progId, lmIdx, mode);
 					}
@@ -1252,9 +1259,9 @@ void CDriverGL3::setupUniforms(TProgram program)
 	else if (m_ProgramUsesLightTableUBO[program])
 	{
 		// Light table UBO path: per-object indices/factors/material
-		// VP lights are shifted: driver slot [_NumPerPixelLights..7] → VP slot [0..7-N]
+		// VP lights are shifted: driver slot [m_VPBuiltinCurrent.NumPerPixelLights..7] → VP slot [0..7-N]
 		// PP lights are not shifted (PP reads from its own uniform namespace)
-		uint lightShift = (program == VertexProgram) ? _NumPerPixelLights : 0;
+		uint lightShift = (program == VertexProgram) ? m_VPBuiltinCurrent.NumPerPixelLights : 0;
 
 		// Per-object light indices and factors
 		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
@@ -1327,7 +1334,7 @@ void CDriverGL3::setupUniforms(TProgram program)
 			}
 		}
 	}
-	else if (program == PixelProgram && _NumPerPixelLights > 0)
+	else if (program == PixelProgram && m_VPBuiltinCurrent.NumPerPixelLights > 0)
 	{
 		// PP non-table PPL: raw per-light values via pp-prefixed uniforms
 		// (computeLightPP handles direction negate and PZB-relative position internally)
@@ -1432,7 +1439,7 @@ void CDriverGL3::setupUniforms(TProgram program)
 	else if (program == VertexProgram)
 	{
 		// Legacy per-light uniform path (VP-only: pre-multiplied light×material)
-		// VP lights are shifted: driver slot [_NumPerPixelLights..7] → VP slot [0..7-N]
+		// VP lights are shifted: driver slot [m_VPBuiltinCurrent.NumPerPixelLights..7] → VP slot [0..7-N]
 		NLMISC::CRGBAF matDiffuse = mat.isLightedVertexColor()
 			? NLMISC::CRGBAF(1.0f, 1.0f, 1.0f, 1.0f)
 			: NLMISC::CRGBAF(mat.getDiffuse());
@@ -1440,7 +1447,7 @@ void CDriverGL3::setupUniforms(TProgram program)
 
 		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
-			uint src = i + _NumPerPixelLights;
+			uint src = i + m_VPBuiltinCurrent.NumPerPixelLights;
 			if (src >= NL_OPENGL3_MAX_LIGHT || !_LightEnable[src])
 				continue;
 

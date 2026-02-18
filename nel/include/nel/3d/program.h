@@ -75,7 +75,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), OutputsWorldSpacePosition(false), InputsWorldSpaceNormal(false), InputsWorldSpacePosition(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), OutputsWorldSpacePosition(false), InputsWorldSpaceNormal(false), InputsWorldSpacePosition(false), SupportPPL(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -127,6 +127,11 @@ struct CProgramFeatures
 	/// that does not use UsesObjectUBO, per-pixel lighting is only activated if both
 	/// InputsWorldSpacePosition and InputsWorldSpaceNormal are set.
 	bool InputsWorldSpacePosition;
+
+	/// Whether this program supports per-pixel lighting
+	/// If this is false, per-pixel lighting will not be used while this program is active,
+	/// otherwise it depends on the availability of the Object UBO and world space varyings.
+	bool SupportPPL;
 
 	// UBO flags
 	/// Whether this VP reads lights from a UBO light table + per-object indices/factors.

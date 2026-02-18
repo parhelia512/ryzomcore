@@ -586,8 +586,9 @@ bool CDriverGL3::setupMegaVertexProgram()
 		m_VPWorldSpacePositionOutput = m_UserPixelProgram->features().InputsWorldSpacePosition;
 
 	// Activate PPL only if the paired PP supports it
+	// (m_VPBuiltinCurrent.NumPerPixelLights is the canonical value, set in setupBuiltinVertexProgram)
 	bool pplActive = false;
-	if (_NumPerPixelLights > 0)
+	if (m_VPBuiltinCurrent.NumPerPixelLights > 0)
 	{
 		if (m_UserPixelProgram)
 		{

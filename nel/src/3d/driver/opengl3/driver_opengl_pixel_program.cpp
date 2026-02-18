@@ -694,7 +694,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		ss << "vec4 applyFog(vec4 col)" << std::endl;
 		ss << "{" << std::endl;
 		if (desc.WorldSpacePosition)
-			ss << "  float z = abs(dot(ecPos.xyz, cameraForward));" << std::endl;
+			ss << "  float z = abs(dot(ecPos.xyz / ecPos.w - cameraWorldPos, cameraForward));" << std::endl;
 		else
 			ss << "  float z = abs(ecPos.y / ecPos.w);" << std::endl;
 		switch (desc.FogMode)
