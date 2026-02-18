@@ -362,7 +362,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		ss << "  float diff = max(0.0, dot(lightDir, wsNormal));" << std::endl;
 		ss << "  pplDiffuse += diff * attnFactor * colDiff;" << std::endl;
 		ss << "  vec3 h = normalize(lightDir + eyeDir);" << std::endl;
-		ss << "  float spec = pow(max(0.0, dot(wsNormal, h)), shininess);" << std::endl;
+		ss << "  float spec = diff > 0.0 ? pow(max(0.0, dot(wsNormal, h)), shininess) : 0.0;" << std::endl;
 		ss << "  pplSpecular += spec * attnFactor * colSpec;" << std::endl;
 		ss << "}" << std::endl;
 		ss << std::endl;
@@ -438,7 +438,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 
 		// rawVertexColor carries the raw vertex color when VertexColorLighted + PPL,
 		// vec4(1) otherwise. Multiply combined lighting by it for GL_COLOR_MATERIAL behavior.
-		ss << "    fragColor.rgb = (fragColor.rgb + pplDiff.rgb) * rawVertexColor.rgb;" << std::endl;
+		ss << "    fragColor.rgb = clamp((fragColor.rgb + pplDiff.rgb) * rawVertexColor.rgb, 0.0, 1.0);" << std::endl;
 		ss << "  }" << std::endl;
 		ss << std::endl;
 	}
