@@ -1413,7 +1413,7 @@ private:
 	bool m_VPWorldSpacePositionOutput;
 
 	// Per-program UBO usage flags (indexed by IDriver::TProgram)
-	static const uint NumTProgram = 3;
+	static const uint NumTProgram = IDriver::ProgramNb;
 	bool m_ProgramUsesLightTableUBO[NumTProgram]; // Program reads from NlLightTable UBO
 	bool m_ProgramUsesCameraUBO[NumTProgram];     // Program reads camera/fog/clip from NlCamera UBO
 	bool m_ProgramUsesObjectUBO[NumTProgram];     // Program reads from NlModel UBO

@@ -164,9 +164,13 @@ public:
 
 	enum TProgram
 	{
-		VertexProgram = 0,
-		PixelProgram = 1,
-		GeometryProgram = 2
+		ShaderProgram = 0, // Monolithic shader program, must contain a matching VP/PP pair at minimum
+
+		VertexProgram = 1,
+		PixelProgram = 2,
+		// GeometryProgram = 3,
+
+		ProgramNb
 	};
 
 protected:
