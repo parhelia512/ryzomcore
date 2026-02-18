@@ -584,10 +584,10 @@ bool CDriverGL3::setupMegaVertexProgram()
 	int objectUBO = m_UseMegaObjectUBO ? 1 : 0;
 	int materialUBO = m_UseMegaMaterialUBO ? 1 : 0;
 
-	m_ProgramUsesLightTableUBO[PixelProgram] = tableUBO;
-	m_ProgramUsesCameraUBO[PixelProgram] = cameraUBO;
-	m_ProgramUsesObjectUBO[PixelProgram] = objectUBO;
-	m_ProgramUsesMaterialUBO[PixelProgram] = materialUBO;
+	m_ProgramUsesLightTableUBO[VertexProgram] = tableUBO;
+	m_ProgramUsesCameraUBO[VertexProgram] = cameraUBO;
+	m_ProgramUsesObjectUBO[VertexProgram] = objectUBO;
+	m_ProgramUsesMaterialUBO[VertexProgram] = materialUBO;
 
 	CVertexProgram *vp = m_MegaVP[fogOrPpl][clip][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(vp);

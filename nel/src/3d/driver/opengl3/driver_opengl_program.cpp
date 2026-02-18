@@ -911,6 +911,11 @@ bool CDriverGL3::setupBuiltinPixelProgram()
 		matDrv->PPBuiltin.MaterialUBOTouched = false;
 	}
 
+	m_ProgramUsesLightTableUBO[PixelProgram] = false; // Builtin non-mega PP does not use UBOs
+	m_ProgramUsesCameraUBO[PixelProgram] = false;
+	m_ProgramUsesObjectUBO[PixelProgram] = false;
+	m_ProgramUsesMaterialUBO[PixelProgram] = false;
+
 	if (!activePixelProgram(matDrv->PPBuiltin.PixelProgram, true))
 		return false;
 
