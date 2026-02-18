@@ -519,7 +519,7 @@ void CDriverGL3::uploadLightTableUBO()
 }
 
 // ***************************************************************************
-// Camera UBO data layout (std140, 208 bytes, matches GLSL NlCamera block)
+// Camera UBO data layout (std140, 240 bytes, matches GLSL NlCamera block)
 struct CCameraUBOData
 {
 	float viewMatrix[16];    // 64
@@ -530,8 +530,10 @@ struct CCameraUBOData
 	sint32 fogMode;          //  4
 	sint32 clipPlaneMask;    //  4
 	float clipPlane[6][4];   // 96
-};                           // 208
-static_assert(sizeof(CCameraUBOData) == 208, "Camera UBO layout mismatch");
+	float cameraWorldPos[3]; // 12  (inverse view translation: actual camera world position)
+	float _pad0;             //  4
+};                           // 224
+static_assert(sizeof(CCameraUBOData) == 224, "Camera UBO layout mismatch");
 
 void CDriverGL3::uploadCameraUBO()
 {
@@ -568,6 +570,18 @@ void CDriverGL3::uploadCameraUBO()
 	// Clip planes
 	for (uint i = 0; i < MaxClipPlanes; ++i)
 		memcpy(data.clipPlane[i], _ClipPlaneEye[i], 4 * sizeof(float));
+
+	// Camera world position: -transpose(mat3(V)) * V[3]
+	// With PZB: V[3]=0 → (0,0,0). Without PZB: actual camera world position.
+	{
+		CMatrix invView = _ViewMtx;
+		invView.invert();
+		CVector cwp = invView.getPos();
+		data.cameraWorldPos[0] = cwp.x;
+		data.cameraWorldPos[1] = cwp.y;
+		data.cameraWorldPos[2] = cwp.z;
+		data._pad0 = 0.f;
+	}
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CCameraUBOData);

@@ -199,7 +199,10 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 				ss << "uniform float nlMaterialShininess;" << std::endl;
 			}
 			if (!cameraUBO)
+			{
 				ss << "uniform vec3 pzbCameraPos;" << std::endl;
+				ss << "uniform vec3 cameraWorldPos;" << std::endl;
+			}
 		}
 		else
 		{
@@ -225,7 +228,10 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 				ss << "uniform float nlMaterialShininess;" << std::endl;
 			}
 			if (!cameraUBO)
+			{
 				ss << "uniform vec3 pzbCameraPos;" << std::endl;
+				ss << "uniform vec3 cameraWorldPos;" << std::endl;
+			}
 		}
 		if (!objectUBO)
 			ss << "uniform int nlNumPerPixelLights;" << std::endl;
@@ -384,7 +390,9 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		ss << "  if (nlNumPerPixelLights > 0) {" << std::endl;
 		ss << "    vec3 wsPos = ecPos.xyz / ecPos.w;" << std::endl;
 		ss << "    vec3 wsNormal = normalize(normal.xyz);" << std::endl;
-		ss << "    vec3 eyeDir = normalize(-wsPos);" << std::endl;
+		// cameraWorldPos: precomputed on CPU as inverse view matrix position
+		// With PZB: (0,0,0) since view translation is zeroed. Without PZB: actual camera world position.
+		ss << "    vec3 eyeDir = normalize(cameraWorldPos - wsPos);" << std::endl;
 		ss << "    vec4 pplDiff = vec4(0.0);" << std::endl;
 
 		if (tableUBO)

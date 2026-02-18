@@ -633,6 +633,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		ss << "uniform vec4 nlMaterialSpecular;" << std::endl;
 		ss << "uniform float nlMaterialShininess;" << std::endl;
 		ss << "uniform vec3 pzbCameraPos;" << std::endl;
+		ss << "uniform vec3 cameraWorldPos;" << std::endl;
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
 			ss << "uniform int nlPpLightMode" << i << ";" << std::endl;
@@ -733,7 +734,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		ss << "if (nlNumPerPixelLights > 0) {" << std::endl;
 		ss << "  vec3 wsPos = ecPos.xyz / ecPos.w;" << std::endl;
 		ss << "  vec3 wsNormal = normalize(normal.xyz);" << std::endl;
-		ss << "  vec3 eyeDir = normalize(-wsPos);" << std::endl;
+		ss << "  vec3 eyeDir = normalize(cameraWorldPos - wsPos);" << std::endl;
 		ss << "  vec4 pplDiff = vec4(0.0);" << std::endl;
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{

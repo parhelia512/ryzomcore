@@ -463,6 +463,7 @@ struct CProgramIndex
 		NlMaterialSpecular,
 		NlMaterialShininess,
 		PzbCameraPos,
+		CameraWorldPos,
 		NlLightMapScale,
 
 		// Per-pixel lighting uniforms for pixel programs (raw values, not pre-multiplied)

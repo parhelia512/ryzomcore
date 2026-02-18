@@ -1315,6 +1315,16 @@ void CDriverGL3::setupUniforms(TProgram program)
 			uint pzbIdx = p->getUniformIndex(CProgramIndex::PzbCameraPos);
 			if (pzbIdx != ~0u)
 				nglProgramUniform3f(progId, pzbIdx, _PZBCameraPos.x, _PZBCameraPos.y, _PZBCameraPos.z);
+
+			uint cwpIdx = p->getUniformIndex(CProgramIndex::CameraWorldPos);
+			if (cwpIdx != ~0u)
+			{
+				// Camera world position: inverse view matrix translation
+				CMatrix invView = _ViewMtx;
+				invView.invert();
+				CVector cwp = invView.getPos();
+				nglProgramUniform3f(progId, cwpIdx, cwp.x, cwp.y, cwp.z);
+			}
 		}
 	}
 	else if (program == PixelProgram && _NumPerPixelLights > 0)
@@ -1408,6 +1418,15 @@ void CDriverGL3::setupUniforms(TProgram program)
 			uint pzbIdx = p->getUniformIndex(CProgramIndex::PzbCameraPos);
 			if (pzbIdx != ~0u)
 				nglProgramUniform3f(progId, pzbIdx, _PZBCameraPos.x, _PZBCameraPos.y, _PZBCameraPos.z);
+
+			uint cwpIdx = p->getUniformIndex(CProgramIndex::CameraWorldPos);
+			if (cwpIdx != ~0u)
+			{
+				CMatrix invView = _ViewMtx;
+				invView.invert();
+				CVector cwp = invView.getPos();
+				nglProgramUniform3f(progId, cwpIdx, cwp.x, cwp.y, cwp.z);
+			}
 		}
 	}
 	else if (program == VertexProgram)
