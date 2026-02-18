@@ -108,7 +108,7 @@ const char *g_AttribNames[CVertexBuffer::NumValue] =
 	"secondaryColor",
 	"fog",
 	"paletteSkin",
-	"none",
+	"tangent",
 	"texCoord0",
 	"texCoord1",
 	"texCoord2",

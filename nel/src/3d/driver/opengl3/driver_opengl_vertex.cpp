@@ -400,7 +400,7 @@ const uint		CDriverGL3::GLVertexAttribIndex[CVertexBuffer::NumValue]=
 	1,	// Weight
 	6,	// Empty (PaletteSkin)
 	5,	// Fog
-	7,	// Empty
+	7,	// Tangent
 };
 
 // tells for each vertex argument if it must be normalized when it is an integral type
@@ -421,7 +421,7 @@ static const GLboolean ARBVertexProgramMustNormalizeAttrib[] =
 	GL_TRUE,  // Weight
 	GL_FALSE, // PaletteSkin
 	GL_FALSE, // Fog
-	GL_FALSE, // Empty
+	GL_FALSE, // Tangent
 };
 
 // ***************************************************************************

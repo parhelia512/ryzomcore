@@ -110,7 +110,7 @@ enum TAttribOffset
 	SecondaryColor,
 	Fog,
 	PaletteSkin,
-	Empty,
+	Tangent,
 	TexCoord0,
 	TexCoord1,
 	TexCoord2,
@@ -130,7 +130,7 @@ static const int VaryingLocationRawVertexColor = Weight; // = 1, raw vertex colo
 static const int VaryingLocationNormal = Normal; // = 2, world-space normal (when WorldSpaceNormal is set)
 static const int VaryingLocationDiffuseColor = PrimaryColor; // = 3, PrimaryColor is always skipped
 static const int VaryingLocationSpecularColor = SecondaryColor; // = 4, SecondaryColor is always skipped
-// Reserved: VaryingLocationTangent = PaletteSkin (6), VaryingLocationBitangent = Empty (7)
+static const int VaryingLocationTangent = Tangent; // = 7, world-space tangent (vec4: xyz = tangent, w = bitangent sign)
 
 extern const uint16 g_VertexFlags[CVertexBuffer::NumValue];
 extern const char *g_AttribNames[CVertexBuffer::NumValue];

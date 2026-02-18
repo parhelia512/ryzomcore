@@ -1353,7 +1353,8 @@ bool CDriverGL3::supportPerPixelLighting(bool specular) const
 {
 	H_AUTO_OGL(CDriverGL3_supportPerPixelLighting)
 
-	return false; // FIXME GL3 // _Extensions.GLCore;
+	// Per-pixel lighting is deprecated. The replacement is supportWorldSpacePPL().
+	return false;
 }
 
 // ***************************************************************************
@@ -1723,7 +1724,8 @@ bool CDriverGL3::supportCloudRenderSinglePass() const
 {
 	H_AUTO_OGL(CDriverGL3_supportCloudRenderSinglePass)
 
-	// Cloud shader is deprecated and will not be supported in the GL3 driver.
+	// Cloud shader (CCloud) is deprecated and will not be supported in the GL3 driver.
+	// It was only used in the Snowballs demo and was removed from Ryzom.
 	return false;
 }
 
