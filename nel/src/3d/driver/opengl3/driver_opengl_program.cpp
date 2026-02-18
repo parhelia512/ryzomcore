@@ -1115,7 +1115,8 @@ void CDriverGL3::setupUniforms(TProgram program)
 			nglProgramUniform1i(progId, nlIdx, m_VPBuiltinCurrent.Lighting ? 1 : 0);
 
 		// Per-light modes (non-table variant — table reads from UBO)
-		if (!m_ProgramUsesLightTableUBO[program])
+		// VP-only: mega PP does not declare nlLightMode uniforms
+		if (program == VertexProgram && !m_ProgramUsesLightTableUBO[program])
 		{
 			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 			{
@@ -1362,9 +1363,9 @@ void CDriverGL3::setupUniforms(TProgram program)
 				nglProgramUniform3f(progId, pzbIdx, _PZBCameraPos.x, _PZBCameraPos.y, _PZBCameraPos.z);
 		}
 	}
-	else
+	else if (program == VertexProgram)
 	{
-		// Legacy per-light uniform path
+		// Legacy per-light uniform path (VP-only: pre-multiplied light×material)
 		NLMISC::CRGBAF matDiffuse = mat.isLightedVertexColor()
 			? NLMISC::CRGBAF(1.0f, 1.0f, 1.0f, 1.0f)
 			: NLMISC::CRGBAF(mat.getDiffuse());
