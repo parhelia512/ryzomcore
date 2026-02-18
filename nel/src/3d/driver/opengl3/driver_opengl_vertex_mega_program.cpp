@@ -199,7 +199,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 		ss << "uniform int nlWorldSpaceNormal;" << std::endl;
 		if (fogOrPpl)
 			ss << "uniform int nlWorldSpacePosition;" << std::endl;
-		ss << "uniform int nlNumPerPixelLights;" << std::endl;
+		// nlNumPerPixelLights not needed in VP: upload path shifts VP lights to start at slot 0
 	}
 	ss << std::endl;
 
@@ -333,14 +333,18 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 		const char *matSpecStr = materialUBO ? "materialSpecular" : "nlMaterialSpecular";
 		const char *matShinStr = materialUBO ? "materialShininess" : "nlMaterialShininess";
 
-		// Unrolled light table lookups (skip first nlNumPerPixelLights — evaluated in PP)
+		// Unrolled light table lookups
+		// objectUBO: VP and PP share UBO slots, guard with nlNumPerPixelLights
+		// !objectUBO: upload path shifts VP lights to slot 0, no guard needed
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
 			// Light index/factor accessor: packed from UBO or individual uniforms
 			const char *idxAccess = objectUBO ? s_LightIdxAccess[i] : NULL;
 			const char *facAccess = objectUBO ? s_LightFacAccess[i] : NULL;
 
-			ss << "    if (" << i << " >= nlNumPerPixelLights) {" << std::endl;
+			if (objectUBO)
+				ss << "    if (" << i << " >= nlNumPerPixelLights) {" << std::endl;
+			ss << "    {" << std::endl;
 			if (objectUBO)
 				ss << "      int idx = " << idxAccess << ";" << std::endl;
 			else
@@ -365,14 +369,16 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool clip, bool tableUBO
 			ss << "          normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);" << std::endl;
 			ss << "      }" << std::endl;
 			ss << "    }" << std::endl;
+			if (objectUBO)
+				ss << "    }" << std::endl;
 		}
 	}
 	else
 	{
-		// Unrolled 8-light calls with individual uniforms (skip first nlNumPerPixelLights)
+		// Unrolled 8-light calls with individual uniforms
+		// Upload path shifts VP lights to slot 0, no guard needed
 		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
-			ss << "    if (" << i << " >= nlNumPerPixelLights)" << std::endl;
 			ss << "    computeLight(nlLightMode" << i
 				<< ", light" << i << "DirOrPos"
 				<< ", light" << i << "ColDiff"

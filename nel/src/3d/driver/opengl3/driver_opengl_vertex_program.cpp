@@ -30,6 +30,13 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
+// Helper: get effective VP light mode at VP slot (shifted by NumPerPixelLights)
+static inline sint vpLightMode(const CVPBuiltin &desc, sint vpSlot)
+{
+	sint drvSlot = vpSlot + desc.NumPerPixelLights;
+	return (drvSlot < NL_OPENGL3_MAX_LIGHT) ? desc.LightMode[drvSlot] : -1;
+}
+
 bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 {
 	if (left.VertexFormat != right.VertexFormat)
@@ -37,9 +44,16 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 	if (left.Lighting != right.Lighting)
 		return right.Lighting;
 	if (left.Lighting)
+	{
+		// Compare shifted VP light layout (NumPerPixelLights is implicit, not part of key)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			if (left.LightMode[i] != right.LightMode[i])
-				return left.LightMode[i] < right.LightMode[i];
+		{
+			sint lm = vpLightMode(left, i);
+			sint rm = vpLightMode(right, i);
+			if (lm != rm)
+				return lm < rm;
+		}
+	}
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
 			return left.TexGenMode[i] < right.TexGenMode[i];
@@ -68,9 +82,12 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 	if (left.Lighting != right.Lighting)
 		return false;
 	if (left.Lighting)
+	{
+		// Compare shifted VP light layout (NumPerPixelLights is implicit, not part of key)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			if (left.LightMode[i] != right.LightMode[i])
+			if (vpLightMode(left, i) != vpLightMode(right, i))
 				return false;
+	}
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
 			return false;
@@ -104,7 +121,7 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 	h = NLMISC::wangHash(((uint32)v.VertexFormat) | (v.Lighting ? (1 << 16) : 0) | (v.Specular ? (1 << 17) : 0) | (v.Fog ? (1 << 18) : 0) | (v.VertexColorLighted ? (1 << 19) : 0) | ((uint32)v.ClipPlaneMask << 20) | (v.Normalize ? (1 << 26) : 0) | (v.WorldSpaceNormal ? (1 << 27) : 0) | (v.WorldSpacePosition ? (1 << 28) : 0));
 	if (v.Lighting)
 		for (sint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			h = NLMISC::wangHash(h ^ v.LightMode[i]);
+			h = NLMISC::wangHash(h ^ vpLightMode(v, i));
 	for (sint i = 0; i < NL3D::IDRV_MAT_MAXTEXTURES; ++i)
 		h = NLMISC::wangHash(h ^ v.TexGenMode[i]);
 
@@ -119,9 +136,9 @@ namespace NLDRIVERGL3 {
 
 namespace /* anonymous */ {
 
-void vpLightUniforms(std::stringstream &ss, const CVPBuiltin &desc, int i)
+void vpLightUniforms(std::stringstream &ss, sint mode, int i)
 {
-	switch (desc.LightMode[i])
+	switch (mode)
 	{
 	case CLight::DirectionalLight:
 		ss << "uniform vec3 light" << i << "DirOrPos;" << std::endl;
@@ -155,9 +172,9 @@ void vpLightUniforms(std::stringstream &ss, const CVPBuiltin &desc, int i)
 	}
 }
 
-void vpLightFunctions(std::stringstream &ss, const CVPBuiltin &desc, int i)
+void vpLightFunctions(std::stringstream &ss, sint mode, int i)
 {
-	switch (desc.LightMode[i])
+	switch (mode)
 	{
 	case CLight::DirectionalLight:
 		ss << "float getIntensity" << i << "(vec3 normal3, vec3 lightDir)" << std::endl;
@@ -389,11 +406,12 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	if (lighting)
 	{
 		ss << "uniform mat3 normalMatrix;" << std::endl;
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			vpLightUniforms(ss, desc, i);
-		
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
-			vpLightFunctions(ss, desc, i);
+		// VP lights are shifted: driver slot [NumPerPixelLights..7] → VP slot [0..7-N]
+		for (int vpSlot = 0, drvSlot = desc.NumPerPixelLights; drvSlot < NL_OPENGL3_MAX_LIGHT; ++vpSlot, ++drvSlot)
+			vpLightUniforms(ss, desc.LightMode[drvSlot], vpSlot);
+
+		for (int vpSlot = 0, drvSlot = desc.NumPerPixelLights; drvSlot < NL_OPENGL3_MAX_LIGHT; ++vpSlot, ++drvSlot)
+			vpLightFunctions(ss, desc.LightMode[drvSlot], vpSlot);
 		ss << std::endl;
 	}
 
@@ -424,9 +442,9 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "specularVertex = vec4(0.0, 0.0, 0.0, 0.0);" << std::endl;
 		ss << "vec4 diffuseLight;" << std::endl;
 		ss << "vec4 specularLight;" << std::endl;
-		for (int i = 0; i < NL_OPENGL3_MAX_LIGHT; i++)
-			if (desc.LightMode[i] == CLight::DirectionalLight || desc.LightMode[i] == CLight::PointLight || desc.LightMode[i] == CLight::SpotLight)
-				ss << "addLight" << i << "Color(diffuseVertex, specularVertex);" << std::endl;
+		for (int vpSlot = 0, drvSlot = desc.NumPerPixelLights; drvSlot < NL_OPENGL3_MAX_LIGHT; ++vpSlot, ++drvSlot)
+			if (desc.LightMode[drvSlot] == CLight::DirectionalLight || desc.LightMode[drvSlot] == CLight::PointLight || desc.LightMode[drvSlot] == CLight::SpotLight)
+				ss << "addLight" << vpSlot << "Color(diffuseVertex, specularVertex);" << std::endl;
 		ss << "diffuseVertex.a = 1.0;" << std::endl;
 		ss << "specularVertex.a = 1.0;" << std::endl;
 
