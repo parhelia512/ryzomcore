@@ -102,7 +102,7 @@ private:
 CClipPlaneDemo::CClipPlaneDemo()
 	: m_CloseWindow(false)
 {
-	m_Driver = UDriver::createDriver(0, false);
+	m_Driver = UDriver::createDriver(0, UDriver::OpenGl3);
 	if (!m_Driver)
 	{
 		nlerror("Failed to create driver");

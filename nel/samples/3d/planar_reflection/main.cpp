@@ -366,7 +366,7 @@ CPlanarReflectionDemo::CPlanarReflectionDemo()
 	, m_KeyBackward(false)
 	, m_TextContext(NULL)
 {
-	m_Driver = UDriver::createDriver(0, false);
+	m_Driver = UDriver::createDriver(0, UDriver::OpenGl3);
 	if (!m_Driver)
 	{
 		nlerror("Failed to create driver");
