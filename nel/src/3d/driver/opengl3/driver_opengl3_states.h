@@ -29,45 +29,18 @@ namespace NLDRIVERGL3 {
 
 // ***************************************************************************
 /**
- * Class for optimizing calls to openGL states, by caching old ones.
- *	All following call with OpenGL must be done with only one instance of this class:
-		- glEnable() glDisable() with:
-			- GL_BLEND
-			- GL_CULL_FACE
-			- GL_ALPHA_TEST
-			- GL_LIGHTING
-			- GL_LIGHT0 + i .....
-			- GL_TEXTURE_2D or GL_TEXTURE_CUBE_MAP/OES.
-			- GL_TEXTURE_GEN_S, GL_TEXTURE_GEN_T, GL_TEXTURE_GEN_R
-			- GL_COLOR_MATERIAL
-			- GL_FOG
-			- GL_MULTISAMPLE_ARB
-		- glActiveTexture()
-		- glClientActiveTexture()
-		- glEnableClientState() glDisableClientState() with:
-			- GL_VERTEX_ARRAY
-			- GL_NORMAL_ARRAY
-			- GL_VERTEX_WEIGHTING_EXT
-			- GL_COLOR_ARRAY
-			- GL_SECONDARY_COLOR_ARRAY_EXT
-			- GL_TEXTURE_COORD_ARRAY
-			- GL_VERTEX_ATTRIB_ARRAY0_NV + i.
-		- glDepthMask()
-		- glAlphaFunc()
-		- glBlendFunc()
-		- glDepthFunc()
-		- glMaterialf() and glMaterialfv() for:
-			- GL_EMISSION
-			- GL_AMBIENT
-			- GL_DIFFUSE
-			- GL_SPECULAR
-			- GL_SHININESS
-		- glDepthRange()
-		- glColorMaterial()
-		- glTexGeni()
- * \author Lionel Berenguier
- * \author Nevrax France
- * \date 2001
+ * Class for optimizing GL3 core profile state calls by caching previous values.
+ * All following GL calls must go through a single instance of this class:
+ *   - glEnable() / glDisable(): GL_BLEND, GL_CULL_FACE, GL_STENCIL_TEST
+ *   - glBlendFunc()
+ *   - glDepthMask()
+ *   - glDepthFunc()
+ *   - glDepthRange()
+ *   - glStencilFunc(), glStencilOp(), glStencilMask()
+ *   - glCullFace()
+ *   - glActiveTexture()
+ *   - glEnableVertexAttribArray() / glDisableVertexAttribArray()
+ *   - glBindBuffer(GL_ARRAY_BUFFER)
  */
 class CDriverGLStates3
 {
@@ -75,105 +48,108 @@ public:
 	/// Constructor. no-op.
 	CDriverGLStates3();
 	// init. Do it just after setDisplay()
-	void			init();
+	void init();
 
-	/// Reset all OpenGL states of interest to default, and update caching. This don't apply to light.
-	void			forceDefaults(uint nbTextureStages);
+	/// Reset all OpenGL states of interest to default, and update caching.
+	void forceDefaults(uint nbTextureStages);
 
 	/// \name enable if !0
 	// @{
-	void			enableBlend(uint enable);
-	void			enableCullFace(uint enable);
-	/// enable and set good AlphaFunc.
-	void			enableZWrite(uint enable);
+	void enableBlend(uint enable);
+	void enableCullFace(uint enable);
+	/// glDepthMask.
+	void enableZWrite(uint enable);
 	/// enable/disable stencil test
-	void			enableStencilTest(bool enable);
-	bool			isStencilTestEnabled() const { return _CurStencilTest; }
+	void enableStencilTest(bool enable);
+	bool isStencilTestEnabled() const { return m_CurStencilTest; }
 	// @}
 
 	/// glBlendFunc.
-	void			blendFunc(GLenum src, GLenum dst);
+	void blendFunc(GLenum src, GLenum dst);
 	/// glDepthFunc.
-	void			depthFunc(GLenum zcomp);
+	void depthFunc(GLenum zcomp);
 	/// glStencilFunc
-	void			stencilFunc(GLenum stencilFunc, GLint ref, GLuint mask);
+	void stencilFunc(GLenum stencilFunc, GLint ref, GLuint mask);
 	/// glStencilOp
-	void			stencilOp(GLenum fail, GLenum zfail, GLenum zpass);
+	void stencilOp(GLenum fail, GLenum zfail, GLenum zpass);
 	/// glStencilMask
-	void			stencilMask(uint mask);
+	void stencilMask(uint mask);
 
-	/// \name Material setting.
-	/// Each f() get an uint32 for fast comparison, and OpenGL colors.
+	/// \name Depth range.
 	// @{
-	void			setDepthRange (float znear, float zfar);
-	void			getDepthRange(float &znear, float &zfar) const { znear = _DepthRangeNear; zfar = _DepthRangeFar; }
+	void setDepthRange(float znear, float zfar);
+	void getDepthRange(float &znear, float &zfar) const
+	{
+		znear = m_DepthRangeNear;
+		zfar = m_DepthRangeFar;
+	}
 	/** Set z-bias
-      * NB : this is done in window coordinate, not in world coordinate as with CMaterial
-	  */
-	void			setZBias(float zbias);
+	 * NB : this is done in window coordinate, not in world coordinate as with CMaterial
+	 */
+	void setZBias(float zbias);
 	// @}
 
-
-
-	/// \name Texture Mode setting.
+	/// \name Active texture unit.
 	// @{
-	/// same as glActiveTexture(). useful for setTextureMode.
-	void			activeTexture(uint stage);
-	/// same as active texture arb, but with no cache check
-	void			forceActiveTexture(uint stage);
+	/// glActiveTexture.
+	void activeTexture(uint stage);
+	/// glActiveTexture without cache check
+	void forceActiveTexture(uint stage);
 	/// get active texture
-	uint			getActiveTexture() const { return _CurrentActiveTexture; }
+	uint getActiveTexture() const { return m_CurrentActiveTexture; }
 	// @}
 
-	// special version for ARB_vertex_program used with ARB_vertex_buffer or ATI_vertex_attrib_array_object
-	void			enableVertexAttribArrayARB(uint glIndex, bool enable);
+	/// glEnableVertexAttribArray / glDisableVertexAttribArray.
+	void enableVertexAttribArrayARB(uint glIndex, bool enable);
 
+	/// glBindBuffer(GL_ARRAY_BUFFER).
+	void bindARBVertexBuffer(uint objectID);
+	void forceBindARBVertexBuffer(uint objectID);
+	uint getCurrBoundARBVertexBuffer() const { return m_CurrARBVertexBuffer; }
 
-	// ARB_vertex_buffer_object buffer binding
-	void			bindARBVertexBuffer(uint objectID);
-	void			forceBindARBVertexBuffer(uint objectID);
-	uint			getCurrBoundARBVertexBuffer() const { return _CurrARBVertexBuffer; }
-
-	enum TCullMode  { CCW = 0, CW };
-	void			setCullMode(TCullMode cullMode);
-	TCullMode       getCullMode() const;
-
-private:
-	bool			_CurBlend;
-	bool			_CurCullFace;
-	bool			_CurZWrite;
-	bool			_CurStencilTest;
-
-	GLenum			_CurBlendSrc;
-	GLenum			_CurBlendDst;
-	GLenum			_CurDepthFunc;
-	GLenum			_CurStencilFunc;
-	GLint			_CurStencilRef;
-	GLuint			_CurStencilMask;
-	GLenum			_CurStencilOpFail;
-	GLenum			_CurStencilOpZFail;
-	GLenum			_CurStencilOpZPass;
-	GLuint			_CurStencilWriteMask;
-
-	uint			_CurrentActiveTexture;
-
-	bool			_VertexAttribArrayEnabled[CVertexBuffer::NumValue];
-
-	uint			_CurrARBVertexBuffer;
-
-	float			_DepthRangeNear;
-	float			_DepthRangeFar;
-	float			_ZBias; // NB : zbias is in window coordinates
-
-	TCullMode		_CullMode;
+	enum TCullMode
+	{
+		CCW = 0,
+		CW
+	};
+	void setCullMode(TCullMode cullMode);
+	TCullMode getCullMode() const;
 
 private:
-	void			updateDepthRange();
+	bool m_CurBlend;
+	bool m_CurCullFace;
+	bool m_CurZWrite;
+	bool m_CurStencilTest;
+
+	GLenum m_CurBlendSrc;
+	GLenum m_CurBlendDst;
+	GLenum m_CurDepthFunc;
+	GLenum m_CurStencilFunc;
+	GLint m_CurStencilRef;
+	GLuint m_CurStencilMask;
+	GLenum m_CurStencilOpFail;
+	GLenum m_CurStencilOpZFail;
+	GLenum m_CurStencilOpZPass;
+	GLuint m_CurStencilWriteMask;
+
+	uint m_CurrentActiveTexture;
+
+	bool m_VertexAttribArrayEnabled[CVertexBuffer::NumValue];
+
+	uint m_CurrARBVertexBuffer;
+
+	float m_DepthRangeNear;
+	float m_DepthRangeFar;
+	float m_ZBias; // NB : zbias is in window coordinates
+
+	TCullMode m_CullMode;
+
+private:
+	void updateDepthRange();
 };
 
 } // NLDRIVERGL3
 } // NL3D
-
 
 #endif // NL_DRIVER_OPENGL3_STATES_H
 
