@@ -984,18 +984,29 @@ bool	CMeshVPWindTree::isMBRVpOk(IDriver *driver) const
 	{
 		return false;
 	}
+	bool res = false;
+	// Try to compile UBO program
+	if (_VertexProgramUBO)
+	{
+		if (driver->compileVertexProgram(_VertexProgramUBO))
+		{
+			res = true;
+		}
+		else
+		{
+			nldebug("GL3 WindTree: UBO vertex program not available, using variant path");
+		}
+	}
 	for (uint i = 0; i < NumVp; ++i)
 	{
 		if (!driver->compileVertexProgram(_VertexProgram[i]))
 		{
-			nlwarning("GL3 WindTree: compileVertexProgram failed for variant %u", i);
-			return false;
+			if (!res)
+			{
+				nlwarning("GL3 WindTree: compileVertexProgram failed for variant %u", i);
+				return false;
+			}
 		}
-	}
-	// Try to compile UBO program (non-fatal — falls back to 16-variant path at runtime)
-	if (_VertexProgramUBO && !driver->compileVertexProgram(_VertexProgramUBO))
-	{
-		nldebug("GL3 WindTree: UBO vertex program not available, using variant path");
 	}
 	return true;
 }

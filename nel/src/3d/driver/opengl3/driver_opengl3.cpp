@@ -362,6 +362,8 @@ CDriverGL3::CDriverGL3()
 	m_PPClipPlanes = false; // false for GL 3.3, true for GL ES 3.0, switches to using PP for clip plane discard
 	m_LinkedMegaShaders = true; // also useful under GL 3.3
 	m_SupportSSO = false; // true for GL 3.3, false for GL ES 3.0
+	// set sso and linked shaders opposite to each other to test exclusive modes
+	// m_SupportNonUBOs = false; // testing strict mode, linked-only always implies ubo-only // TODO
 
 #if !FINAL_VERSION && defined(NL_DEBUG)
 	m_BuildUnusedPrograms = false;

@@ -396,8 +396,8 @@ public:
 	virtual bool			setupMaterial(CMaterial& mat);
 	// void					generateShaderDesc(CShaderDesc &desc, CMaterial &mat);
 	bool					setupBuiltinPrograms();
-	bool					setupBuiltinVertexProgram();
-	bool					setupBuiltinPixelProgram();
+	bool					setupBuiltinVertexProgram(CVertexProgram *effectiveVP, CPixelProgram *effectivePP);
+	bool					setupBuiltinPixelProgram(CPixelProgram *effectivePP);
 	bool					setupUniforms();
 	bool					flushPassUniforms();
 	void					setupUniforms(TProgram program);
@@ -1185,6 +1185,13 @@ private:
 	void			endWaterMultiPass();
 	// Water fragment programs: [fog | diffuse<<1]
 	NLMISC::CSmartPtr<CPixelProgram>	_WaterFP[4];
+	// Water PP UBO format (bump scale/bias parameters)
+	NLMISC::CSmartPtr<CUniformBufferFormat> _WaterUBFormat;
+	struct CWaterUBOOffsets {
+		sint Bump0ScaleBias;
+		sint Bump1ScaleBias;
+	} _WaterUBOOffsets;
+	NLMISC::CSmartPtr<CUniformBuffer> _WaterUB;
 	// @}
 
 	/// \name Per pixel lighting
@@ -1382,6 +1389,10 @@ private:
 	NLMISC::CRefPtr<CGeometryProgram> m_UserGeometryProgram;
 	NLMISC::CRefPtr<CPixelProgram> m_UserPixelProgram;
 
+	// Material programs: set by material pass (water, etc.), lower priority than user programs
+	NLMISC::CRefPtr<CVertexProgram> m_MaterialVertexProgram;
+	NLMISC::CRefPtr<CPixelProgram> m_MaterialPixelProgram;
+
 	NLMISC::CRefPtr<CVertexProgram> m_DriverVertexProgram;
 	NLMISC::CRefPtr<CGeometryProgram> m_DriverGeometryProgram;
 	NLMISC::CRefPtr<CPixelProgram> m_DriverPixelProgram;
@@ -1405,6 +1416,7 @@ private:
 	bool m_PPClipPlanes;            // Use PP-based clip plane discard instead of native gl_ClipDistance
 	bool m_LinkedMegaShaders;       // Use linked VP+PP programs instead of SSO for mega path
 	bool m_SupportSSO;              // Support separable shader objects
+	// bool m_SupportNonUBOs;          // Support programs with non-ubo uniforms // TODO
 	bool m_UseMegaShaders;          // Select mega VP/PP variants (false = per-material compiled shaders)
 	bool m_UseMegaLightTableUBO;    // Select mega VP/PP variants with light table UBO
 	bool m_UseMegaCameraUBO;        // Select mega VP/PP variants with camera state UBO
@@ -1422,7 +1434,7 @@ private:
 	CShaderProgram *linkPrograms(
 		IProgram *vpProg, const CProgramFeatures &vpFeatures,
 		IProgram *ppProg, const CProgramFeatures &ppFeatures);
-	bool setupUserLinkedPrograms();
+	bool setupUserLinkedPrograms(CVertexProgram *vpProg, CPixelProgram *ppProg);
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;

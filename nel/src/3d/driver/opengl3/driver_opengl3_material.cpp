@@ -43,6 +43,11 @@ static const char *WaterFPGLSL_Header =
 	"#version 330\n"
 	"#extension GL_ARB_separate_shader_objects : enable\n";
 
+static const char *WaterFPGLSL_ES_Header =
+	"#version 300 es\n"
+	"precision highp float;\n"
+	"precision highp int;\n";
+
 // Water shader uses linear fog only; exp/exp2 fog modes are not supported here
 static const char *WaterFPGLSL_Body =
 	"layout(location = 8) smooth in vec4 texCoord0;\n"
@@ -84,6 +89,43 @@ static const char *WaterFPGLSL_Body =
 	"  float fogFactor = clamp((fogParams.t - z) / (fogParams.t - fogParams.s), 0.0, 1.0);\n"
 	"  col = vec4(mix(fogColor.rgb, col.rgb, fogFactor), col.a);\n"
 	"#endif\n"
+	"  fragColor = col;\n"
+	"}\n";
+
+// UBO-based water FP body: uses NlCamera UBO for fog, NlWater user UBO for bump params.
+// Fog/diffuse variants are folded: runtime fog from camera UBO, diffuse via #define.
+static const char *WaterFPGLSL_UBO_Body =
+	"layout(location = 8) smooth in vec4 texCoord0;\n"
+	"layout(location = 9) smooth in vec4 texCoord1;\n"
+	"layout(location = 10) smooth in vec4 texCoord2;\n"
+	"#ifdef USE_DIFFUSE\n"
+	"layout(location = 11) smooth in vec4 texCoord3;\n"
+	"#endif\n"
+	"layout(location = 0) smooth in vec4 ecPos;\n"
+	"uniform sampler2D sampler0;\n"
+	"uniform sampler2D sampler1;\n"
+	"uniform sampler2D sampler2;\n"
+	"#ifdef USE_DIFFUSE\n"
+	"uniform sampler2D sampler3;\n"
+	"#endif\n"
+	"// bump0ScaleBias and bump1ScaleBias from NlWater user UBO\n"
+	"// fogParams and fogColor from NlCamera UBO\n"
+	"layout(location = 0) out vec4 fragColor;\n"
+	"void main()\n"
+	"{\n"
+	"  vec2 b0 = texture(sampler0, texCoord0.xy).xy;\n"
+	"  b0 = b0 * bump0ScaleBias.x + bump0ScaleBias.y;\n"
+	"  vec2 uv1 = texCoord1.xy + b0;\n"
+	"  vec2 b1 = texture(sampler1, uv1).xy;\n"
+	"  b1 = b1 * bump1ScaleBias.x + bump1ScaleBias.y;\n"
+	"  vec2 uv2 = texCoord2.xy + b1;\n"
+	"  vec4 col = texture(sampler2, uv2);\n"
+	"#ifdef USE_DIFFUSE\n"
+	"  col *= texture(sampler3, texCoord3.xy);\n"
+	"#endif\n"
+	"  float z = abs(ecPos.y / ecPos.w);\n"
+	"  float fogFactor = clamp((fogParams.t - z) / (fogParams.t - fogParams.s), 0.0, 1.0);\n"
+	"  col = vec4(mix(fogColor.rgb, col.rgb, fogFactor), col.a);\n"
 	"  fragColor = col;\n"
 	"}\n";
 
@@ -1499,57 +1541,92 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 	// Lazy creation of water FP programs
 	if (!_WaterFP[fpIdx])
 	{
-		std::string src = WaterFPGLSL_Header;
-		if (fpIdx & 1) src += "#define USE_FOG\n";
-		if (fpIdx & 2) src += "#define USE_DIFFUSE\n";
-		src += WaterFPGLSL_Body;
+		// Build water UBO format (once, shared across all water FP variants)
+		if (!_WaterUBFormat)
+		{
+			CUniformBufferFormat *fmt = new CUniformBufferFormat();
+			fmt->Name = "NlWater";
+			_WaterUBOOffsets.Bump0ScaleBias = fmt->push("bump0ScaleBias", CUniformBufferFormat::FloatVec4);
+			_WaterUBOOffsets.Bump1ScaleBias = fmt->push("bump1ScaleBias", CUniformBufferFormat::FloatVec4);
+			_WaterUBFormat = fmt;
+			_WaterUB = new CUniformBuffer();
+			_WaterUB->Format = *fmt;
+		}
+
+		std::string defines;
+		if (fpIdx & 2) defines += "#define USE_DIFFUSE\n";
 
 		_WaterFP[fpIdx] = new CPixelProgram();
-		IProgram::CSource *s = new IProgram::CSource();
-		s->Profile = IProgram::glsl330f;
-		s->DisplayName = NLMISC::toString("WaterFP/%s/%s",
-			(fpIdx & 1) ? "fog" : "noFog",
-			(fpIdx & 2) ? "diffuse" : "noDiffuse");
-		s->setSource(src);
-		_WaterFP[fpIdx]->addSource(s);
+
+		// Pipeline-stage UBO source (preferred for linked program path)
+		{
+			IProgram::CSource *s = new IProgram::CSource();
+			s->Profile = IProgram::glsl300esf;
+			s->Features.PipelineStage = true;
+			s->Features.UsesCameraUBO = true;
+			s->Features.OnlyUBOs = true;
+			s->UniformBufferFormats[UBBindingPixelProgram] = _WaterUBFormat;
+			s->DisplayName = NLMISC::toString("glsl300esf/WaterFP/%s",
+				(fpIdx & 2) ? "diffuse" : "noDiffuse");
+			s->setSource(std::string(WaterFPGLSL_ES_Header) + defines + WaterFPGLSL_UBO_Body);
+			_WaterFP[fpIdx]->addSource(s);
+		}
+
+		// SSO source (fallback)
+		{
+			std::string src = WaterFPGLSL_Header;
+			if (fpIdx & 1) src += "#define USE_FOG\n";
+			if (fpIdx & 2) src += "#define USE_DIFFUSE\n";
+			src += WaterFPGLSL_Body;
+
+			IProgram::CSource *s = new IProgram::CSource();
+			s->Profile = IProgram::glsl330f;
+			s->DisplayName = NLMISC::toString("glsl330f/WaterFP/%s/%s",
+				(fpIdx & 1) ? "fog" : "noFog",
+				(fpIdx & 2) ? "diffuse" : "noDiffuse");
+			s->setSource(src);
+			_WaterFP[fpIdx]->addSource(s);
+		}
+
+		if (!compilePixelProgram(_WaterFP[fpIdx]))
+		{
+#ifdef NL_DEBUG
+			nlerror("GL3: Water FP compilation failed (variant %u)", fpIdx);
+#endif
+		}
 	}
 
-	// Activate the water FP (auto-compiles on first use)
-	activePixelProgram(_WaterFP[fpIdx], true);
+	// Set water FP as material pixel program — setupBuiltinPrograms() handles
+	// activation (linked or SSO), UBO flags, and uniform setup.
+	m_MaterialPixelProgram = _WaterFP[fpIdx];
 
-	// Set bump scale/bias uniforms
+	// Compute bump factors
 	float factor0 = 1.f, factor1 = 1.f;
 	if (mat.getTexture(0) && mat.getTexture(0)->isBumpMap())
 		factor0 = 0.25f * NLMISC::safe_cast<CTextureBump *>(mat.getTexture(0))->getNormalizationFactor();
 	if (mat.getTexture(1) && mat.getTexture(1)->isBumpMap())
 		factor1 = NLMISC::safe_cast<CTextureBump *>(mat.getTexture(1))->getNormalizationFactor();
 
-	uint b0idx = _WaterFP[fpIdx]->getUniformIndex(CProgramIndex::Bump0ScaleBias);
-	if (b0idx != ~0u)
-		setUniform4f(IDriver::PixelProgram, b0idx, 2.f * factor0, -factor0, 0.f, 0.f);
-	uint b1idx = _WaterFP[fpIdx]->getUniformIndex(CProgramIndex::Bump1ScaleBias);
-	if (b1idx != ~0u)
-		setUniform4f(IDriver::PixelProgram, b1idx, 2.f * factor1, -factor1, 0.f, 0.f);
+	// Stage water UBO data and bind it (always — harmless if SSO path is taken)
+	_WaterUB->lock();
+	_WaterUB->set(_WaterUBOOffsets.Bump0ScaleBias, 2.f * factor0, -factor0, 0.f, 0.f);
+	_WaterUB->set(_WaterUBOOffsets.Bump1ScaleBias, 2.f * factor1, -factor1, 0.f, 0.f);
+	_WaterUB->unlock();
+	bindUniformBuffer(UBBindingPixelProgram, _WaterUB);
 
-	// Water VP/PP use individual uniforms, not UBOs.
-	// Reset these flags since setupBuiltinPrograms() is not called for Water materials,
-	// so they may be stale from the previous draw call's mega shader.
-	m_ProgramNoUniforms[VertexProgram] = false;
-	m_ProgramNoBuiltinUniforms[VertexProgram] = false;
-	m_ProgramOnlyUBOs[VertexProgram] = false;
-	m_ProgramUsesCameraUBO[VertexProgram] = false;
-	m_ProgramUsesObjectUBO[VertexProgram] = false;
-	m_ProgramUsesMaterialUBO[VertexProgram] = false;
-	m_ProgramNoUniforms[PixelProgram] = false;
-	m_ProgramNoBuiltinUniforms[PixelProgram] = false;
-	m_ProgramOnlyUBOs[PixelProgram] = false;
-	m_ProgramUsesCameraUBO[PixelProgram] = false;
-	m_ProgramUsesObjectUBO[PixelProgram] = false;
-	m_ProgramUsesMaterialUBO[PixelProgram] = false;
+	// Activate programs (linked or SSO) and upload builtin uniforms/UBOs
+	setupBuiltinPrograms();
 
-	// Auto-set standard uniforms (fogParams, fogColor for FP; modelView for VP)
-	setupUniforms(IDriver::PixelProgram);
-	setupUniforms(IDriver::VertexProgram);
+	// For SSO path: set water-specific uniforms via legacy individual uniforms
+	if (!m_ProgramOnlyUBOs[PixelProgram])
+	{
+		uint b0idx = _WaterFP[fpIdx]->getUniformIndex(CProgramIndex::Bump0ScaleBias);
+		if (b0idx != ~0u)
+			setUniform4f(IDriver::PixelProgram, b0idx, 2.f * factor0, -factor0, 0.f, 0.f);
+		uint b1idx = _WaterFP[fpIdx]->getUniformIndex(CProgramIndex::Bump1ScaleBias);
+		if (b1idx != ~0u)
+			setUniform4f(IDriver::PixelProgram, b1idx, 2.f * factor1, -factor1, 0.f, 0.f);
+	}
 }
 
 // ***************************************************************************
@@ -1559,8 +1636,12 @@ void CDriverGL3::endWaterMultiPass()
 
 	nlassert(_CurrentMaterial->getShader() == CMaterial::Water);
 
-	// Deactivate the water fragment program
-	activePixelProgram(NULL, true);
+	// Unbind water UBO if bound
+	if (_BoundUserUB[UBBindingPixelProgram] == _WaterUB)
+		bindUniformBuffer(UBBindingPixelProgram, NULL);
+
+	// Clear material pixel program — next setupBuiltinPrograms() will restore builtin/mega PP
+	m_MaterialPixelProgram = NULL;
 }
 
 } // NLDRIVERGL3

@@ -364,7 +364,11 @@ bool CDriverGL3::activeVertexProgram(CVertexProgram *program, bool driver)
 	if (driver) nlassert(m_UserVertexProgram == NULL);
 
 	if (m_DriverVertexProgram == program)
+	{
+		// Still update user program tracking even on early return
+		if (!driver) m_UserVertexProgram = program;
 		return true;
+	}
 
 	// Restore PPO if transitioning back from linked program
 	if (!m_PPOBound)
@@ -576,7 +580,11 @@ bool CDriverGL3::activePixelProgram(CPixelProgram *program, bool driver)
 	if (driver) nlassert(m_UserPixelProgram == NULL);
 
 	if (m_DriverPixelProgram == program)
+	{
+		// Still update user program tracking even on early return
+		if (!driver) m_UserPixelProgram = program;
 		return true;
+	}
 
 	// Restore PPO if transitioning back from linked program
 	if (!m_PPOBound)
@@ -984,32 +992,53 @@ void CDriverGL3::generateShaderDesc(CShaderDesc &desc, CMaterial &mat)
 
 bool CDriverGL3::setupBuiltinPrograms()
 {
-	// Pure mega linked path (no user programs)
-	if (m_LinkedMegaShaders && m_UseMegaShaders && !m_UserVertexProgram && !m_UserPixelProgram)
+	// Effective programs: user > material > NULL
+	CVertexProgram *effectiveVP = m_UserVertexProgram ? m_UserVertexProgram : m_MaterialVertexProgram;
+	CPixelProgram *effectivePP = m_UserPixelProgram ? m_UserPixelProgram : m_MaterialPixelProgram;
+
+	// Ensure effective programs are compiled so that features()/source() are available
+	// to downstream functions. User programs should already be compiled via
+	// activeVertexProgram/activePixelProgram, and material programs should be compiled
+	// at creation time. If we reach here uncompiled, something is wrong upstream.
+	if (effectiveVP && !effectiveVP->m_DrvInfo)
+	{
+		nlwarning("GL3: VP not compiled before setupBuiltinPrograms");
+		if (!compileVertexProgram(effectiveVP))
+			return false;
+	}
+	if (effectivePP && !effectivePP->m_DrvInfo)
+	{
+		nlwarning("GL3: PP not compiled before setupBuiltinPrograms");
+		if (!compilePixelProgram(effectivePP))
+			return false;
+	}
+
+	// Pure mega linked path (no user/material programs)
+	if (m_LinkedMegaShaders && m_UseMegaShaders && !effectiveVP && !effectivePP)
 		return setupMegaLinkedPrograms()
 			&& setupUniforms();
 
-	// Try user linked path when at least one user program is set
+	// Try user/material linked path when at least one non-builtin program is set
 	if (m_LinkedMegaShaders && m_UseMegaShaders)
 	{
-		if (setupUserLinkedPrograms())
+		if (setupUserLinkedPrograms(effectiveVP, effectivePP))
 			return setupUniforms();
 		// Fall through to SSO if linking not possible
 	}
 
-	return setupBuiltinVertexProgram()
-		&& setupBuiltinPixelProgram()
+	return setupBuiltinVertexProgram(effectiveVP, effectivePP)
+		&& setupBuiltinPixelProgram(effectivePP)
 		&& setupUniforms();
 }
 
-bool CDriverGL3::setupBuiltinVertexProgram()
+bool CDriverGL3::setupBuiltinVertexProgram(CVertexProgram *effectiveVP, CPixelProgram *effectivePP)
 {
 	touchVertexFormatVP(); // Always update — PP builtin depends on vertex format
 
 	// Resolve PPL support: both VP and PP must support it
-	m_ProgramSupportsPPL = m_UserPixelProgram ? m_UserPixelProgram->features().SupportPPL : true;
-	if (m_UserVertexProgram)
-		m_ProgramSupportsPPL = m_ProgramSupportsPPL && m_UserVertexProgram->features().SupportPPL;
+	m_ProgramSupportsPPL = effectivePP ? effectivePP->features().SupportPPL : true;
+	if (effectiveVP)
+		m_ProgramSupportsPPL = m_ProgramSupportsPPL && effectiveVP->features().SupportPPL;
 
 	// Set canonical PPL count — single source of truth for all paths
 	{
@@ -1022,18 +1051,24 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 		}
 	}
 
-	if (m_UserVertexProgram)
+	if (effectiveVP)
 	{
-		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
-		m_VPWorldSpacePositionOutput = m_UserVertexProgram->features().OutputsWorldSpacePosition;
+		// If this is a material VP (not already activated externally as user VP), activate on PPO
+		if (!m_UserVertexProgram && m_MaterialVertexProgram)
+		{
+			if (!activeVertexProgram(effectiveVP, true))
+				return false;
+		}
+		m_VPSpecularOutput = effectiveVP->features().OutputsSpecularColor;
+		m_VPWorldSpacePositionOutput = effectiveVP->features().OutputsWorldSpacePosition;
 		m_VPNormalOutput = false;
-		m_ProgramNoUniforms[VertexProgram] = m_UserVertexProgram->features().NoUniforms;
-		m_ProgramNoBuiltinUniforms[VertexProgram] = m_UserVertexProgram->features().NoBuiltinUniforms;
-		m_ProgramOnlyUBOs[VertexProgram] = m_UserVertexProgram->features().OnlyUBOs;
-		m_ProgramUsesLightTableUBO[VertexProgram] = m_UserVertexProgram->features().UsesLightTableUBO || m_UserVertexProgram->features().UsesObjectUBO;
-		m_ProgramUsesCameraUBO[VertexProgram] = m_UserVertexProgram->features().UsesCameraUBO || m_UserVertexProgram->features().UsesObjectUBO;
-		m_ProgramUsesObjectUBO[VertexProgram] = m_UserVertexProgram->features().UsesObjectUBO; // Object UBO implies table and camera UBO
-		m_ProgramUsesMaterialUBO[VertexProgram] = m_UserVertexProgram->features().UsesMaterialUBO;
+		m_ProgramNoUniforms[VertexProgram] = effectiveVP->features().NoUniforms;
+		m_ProgramNoBuiltinUniforms[VertexProgram] = effectiveVP->features().NoBuiltinUniforms;
+		m_ProgramOnlyUBOs[VertexProgram] = effectiveVP->features().OnlyUBOs;
+		m_ProgramUsesLightTableUBO[VertexProgram] = effectiveVP->features().UsesLightTableUBO || effectiveVP->features().UsesObjectUBO;
+		m_ProgramUsesCameraUBO[VertexProgram] = effectiveVP->features().UsesCameraUBO || effectiveVP->features().UsesObjectUBO;
+		m_ProgramUsesObjectUBO[VertexProgram] = effectiveVP->features().UsesObjectUBO; // Object UBO implies table and camera UBO
+		m_ProgramUsesMaterialUBO[VertexProgram] = effectiveVP->features().UsesMaterialUBO;
 		// If PPL requested and user VP has object UBO, force world-space outputs
 		// (UBO programs support PPL dynamically via nlWorldSpacePosition/Normal uniforms)
 		if (m_VPBuiltinCurrent.NumPerPixelLights > 0 && m_ProgramUsesObjectUBO[VertexProgram])
@@ -1050,13 +1085,13 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 
 	// Check if PP needs world-space normal varying
 	bool needNormal = false;
-	if (m_UserPixelProgram)
-		needNormal = m_UserPixelProgram->features().InputsWorldSpaceNormal;
+	if (effectivePP)
+		needNormal = effectivePP->features().InputsWorldSpaceNormal;
 
 	// Check if PP needs world-space position varying
 	bool needWorldPos = false;
-	if (m_UserPixelProgram)
-		needWorldPos = m_UserPixelProgram->features().InputsWorldSpacePosition;
+	if (effectivePP)
+		needWorldPos = effectivePP->features().InputsWorldSpacePosition;
 
 	// Force world-space outputs when per-pixel lighting is active
 	if (m_VPBuiltinCurrent.NumPerPixelLights > 0)
@@ -1094,17 +1129,23 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 	return true;
 }
 
-bool CDriverGL3::setupBuiltinPixelProgram()
+bool CDriverGL3::setupBuiltinPixelProgram(CPixelProgram *effectivePP)
 {
-	if (m_UserPixelProgram)
+	if (effectivePP)
 	{
-		m_ProgramNoUniforms[PixelProgram] = m_UserPixelProgram->features().NoUniforms;
-		m_ProgramNoBuiltinUniforms[PixelProgram] = m_UserPixelProgram->features().NoBuiltinUniforms;
-		m_ProgramOnlyUBOs[PixelProgram] = m_UserPixelProgram->features().OnlyUBOs;
-		m_ProgramUsesLightTableUBO[PixelProgram] = m_UserPixelProgram->features().UsesLightTableUBO || m_UserPixelProgram->features().UsesObjectUBO;
-		m_ProgramUsesCameraUBO[PixelProgram] = m_UserPixelProgram->features().UsesCameraUBO || m_UserPixelProgram->features().UsesObjectUBO;
-		m_ProgramUsesObjectUBO[PixelProgram] = m_UserPixelProgram->features().UsesObjectUBO;
-		m_ProgramUsesMaterialUBO[PixelProgram] = m_UserPixelProgram->features().UsesMaterialUBO;
+		// If this is a material PP (not already activated externally as user PP), activate on PPO
+		if (!m_UserPixelProgram && m_MaterialPixelProgram)
+		{
+			if (!activePixelProgram(effectivePP, true))
+				return false;
+		}
+		m_ProgramNoUniforms[PixelProgram] = effectivePP->features().NoUniforms;
+		m_ProgramNoBuiltinUniforms[PixelProgram] = effectivePP->features().NoBuiltinUniforms;
+		m_ProgramOnlyUBOs[PixelProgram] = effectivePP->features().OnlyUBOs;
+		m_ProgramUsesLightTableUBO[PixelProgram] = effectivePP->features().UsesLightTableUBO || effectivePP->features().UsesObjectUBO;
+		m_ProgramUsesCameraUBO[PixelProgram] = effectivePP->features().UsesCameraUBO || effectivePP->features().UsesObjectUBO;
+		m_ProgramUsesObjectUBO[PixelProgram] = effectivePP->features().UsesObjectUBO;
+		m_ProgramUsesMaterialUBO[PixelProgram] = effectivePP->features().UsesMaterialUBO;
 		return true;
 	}
 
@@ -1933,6 +1974,14 @@ CShaderProgram *CDriverGL3::linkPrograms(
 		sp->VPFeatures = vpFeatures;
 		sp->PPFeatures = ppFeatures;
 		src->Features = vpFeatures;
+		// Merge user UBO formats from both VP and PP sources so setupInitialUniforms
+		// can resolve all user UBO block bindings in the linked program
+		if (vpProg->source())
+			src->UniformBufferFormats.insert(vpProg->source()->UniformBufferFormats.begin(),
+				vpProg->source()->UniformBufferFormats.end());
+		if (ppProg->source())
+			src->UniformBufferFormats.insert(ppProg->source()->UniformBufferFormats.begin(),
+				ppProg->source()->UniformBufferFormats.end());
 		sp->addSource(src);
 
 		ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(), (NL3D::IProgramDrvInfos*)NULL);
@@ -1947,9 +1996,9 @@ CShaderProgram *CDriverGL3::linkPrograms(
 	return sp;
 }
 
-bool CDriverGL3::setupUserLinkedPrograms()
+bool CDriverGL3::setupUserLinkedPrograms(CVertexProgram *vpProg, CPixelProgram *ppProg)
 {
-	nlassert(m_UserVertexProgram || m_UserPixelProgram); // At least one must be set
+	nlassert(vpProg || ppProg); // At least one must be set
 	nlassert(_CurrentMaterial);
 
 	CMaterial &mat = *_CurrentMaterial;
@@ -1960,9 +2009,9 @@ bool CDriverGL3::setupUserLinkedPrograms()
 	touchVertexFormatVP();
 
 	// Resolve PPL support from both VP and PP
-	m_ProgramSupportsPPL = m_UserPixelProgram ? m_UserPixelProgram->features().SupportPPL : true;
-	if (m_UserVertexProgram)
-		m_ProgramSupportsPPL = m_ProgramSupportsPPL && m_UserVertexProgram->features().SupportPPL;
+	m_ProgramSupportsPPL = ppProg ? ppProg->features().SupportPPL : true;
+	if (vpProg)
+		m_ProgramSupportsPPL = m_ProgramSupportsPPL && vpProg->features().SupportPPL;
 
 	{
 		uint8 numPpl = (uint8)(m_ProgramSupportsPPL ? _NumPerPixelLights : 0);
@@ -1974,12 +2023,12 @@ bool CDriverGL3::setupUserLinkedPrograms()
 		}
 	}
 
-	if (m_UserVertexProgram)
+	if (vpProg)
 	{
-		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
-		m_VPWorldSpacePositionOutput = m_UserVertexProgram->features().OutputsWorldSpacePosition;
+		m_VPSpecularOutput = vpProg->features().OutputsSpecularColor;
+		m_VPWorldSpacePositionOutput = vpProg->features().OutputsWorldSpacePosition;
 		m_VPNormalOutput = false;
-		if (m_VPBuiltinCurrent.NumPerPixelLights > 0 && m_UserVertexProgram->features().UsesObjectUBO)
+		if (m_VPBuiltinCurrent.NumPerPixelLights > 0 && vpProg->features().UsesObjectUBO)
 		{
 			m_VPWorldSpacePositionOutput = true;
 			m_VPNormalOutput = true;
@@ -1995,12 +2044,12 @@ bool CDriverGL3::setupUserLinkedPrograms()
 		bool pplActive = false;
 		if (m_VPBuiltinCurrent.NumPerPixelLights > 0)
 		{
-			if (m_UserPixelProgram)
+			if (ppProg)
 			{
-				if (m_UserPixelProgram->features().UsesObjectUBO)
+				if (ppProg->features().UsesObjectUBO)
 					pplActive = true;
-				else if (m_UserPixelProgram->features().InputsWorldSpacePosition
-				      && m_UserPixelProgram->features().InputsWorldSpaceNormal)
+				else if (ppProg->features().InputsWorldSpacePosition
+				      && ppProg->features().InputsWorldSpaceNormal)
 					pplActive = true;
 			}
 			else
@@ -2016,7 +2065,7 @@ bool CDriverGL3::setupUserLinkedPrograms()
 	}
 
 	// --- PP-side state ---
-	if (!m_UserPixelProgram)
+	if (!ppProg)
 	{
 		// Mega PP state
 		matDrv->PPBuiltin.checkDriverStateTouched(this);
@@ -2030,31 +2079,31 @@ bool CDriverGL3::setupUserLinkedPrograms()
 	}
 
 	// --- Check linkability ---
-	bool vpLinkable = m_UserVertexProgram
-		? (m_UserVertexProgram->source() && m_UserVertexProgram->source()->Features.PipelineStage)
+	bool vpLinkable = vpProg
+		? (vpProg->source() && vpProg->source()->Features.PipelineStage)
 		: true; // Mega VP linked=1 variants always linkable
-	bool ppLinkable = m_UserPixelProgram
-		? (m_UserPixelProgram->source() && m_UserPixelProgram->source()->Features.PipelineStage)
+	bool ppLinkable = ppProg
+		? (ppProg->source() && ppProg->source()->Features.PipelineStage)
 		: true; // Mega PP linked=1 variants always linkable
 
 	if (!vpLinkable && !ppLinkable)
-		return false; // Neither user program is linkable, fall back to SSO
+		return false; // Neither program is linkable, fall back to SSO
 
-	// If only one side is linkable and the other is a user program that's not, fall back
-	if (m_UserVertexProgram && !vpLinkable)
+	// If only one side is linkable and the other is a non-mega program that's not, fall back
+	if (vpProg && !vpLinkable)
 		return false;
-	if (m_UserPixelProgram && !ppLinkable)
+	if (ppProg && !ppLinkable)
 		return false;
 
-	// --- Compile user programs if needed ---
-	if (m_UserVertexProgram && !m_UserVertexProgram->m_DrvInfo)
+	// --- Compile programs if needed ---
+	if (vpProg && !vpProg->m_DrvInfo)
 	{
-		if (!compileVertexProgram(m_UserVertexProgram))
+		if (!compileVertexProgram(vpProg))
 			return false;
 	}
-	if (m_UserPixelProgram && !m_UserPixelProgram->m_DrvInfo)
+	if (ppProg && !ppProg->m_DrvInfo)
 	{
-		if (!compilePixelProgram(m_UserPixelProgram))
+		if (!compilePixelProgram(ppProg))
 			return false;
 	}
 
@@ -2069,42 +2118,42 @@ bool CDriverGL3::setupUserLinkedPrograms()
 
 	CShaderProgram *sp = NULL;
 
-	if (m_UserVertexProgram && !m_UserPixelProgram)
+	if (vpProg && !ppProg)
 	{
-		// Case A: User VP + Mega PP
-		CProgramDrvInfosGL3 *vpDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)m_UserVertexProgram->m_DrvInfo);
+		// Case A: User/Material VP + Mega PP
+		CProgramDrvInfosGL3 *vpDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)vpProg->m_DrvInfo);
 		sp = vpDrv->LinkedVPMegaPP[fogOrPpl][cube][specular][ppClip];
 		if (!sp)
 		{
 			int ppTableUBO = fogOrPpl ? 1 : 0;
 			CPixelProgram *megaPP = m_MegaPP[1][fogOrPpl][cube][specular][ppClip][ppTableUBO][1][1][1];
 			if (!megaPP || !megaPP->m_DrvInfo) return false;
-			sp = linkPrograms(m_UserVertexProgram, m_UserVertexProgram->source()->Features,
+			sp = linkPrograms(vpProg, vpProg->source()->Features,
 				megaPP, megaPP->source()->Features);
 			if (!sp) return false;
 			vpDrv->LinkedVPMegaPP[fogOrPpl][cube][specular][ppClip] = sp;
 		}
 	}
-	else if (!m_UserVertexProgram && m_UserPixelProgram)
+	else if (!vpProg && ppProg)
 	{
-		// Case B: Mega VP + User PP
-		CProgramDrvInfosGL3 *ppDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)m_UserPixelProgram->m_DrvInfo);
+		// Case B: Mega VP + User/Material PP
+		CProgramDrvInfosGL3 *ppDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)ppProg->m_DrvInfo);
 		sp = ppDrv->LinkedMegaVPPP[fogOrPpl][hwClip];
 		if (!sp)
 		{
 			CVertexProgram *megaVP = m_MegaVP[1][fogOrPpl][hwClip][1][1][1][1];
 			if (!megaVP || !megaVP->m_DrvInfo) return false;
 			sp = linkPrograms(megaVP, megaVP->source()->Features,
-				m_UserPixelProgram, m_UserPixelProgram->source()->Features);
+				ppProg, ppProg->source()->Features);
 			if (!sp) return false;
 			ppDrv->LinkedMegaVPPP[fogOrPpl][hwClip] = sp;
 		}
 	}
 	else
 	{
-		// Case C: User VP + User PP
-		CProgramDrvInfosGL3 *vpDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)m_UserVertexProgram->m_DrvInfo);
-		CProgramDrvInfosGL3 *ppDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)m_UserPixelProgram->m_DrvInfo);
+		// Case C: User/Material VP + User/Material PP
+		CProgramDrvInfosGL3 *vpDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)vpProg->m_DrvInfo);
+		CProgramDrvInfosGL3 *ppDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)ppProg->m_DrvInfo);
 		auto it = vpDrv->LinkedUserVPPP.find(ppDrv);
 		if (it != vpDrv->LinkedUserVPPP.end())
 		{
@@ -2112,8 +2161,8 @@ bool CDriverGL3::setupUserLinkedPrograms()
 		}
 		else
 		{
-			sp = linkPrograms(m_UserVertexProgram, m_UserVertexProgram->source()->Features,
-				m_UserPixelProgram, m_UserPixelProgram->source()->Features);
+			sp = linkPrograms(vpProg, vpProg->source()->Features,
+				ppProg, ppProg->source()->Features);
 			if (!sp) return false;
 			vpDrv->LinkedUserVPPP[ppDrv] = sp;
 		}
