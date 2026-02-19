@@ -568,7 +568,7 @@ public:
 		gp5fp = 0x61020020, // NV_gpu_program5
 		// geometry programs
 		gp4gp = 0x61030001, // NV_gpu_program4
-		gp5gp = 0x61030001, // NV_gpu_program5
+		gp5gp = 0x61030002, // NV_gpu_program5
 
 		// glsl - 0x65,type,version
 		glsl330v = 0x65010330, // GLSL vertex program version 330
