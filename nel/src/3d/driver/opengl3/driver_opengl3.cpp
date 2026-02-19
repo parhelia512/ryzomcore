@@ -359,8 +359,9 @@ CDriverGL3::CDriverGL3()
 	m_VPBuiltinTouched = true;
 	
 	// for GL ES 3.0 compatibility
-	m_PPClipPlanes = false;
+	m_PPClipPlanes = false; // false for GL 3.3, true for GL ES 3.0, switches to using PP for clip plane discard
 	m_LinkedMegaShaders = true; // also useful under GL 3.3
+	m_SupportSSO = false; // true for GL 3.3, false for GL ES 3.0
 
 #if !FINAL_VERSION && defined(NL_DEBUG)
 	m_BuildUnusedPrograms = false;
@@ -433,10 +434,21 @@ bool CDriverGL3::setupDisplay()
 		nlwarning("Missing required GL 3.30 Core features. Update your driver");
 		throw EBadDisplay("Missing required GL 3.30 Core features. Update your driver");
 	}
-	if (!_Extensions.ARBSeparateShaderObjects)
+	if (m_SupportSSO)
 	{
-		nlwarning("Missing required GL extension: GL_ARB_separate_shader_objects. Update your driver");
-		throw EBadDisplay("Missing required GL extension: GL_ARB_separate_shader_objects. Update your driver");
+		if (!_Extensions.ARBSeparateShaderObjects)
+		{
+			m_SupportSSO = false;
+			if (!m_UseMegaShaders || !m_LinkedMegaShaders)
+			{
+				nlwarning("Missing required GL extension: GL_ARB_separate_shader_objects. Update your driver");
+				throw EBadDisplay("Missing required GL extension: GL_ARB_separate_shader_objects. Update your driver");
+			}
+			else
+			{
+				nlwarning("Missing recommended GL extension: GL_ARB_separate_shader_objects. Update your driver");
+			}
+		}
 	}
 
 	// All User Light are disabled by Default

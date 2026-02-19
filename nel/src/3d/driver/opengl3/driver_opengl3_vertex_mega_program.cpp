@@ -543,6 +543,8 @@ bool CDriverGL3::initMegaVertexPrograms()
 
 	for (int linked = 0; linked < 2; ++linked)
 	{
+		if (!linked && !m_SupportSSO) continue; // Skip unlinked if no SSO support
+
 		// Skip linked variants if linked mega shaders are not enabled
 		if (linked && !m_LinkedMegaShaders) continue;
 
@@ -587,7 +589,7 @@ bool CDriverGL3::initMegaVertexPrograms()
 
 								CVertexProgram *vp = new CVertexProgram();
 								IProgram::CSource *src = new IProgram::CSource();
-								src->Profile = IProgram::glsl330v;
+								src->Profile = linked ? IProgram::glsl300esv : IProgram::glsl330v;
 								src->DisplayName = NLMISC::toString("Mega VP (linked=%d, fogOrPpl=%d, hwClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", linked, fogOrPpl, hwClip, tableUBO, cameraUBO, objectUBO, materialUBO);
 								src->Features.UsesLightTableUBO = (tableUBO != 0);
 								src->Features.UsesCameraUBO = (cameraUBO != 0);

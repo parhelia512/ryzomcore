@@ -192,7 +192,7 @@ const char *g_ConstantNames[IDRV_PROGRAM_MAXSAMPLERS] =
 
 bool CDriverGL3::supportVertexProgram(CVertexProgram::TProfile profile) const
 {
-	return (profile == IProgram::glsl330v);
+	return (profile == IProgram::glsl330v) || (profile == IProgram::glsl300esv);
 }
 
 bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
@@ -204,13 +204,24 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 		return false;
 
 	IProgram::CSource *src = NULL;
-	for (int i = 0; i < program->getSourceNb(); i++)
+	if (m_LinkedMegaShaders)
 	{
-		src = program->getSource(i);
-		if (src->Profile == IProgram::glsl330v)
-			break;
-
-		src = NULL;
+		// Prefer pipeline-stage source for linking
+		for (int i = 0; i < program->getSourceNb(); i++)
+		{
+			IProgram::CSource *s = program->getSource(i);
+			if (s->Profile == IProgram::glsl300esv && s->Features.PipelineStage)
+			{ src = s; break; }
+		}
+	}
+	if (!src && m_SupportSSO)
+	{
+		for (int i = 0; i < program->getSourceNb(); i++)
+		{
+			IProgram::CSource *s = program->getSource(i);
+			if (s->Profile == IProgram::glsl330v || ((!m_LinkedMegaShaders || !s->Features.PipelineStage) && s->Profile == IProgram::glsl300esv))
+			{ src = s; break; }
+		}
 	}
 	if (src == NULL)
 	{
@@ -277,6 +288,8 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 
 		id = nglCreateProgram();
 		nglAttachShader(id, shader);
+		if (!m_LinkedMegaShaders)
+			nglProgramParameteri(id, GL_PROGRAM_SEPARABLE, GL_TRUE);
 		nglLinkProgram(id);
 
 		GLint linkOk;
@@ -392,10 +405,7 @@ bool CDriverGL3::activeVertexProgram(CVertexProgram *program, bool driver)
 
 bool CDriverGL3::supportPixelProgram(IProgram::TProfile profile) const
 {
-	if (profile == IProgram::glsl330f)
-		return true;
-	else
-		return false;
+	return (profile == IProgram::glsl330f) || (profile == IProgram::glsl300esf);
 }
 
 bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
@@ -407,16 +417,25 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 		return false;
 
 	IProgram::CSource *src = NULL;
-
-	for (int i = 0; i < program->getSourceNb(); i++)
+	if (m_LinkedMegaShaders)
 	{
-		src = program->getSource(i);
-		if (src->Profile == IProgram::glsl330f)
-			break;
-
-		src = NULL;
+		// Prefer pipeline-stage source for linking
+		for (int i = 0; i < program->getSourceNb(); i++)
+		{
+			IProgram::CSource *s = program->getSource(i);
+			if (s->Profile == IProgram::glsl300esf && s->Features.PipelineStage)
+			{ src = s; break; }
+		}
 	}
-
+	if (!src && m_SupportSSO)
+	{
+		for (int i = 0; i < program->getSourceNb(); i++)
+		{
+			IProgram::CSource *s = program->getSource(i);
+			if (s->Profile == IProgram::glsl330f || ((!m_LinkedMegaShaders || !s->Features.PipelineStage) && s->Profile == IProgram::glsl300esf))
+			{ src = s; break; }
+		}
+	}
 	if (src == NULL)
 	{
 		program->m_CompileFailed = true;
@@ -482,6 +501,8 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 
 		id = nglCreateProgram();
 		nglAttachShader(id, shader);
+		if (!m_LinkedMegaShaders)
+			nglProgramParameteri(id, GL_PROGRAM_SEPARABLE, GL_TRUE);
 		nglLinkProgram(id);
 
 		GLint linkOk;
@@ -963,10 +984,18 @@ void CDriverGL3::generateShaderDesc(CShaderDesc &desc, CMaterial &mat)
 
 bool CDriverGL3::setupBuiltinPrograms()
 {
-	// Linked mega shader path: bypass separate VP/PP setup entirely
+	// Pure mega linked path (no user programs)
 	if (m_LinkedMegaShaders && m_UseMegaShaders && !m_UserVertexProgram && !m_UserPixelProgram)
 		return setupMegaLinkedPrograms()
 			&& setupUniforms();
+
+	// Try user linked path when at least one user program is set
+	if (m_LinkedMegaShaders && m_UseMegaShaders)
+	{
+		if (setupUserLinkedPrograms())
+			return setupUniforms();
+		// Fall through to SSO if linking not possible
+	}
 
 	return setupBuiltinVertexProgram()
 		&& setupBuiltinPixelProgram()
@@ -1016,6 +1045,8 @@ bool CDriverGL3::setupBuiltinVertexProgram()
 	}
 
 	if (m_UseMegaShaders) return setupMegaVertexProgram();
+
+	if (!m_SupportSSO) return false;
 
 	// Check if PP needs world-space normal varying
 	bool needNormal = false;
@@ -1077,10 +1108,9 @@ bool CDriverGL3::setupBuiltinPixelProgram()
 		return true;
 	}
 
-	if (m_UseMegaShaders)
-	{
-		return setupMegaPixelProgram();
-	}
+	if (m_UseMegaShaders) return setupMegaPixelProgram();
+
+	if (!m_SupportSSO) return false;
 
 	nlassert(_CurrentMaterial);
 	CMaterial &mat = *_CurrentMaterial;
@@ -1844,6 +1874,292 @@ void CDriverGL3::setupInitialUniforms(IProgram *program)
 	}
 }
 
+CShaderProgram *CDriverGL3::linkPrograms(
+	IProgram *vpProg, const CProgramFeatures &vpFeatures,
+	IProgram *ppProg, const CProgramFeatures &ppFeatures)
+{
+	if (!vpProg || !ppProg || !vpProg->m_DrvInfo || !ppProg->m_DrvInfo)
+		return NULL;
+
+	CProgramDrvInfosGL3 *vpDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)vpProg->m_DrvInfo);
+	CProgramDrvInfosGL3 *ppDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)ppProg->m_DrvInfo);
+
+	// Extract attached shaders from single-stage programs
+	GLuint vpShader = 0, ppShader = 0;
+	GLsizei count = 0;
+	nglGetAttachedShaders(vpDrvInfo->getProgramId(), 1, &count, &vpShader);
+	if (count == 0 || vpShader == 0)
+	{
+		nlwarning("GL3: Failed to extract VP shader for linked program");
+		return NULL;
+	}
+	count = 0;
+	nglGetAttachedShaders(ppDrvInfo->getProgramId(), 1, &count, &ppShader);
+	if (count == 0 || ppShader == 0)
+	{
+		nlwarning("GL3: Failed to extract PP shader for linked program");
+		return NULL;
+	}
+
+	// Create combined linked program
+	GLuint linkedProg = nglCreateProgram();
+	nglAttachShader(linkedProg, vpShader);
+	nglAttachShader(linkedProg, ppShader);
+	nglLinkProgram(linkedProg);
+
+	GLint linkOk;
+	nglGetProgramiv(linkedProg, GL_LINK_STATUS, &linkOk);
+	if (linkOk == 0)
+	{
+		char errorLog[1024];
+		nglGetProgramInfoLog(linkedProg, 1024, NULL, errorLog);
+		nlwarning("GL3: Linked program link failed: %s", errorLog);
+		nglDeleteProgram(linkedProg);
+		return NULL;
+	}
+
+	nldebug("GL3: Linked user program id=%u (VP=%s, PP=%s)",
+		linkedProg,
+		vpProg->source() ? vpProg->source()->DisplayName.c_str() : "?",
+		ppProg->source() ? ppProg->source()->DisplayName.c_str() : "?");
+
+	// Create CShaderProgram wrapping the combined linked program
+	CShaderProgram *sp = new CShaderProgram();
+	{
+		IProgram::CSource *src = new IProgram::CSource();
+		src->Profile = IProgram::glsl300es;
+		src->DisplayName = (vpProg->source() ? vpProg->source()->DisplayName : "VP")
+			+ "+" + (ppProg->source() ? ppProg->source()->DisplayName : "PP") + " [linked]";
+		sp->VPFeatures = vpFeatures;
+		sp->PPFeatures = ppFeatures;
+		src->Features = vpFeatures;
+		sp->addSource(src);
+
+		ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(), (NL3D::IProgramDrvInfos*)NULL);
+		CProgramDrvInfosGL3 *drv = new CProgramDrvInfosGL3(this, it);
+		*it = drv;
+		drv->setProgramId(linkedProg);
+		sp->m_DrvInfo = drv;
+		sp->buildInfo(src);
+		setupInitialUniforms(sp);
+	}
+
+	return sp;
+}
+
+bool CDriverGL3::setupUserLinkedPrograms()
+{
+	nlassert(m_UserVertexProgram || m_UserPixelProgram); // At least one must be set
+	nlassert(_CurrentMaterial);
+
+	CMaterial &mat = *_CurrentMaterial;
+	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+	nlassert(matDrv);
+
+	// --- VP-side state ---
+	touchVertexFormatVP();
+
+	// Resolve PPL support from both VP and PP
+	m_ProgramSupportsPPL = m_UserPixelProgram ? m_UserPixelProgram->features().SupportPPL : true;
+	if (m_UserVertexProgram)
+		m_ProgramSupportsPPL = m_ProgramSupportsPPL && m_UserVertexProgram->features().SupportPPL;
+
+	{
+		uint8 numPpl = (uint8)(m_ProgramSupportsPPL ? _NumPerPixelLights : 0);
+		if (m_VPBuiltinCurrent.NumPerPixelLights != numPpl)
+		{
+			m_VPBuiltinCurrent.NumPerPixelLights = numPpl;
+			if (m_VPBuiltinCurrent.Lighting)
+				m_VPBuiltinTouched = true;
+		}
+	}
+
+	if (m_UserVertexProgram)
+	{
+		m_VPSpecularOutput = m_UserVertexProgram->features().OutputsSpecularColor;
+		m_VPWorldSpacePositionOutput = m_UserVertexProgram->features().OutputsWorldSpacePosition;
+		m_VPNormalOutput = false;
+		if (m_VPBuiltinCurrent.NumPerPixelLights > 0 && m_UserVertexProgram->features().UsesObjectUBO)
+		{
+			m_VPWorldSpacePositionOutput = true;
+			m_VPNormalOutput = true;
+		}
+	}
+	else
+	{
+		// Mega VP
+		m_VPSpecularOutput = true;
+		m_VPNormalOutput = false;
+		m_VPWorldSpacePositionOutput = false;
+
+		bool pplActive = false;
+		if (m_VPBuiltinCurrent.NumPerPixelLights > 0)
+		{
+			if (m_UserPixelProgram)
+			{
+				if (m_UserPixelProgram->features().UsesObjectUBO)
+					pplActive = true;
+				else if (m_UserPixelProgram->features().InputsWorldSpacePosition
+				      && m_UserPixelProgram->features().InputsWorldSpaceNormal)
+					pplActive = true;
+			}
+			else
+			{
+				pplActive = true;
+			}
+		}
+		if (pplActive)
+		{
+			m_VPWorldSpacePositionOutput = true;
+			m_VPNormalOutput = true;
+		}
+	}
+
+	// --- PP-side state ---
+	if (!m_UserPixelProgram)
+	{
+		// Mega PP state
+		matDrv->PPBuiltin.checkDriverStateTouched(this);
+		matDrv->PPBuiltin.checkDriverMaterialStateTouched(this, mat);
+		matDrv->PPBuiltin.checkMaterialStateTouched(mat);
+		if (matDrv->PPBuiltin.MaterialUBOTouched)
+		{
+			matDrv->MaterialUBODirty = true;
+			matDrv->PPBuiltin.MaterialUBOTouched = false;
+		}
+	}
+
+	// --- Check linkability ---
+	bool vpLinkable = m_UserVertexProgram
+		? (m_UserVertexProgram->source() && m_UserVertexProgram->source()->Features.PipelineStage)
+		: true; // Mega VP linked=1 variants always linkable
+	bool ppLinkable = m_UserPixelProgram
+		? (m_UserPixelProgram->source() && m_UserPixelProgram->source()->Features.PipelineStage)
+		: true; // Mega PP linked=1 variants always linkable
+
+	if (!vpLinkable && !ppLinkable)
+		return false; // Neither user program is linkable, fall back to SSO
+
+	// If only one side is linkable and the other is a user program that's not, fall back
+	if (m_UserVertexProgram && !vpLinkable)
+		return false;
+	if (m_UserPixelProgram && !ppLinkable)
+		return false;
+
+	// --- Compile user programs if needed ---
+	if (m_UserVertexProgram && !m_UserVertexProgram->m_DrvInfo)
+	{
+		if (!compileVertexProgram(m_UserVertexProgram))
+			return false;
+	}
+	if (m_UserPixelProgram && !m_UserPixelProgram->m_DrvInfo)
+	{
+		if (!compilePixelProgram(m_UserPixelProgram))
+			return false;
+	}
+
+	// --- Compute dimension indices ---
+	bool pplActive = m_VPBuiltinCurrent.NumPerPixelLights > 0
+		&& (m_VPWorldSpacePositionOutput && m_VPNormalOutput);
+	int ppClip = m_VPBuiltinCurrent.PPClipPlane ? 1 : 0;
+	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive || ppClip) ? 1 : 0;
+	int hwClip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
+	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
+	int specular = m_VPSpecularOutput ? 1 : 0;
+
+	CShaderProgram *sp = NULL;
+
+	if (m_UserVertexProgram && !m_UserPixelProgram)
+	{
+		// Case A: User VP + Mega PP
+		CProgramDrvInfosGL3 *vpDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)m_UserVertexProgram->m_DrvInfo);
+		sp = vpDrv->LinkedVPMegaPP[fogOrPpl][cube][specular][ppClip];
+		if (!sp)
+		{
+			int ppTableUBO = fogOrPpl ? 1 : 0;
+			CPixelProgram *megaPP = m_MegaPP[1][fogOrPpl][cube][specular][ppClip][ppTableUBO][1][1][1];
+			if (!megaPP || !megaPP->m_DrvInfo) return false;
+			sp = linkPrograms(m_UserVertexProgram, m_UserVertexProgram->source()->Features,
+				megaPP, megaPP->source()->Features);
+			if (!sp) return false;
+			vpDrv->LinkedVPMegaPP[fogOrPpl][cube][specular][ppClip] = sp;
+		}
+	}
+	else if (!m_UserVertexProgram && m_UserPixelProgram)
+	{
+		// Case B: Mega VP + User PP
+		CProgramDrvInfosGL3 *ppDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)m_UserPixelProgram->m_DrvInfo);
+		sp = ppDrv->LinkedMegaVPPP[fogOrPpl][hwClip];
+		if (!sp)
+		{
+			CVertexProgram *megaVP = m_MegaVP[1][fogOrPpl][hwClip][1][1][1][1];
+			if (!megaVP || !megaVP->m_DrvInfo) return false;
+			sp = linkPrograms(megaVP, megaVP->source()->Features,
+				m_UserPixelProgram, m_UserPixelProgram->source()->Features);
+			if (!sp) return false;
+			ppDrv->LinkedMegaVPPP[fogOrPpl][hwClip] = sp;
+		}
+	}
+	else
+	{
+		// Case C: User VP + User PP
+		CProgramDrvInfosGL3 *vpDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)m_UserVertexProgram->m_DrvInfo);
+		CProgramDrvInfosGL3 *ppDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)m_UserPixelProgram->m_DrvInfo);
+		auto it = vpDrv->LinkedUserVPPP.find(ppDrv);
+		if (it != vpDrv->LinkedUserVPPP.end())
+		{
+			sp = it->second;
+		}
+		else
+		{
+			sp = linkPrograms(m_UserVertexProgram, m_UserVertexProgram->source()->Features,
+				m_UserPixelProgram, m_UserPixelProgram->source()->Features);
+			if (!sp) return false;
+			vpDrv->LinkedUserVPPP[ppDrv] = sp;
+		}
+	}
+
+	nlassert(sp);
+	nlassert(sp->m_DrvInfo);
+
+	CProgramDrvInfosGL3 *spDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)sp->m_DrvInfo);
+	GLuint linkedProgId = spDrvInfo->getProgramId();
+	nlassert(linkedProgId != 0);
+
+	// Unbind PPO and activate linked program
+	if (m_PPOBound)
+	{
+		nglBindProgramPipeline(0);
+		m_PPOBound = false;
+	}
+	nglUseProgram(linkedProgId);
+
+	// Set shader program — getProgram/getProgramId will use this for both VP and PP
+	m_DriverShaderProgram = sp;
+	m_DriverVertexProgram = NULL;
+	m_DriverPixelProgram = NULL;
+
+	// Set UBO flags from VP features
+	m_ProgramNoUniforms[VertexProgram] = sp->VPFeatures.NoUniforms;
+	m_ProgramNoBuiltinUniforms[VertexProgram] = sp->VPFeatures.NoBuiltinUniforms;
+	m_ProgramOnlyUBOs[VertexProgram] = sp->VPFeatures.OnlyUBOs;
+	m_ProgramUsesLightTableUBO[VertexProgram] = sp->VPFeatures.UsesLightTableUBO;
+	m_ProgramUsesCameraUBO[VertexProgram] = sp->VPFeatures.UsesCameraUBO;
+	m_ProgramUsesObjectUBO[VertexProgram] = sp->VPFeatures.UsesObjectUBO;
+	m_ProgramUsesMaterialUBO[VertexProgram] = sp->VPFeatures.UsesMaterialUBO;
+
+	// Set UBO flags from PP features
+	m_ProgramNoUniforms[PixelProgram] = sp->PPFeatures.NoUniforms;
+	m_ProgramNoBuiltinUniforms[PixelProgram] = sp->PPFeatures.NoBuiltinUniforms;
+	m_ProgramOnlyUBOs[PixelProgram] = sp->PPFeatures.OnlyUBOs;
+	m_ProgramUsesLightTableUBO[PixelProgram] = sp->PPFeatures.UsesLightTableUBO;
+	m_ProgramUsesCameraUBO[PixelProgram] = sp->PPFeatures.UsesCameraUBO;
+	m_ProgramUsesObjectUBO[PixelProgram] = sp->PPFeatures.UsesObjectUBO;
+	m_ProgramUsesMaterialUBO[PixelProgram] = sp->PPFeatures.UsesMaterialUBO;
+
+	return true;
+}
+
 bool CDriverGL3::initMegaLinkedPrograms()
 {
 	// Linked shader programs are always fully UBO-backed.
@@ -1881,72 +2197,13 @@ bool CDriverGL3::initMegaLinkedPrograms()
 							nlwarning("GL3: Missing mega program (vpProg=%p, ppProg=%p) for linked pipeline (fogOrPpl=%d, hwClip=%d, cube=%d, specular=%d, ppClip=%d)", (void *)vpProg, (void *)ppProg, fogOrPpl, hwClip, cube, specular, ppClip);
 							return false;
 						}
-						if (!vpProg->m_DrvInfo || !ppProg->m_DrvInfo)
+
+						CShaderProgram *sp = linkPrograms(vpProg, vpProg->source()->Features,
+							ppProg, ppProg->source()->Features);
+						if (!sp)
 						{
-							nlwarning("GL3: Missing driver info for mega program in linked pipeline (fogOrPpl=%d, hwClip=%d, cube=%d, specular=%d, ppClip=%d)", fogOrPpl, hwClip, cube, specular, ppClip);
+							nlwarning("GL3: Failed to link mega program (fogOrPpl=%d, hwClip=%d, cube=%d, specular=%d, ppClip=%d)", fogOrPpl, hwClip, cube, specular, ppClip);
 							return false;
-						}
-
-						CProgramDrvInfosGL3 *vpDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)vpProg->m_DrvInfo);
-						CProgramDrvInfosGL3 *ppDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)ppProg->m_DrvInfo);
-
-						// Extract attached shaders from single-stage programs
-						GLuint vpShader = 0, ppShader = 0;
-						GLsizei count = 0;
-						nglGetAttachedShaders(vpDrvInfo->getProgramId(), 1, &count, &vpShader);
-						if (count == 0 || vpShader == 0)
-						{
-							nlwarning("GL3: Failed to extract VP shader for linked mega program");
-							return false;
-						}
-						count = 0;
-						nglGetAttachedShaders(ppDrvInfo->getProgramId(), 1, &count, &ppShader);
-						if (count == 0 || ppShader == 0)
-						{
-							nlwarning("GL3: Failed to extract PP shader for linked mega program");
-							return false;
-						}
-
-						// Create combined linked program
-						GLuint linkedProg = nglCreateProgram();
-						nglAttachShader(linkedProg, vpShader);
-						nglAttachShader(linkedProg, ppShader);
-						nglLinkProgram(linkedProg);
-
-						GLint linkOk;
-						nglGetProgramiv(linkedProg, GL_LINK_STATUS, &linkOk);
-						if (linkOk == 0)
-						{
-							char errorLog[1024];
-							nglGetProgramInfoLog(linkedProg, 1024, NULL, errorLog);
-							nlwarning("GL3: Mega linked program link failed (fogOrPpl=%d, hwClip=%d, cube=%d, spec=%d, ppClip=%d): %s",
-								fogOrPpl, hwClip, cube, specular, ppClip, errorLog);
-							nglDeleteProgram(linkedProg);
-							return false;
-						}
-
-						nldebug("GL3: Linked mega program (fogOrPpl=%d, hwClip=%d, cube=%d, spec=%d, ppClip=%d) id=%u",
-							fogOrPpl, hwClip, cube, specular, ppClip, linkedProg);
-
-						// Create CShaderProgram wrapping the combined linked program.
-						// A single buildInfo() resolves all uniforms from both VP and PP stages.
-						CShaderProgram *sp = new CShaderProgram();
-						{
-							IProgram::CSource *src = new IProgram::CSource();
-							src->Profile = IProgram::glsl330v;
-							src->DisplayName = vpProg->source()->DisplayName + "+" + ppProg->source()->DisplayName + " [linked]";
-							sp->VPFeatures = vpProg->source()->Features;
-							sp->PPFeatures = ppProg->source()->Features;
-							src->Features = vpProg->source()->Features;
-							sp->addSource(src);
-
-							ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(), (NL3D::IProgramDrvInfos*)NULL);
-							CProgramDrvInfosGL3 *drv = new CProgramDrvInfosGL3(this, it);
-							*it = drv;
-							drv->setProgramId(linkedProg);
-							sp->m_DrvInfo = drv;
-							sp->buildInfo(src);
-							setupInitialUniforms(sp);
 						}
 
 						m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip] = sp;

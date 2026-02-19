@@ -702,6 +702,8 @@ bool CDriverGL3::initMegaPixelPrograms()
 
 	for (int linked = 0; linked < 2; ++linked)
 	{
+		if (!linked && !m_SupportSSO) continue; // Skip unlinked if no SSO support
+
 		// Skip linked variants if linked mega shaders are not enabled
 		if (linked && !m_LinkedMegaShaders) continue;
 
@@ -766,7 +768,7 @@ bool CDriverGL3::initMegaPixelPrograms()
 
 										CPixelProgram *pp = new CPixelProgram();
 										IProgram::CSource *src = new IProgram::CSource();
-										src->Profile = IProgram::glsl330f;
+										src->Profile = linked ? IProgram::glsl300esf : IProgram::glsl330f;
 										src->DisplayName = NLMISC::toString("Mega PP (linked=%d, fogOrPpl=%d, cube=%d, spec=%d, ppClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", linked, fogOrPpl, cube, specular, ppClip, tableUBO, cameraUBO, objectUBO, materialUBO);
 										src->Features.UsesLightTableUBO = (tableUBO != 0);
 										src->Features.UsesCameraUBO = (cameraUBO != 0);

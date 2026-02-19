@@ -294,6 +294,7 @@ extern PFNGLGETSYNCIVPROC								nglGetSynciv;
 extern PFNGLUSEPROGRAMSTAGESPROC						nglUseProgramStages;
 extern PFNGLACTIVESHADERPROGRAMPROC						nglActiveShaderProgram;
 extern PFNGLCREATESHADERPROGRAMVPROC					nglCreateShaderProgramv;
+extern PFNGLPROGRAMPARAMETERIPROC					nglProgramParameteri;
 extern PFNGLBINDPROGRAMPIPELINEPROC						nglBindProgramPipeline;
 extern PFNGLDELETEPROGRAMPIPELINESPROC					nglDeleteProgramPipelines;
 extern PFNGLGENPROGRAMPIPELINESPROC						nglGenProgramPipelines;

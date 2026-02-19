@@ -1403,8 +1403,9 @@ private:
 	//   tableUBO: 0=non-table lights; 1=light table UBO
 	bool m_BuildUnusedPrograms;
 	bool m_PPClipPlanes;            // Use PP-based clip plane discard instead of native gl_ClipDistance
-	bool m_UseMegaShaders;          // Select mega VP/PP variants (false = per-material compiled shaders)
 	bool m_LinkedMegaShaders;       // Use linked VP+PP programs instead of SSO for mega path
+	bool m_SupportSSO;              // Support separable shader objects
+	bool m_UseMegaShaders;          // Select mega VP/PP variants (false = per-material compiled shaders)
 	bool m_UseMegaLightTableUBO;    // Select mega VP/PP variants with light table UBO
 	bool m_UseMegaCameraUBO;        // Select mega VP/PP variants with camera state UBO
 	bool m_UseMegaObjectUBO;        // Select mega VP/PP variants with per-object UBO (implies table+camera)
@@ -1416,6 +1417,12 @@ private:
 	// Linked mega shader programs (combined VP+PP, always UBO-backed)
 	// m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip]
 	NLMISC::CSmartPtr<CShaderProgram> m_MegaLinked[2][2][2][2][2];
+
+	// User VP/PP linked program helpers
+	CShaderProgram *linkPrograms(
+		IProgram *vpProg, const CProgramFeatures &vpFeatures,
+		IProgram *ppProg, const CProgramFeatures &ppFeatures);
+	bool setupUserLinkedPrograms();
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;
@@ -1540,6 +1547,18 @@ public:
 	void setObjectBlockIndex(GLuint idx) { objectBlockIndex = idx; }
 	GLuint getMaterialBlockIndex() const { return materialBlockIndex; }
 	void setMaterialBlockIndex(GLuint idx) { materialBlockIndex = idx; }
+
+	// Linked program cache for user VP + mega PP combinations
+	// Indexed by [fogOrPpl][cube][specular][ppClip]
+	NLMISC::CSmartPtr<CShaderProgram> LinkedVPMegaPP[2][2][2][2];
+
+	// Linked program cache for mega VP + user PP combinations
+	// Indexed by [fogOrPpl][hwClip]
+	NLMISC::CSmartPtr<CShaderProgram> LinkedMegaVPPP[2][2];
+
+	// Linked program cache for user VP + user PP combinations
+	// Keyed by the other program's drvinfo pointer
+	std::map<CProgramDrvInfosGL3*, NLMISC::CSmartPtr<CShaderProgram>> LinkedUserVPPP;
 
 private:
 	GLuint programId;

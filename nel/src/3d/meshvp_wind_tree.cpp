@@ -59,6 +59,12 @@ static const char* WindTreeVPCodeGLSL_Header =
 	"#version 330\n"
 	"#extension GL_ARB_separate_shader_objects : enable\n";
 
+// GLSL 300 es header for pipeline stage (linked program path)
+static const char* WindTreeVPCodeGLSL_ES_Header =
+	"#version 300 es\n"
+	"precision highp float;\n"
+	"precision highp int;\n";
+
 static const char* WindTreeVPCodeGLSL_Body =
 	"#ifndef NUM_POINT_LIGHTS\n"
 	"#define NUM_POINT_LIGHTS 0\n"
@@ -204,12 +210,15 @@ static const char* WindTreeVPCodeGLSL_Body =
 
 // UBO-based GLSL body: uses NlCamera, NlLightTable, NlModel, NlWindTree UBOs.
 // All 16 variants (light count, specular, normalize) folded into one shader.
+// gl_PerVertex output block (SSO-only; 300 es has implicit gl_Position)
+static const char* WindTreeVPCodeGLSL_UBO_PerVertex =
+	"out gl_PerVertex { vec4 gl_Position; };\n";
+
 static const char* WindTreeVPCodeGLSL_UBO_Body =
 	"layout (location = 0) in vec4 vposition;\n"
 	"layout (location = 2) in vec4 vnormal;\n"
 	"layout (location = 3) in vec4 vprimaryColor;\n"
 	"layout (location = 8) in vec4 vtexCoord0;\n"
-	"out gl_PerVertex { vec4 gl_Position; };\n"
 	"layout(location = 3) smooth out vec4 diffuseColor;\n"
 	"layout(location = 4) smooth out vec4 specularColor;\n"
 	"layout(location = 8) smooth out vec4 texCoord0;\n"
@@ -549,18 +558,36 @@ CVertexProgramWindTreeUBO::CVertexProgramWindTreeUBO()
 		CMeshVPWindTree::_WindTreeUBFormat = fmt;
 	}
 
-	// Single UBO-based VP (GL3-only, no assembly fallback)
-	CSource *source = new CSource();
-	source->Features.OutputsSpecularColor = true;
-	source->Features.OnlyUBOs = true;
-	source->Features.UsesLightTableUBO = true;
-	source->Features.UsesCameraUBO = true;
-	source->Features.UsesObjectUBO = true;
-	source->UniformBufferFormats[UBBindingVertexProgram] = CMeshVPWindTree::_WindTreeUBFormat;
-	source->DisplayName = "glsl330v/MeshVPWindTree/UBO";
-	source->Profile = CVertexProgram::glsl330v;
-	source->setSource(std::string(WindTreeVPCodeGLSL_Header) + WindTreeVPCodeGLSL_UBO_Body);
-	addSource(source);
+	// Pipeline-stage UBO source (preferred for linked program path)
+	{
+		CSource *source = new CSource();
+		source->Features.OutputsSpecularColor = true;
+		source->Features.OnlyUBOs = true;
+		source->Features.PipelineStage = true;
+		source->Features.UsesLightTableUBO = true;
+		source->Features.UsesCameraUBO = true;
+		source->Features.UsesObjectUBO = true;
+		source->UniformBufferFormats[UBBindingVertexProgram] = CMeshVPWindTree::_WindTreeUBFormat;
+		source->DisplayName = "glsl300esv/MeshVPWindTree/UBO";
+		source->Profile = CVertexProgram::glsl300esv;
+		source->setSource(std::string(WindTreeVPCodeGLSL_ES_Header) + WindTreeVPCodeGLSL_UBO_Body);
+		addSource(source);
+	}
+
+	// SSO UBO source (fallback for separate shader objects path)
+	{
+		CSource *source = new CSource();
+		source->Features.OutputsSpecularColor = true;
+		source->Features.OnlyUBOs = true;
+		source->Features.UsesLightTableUBO = true;
+		source->Features.UsesCameraUBO = true;
+		source->Features.UsesObjectUBO = true;
+		source->UniformBufferFormats[UBBindingVertexProgram] = CMeshVPWindTree::_WindTreeUBFormat;
+		source->DisplayName = "glsl330v/MeshVPWindTree/UBO";
+		source->Profile = CVertexProgram::glsl330v;
+		source->setSource(std::string(WindTreeVPCodeGLSL_Header) + WindTreeVPCodeGLSL_UBO_PerVertex + WindTreeVPCodeGLSL_UBO_Body);
+		addSource(source);
+	}
 }
 
 void CVertexProgramWindTreeUBO::buildInfo()
