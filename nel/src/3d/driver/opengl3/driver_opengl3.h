@@ -1384,6 +1384,7 @@ private:
 	NLMISC::CRefPtr<CVertexProgram> m_DriverVertexProgram;
 	NLMISC::CRefPtr<CGeometryProgram> m_DriverGeometryProgram;
 	NLMISC::CRefPtr<CPixelProgram> m_DriverPixelProgram;
+	NLMISC::CRefPtr<CShaderProgram> m_DriverShaderProgram; // Combined linked VP+PP program (non-SSO path)
 
 	friend class CPPBuiltin;
 	std::unordered_set<CPPBuiltin> m_PPBuiltinCache;
@@ -1412,15 +1413,8 @@ private:
 	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2][2][2][2];
 
 	// Linked mega shader programs (combined VP+PP linked programs)
-	struct CMegaLinkedProgram
-	{
-		GLuint progId;                              // Combined linked GL program (0 = not built)
-		NLMISC::CSmartPtr<CVertexProgram> vpProxy;  // Proxy for VP-side uniform queries
-		NLMISC::CSmartPtr<CPixelProgram>  ppProxy;  // Proxy for PP-side uniform queries
-		CMegaLinkedProgram() : progId(0) { }
-	};
 	// m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO]
-	CMegaLinkedProgram m_MegaLinked[2][2][2][2][2][2][2][2][2];
+	NLMISC::CSmartPtr<CShaderProgram> m_MegaLinked[2][2][2][2][2][2][2][2][2];
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;

@@ -658,6 +658,27 @@ public:
 
 }; /* class IProgram */
 
+/**
+ * \brief CShaderProgram
+ * A combined linked VP+PP shader program (non-SSO).
+ * Wraps a single GPU program containing both vertex and fragment stages.
+ * A single buildInfo() call resolves all uniforms from both stages.
+ * Stores separate VP and PP feature copies for per-stage UBO flag queries.
+ * Only used internally by the driver implementations; not exposed to user code.
+ */
+class CShaderProgram : public IProgram
+{
+public:
+	CShaderProgram();
+	virtual ~CShaderProgram();
+
+	/// VP-side features (for per-stage UBO flag queries)
+	CProgramFeatures VPFeatures;
+
+	/// PP-side features (for per-stage UBO flag queries)
+	CProgramFeatures PPFeatures;
+};
+
 } /* namespace NL3D */
 
 #endif /* #ifndef NL3D_PROGRAM_H */

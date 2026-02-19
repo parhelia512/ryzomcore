@@ -432,7 +432,17 @@ void IProgram::buildInfo(CSource *source)
 
 void IProgram::buildInfo()
 {
-	
+
+}
+
+// ***************************************************************************
+
+CShaderProgram::CShaderProgram()
+{
+}
+
+CShaderProgram::~CShaderProgram()
+{
 }
 
 } /* namespace NL3D */

@@ -354,6 +354,7 @@ bool CDriverGL3::activeVertexProgram(CVertexProgram *program, bool driver)
 		nglUseProgram(0);
 		nglBindProgramPipeline(ppoId);
 		m_PPOBound = true;
+		m_DriverShaderProgram = NULL;
 	}
 
 	if (program == NULL)
@@ -551,6 +552,7 @@ bool CDriverGL3::activePixelProgram(CPixelProgram *program, bool driver)
 		nglUseProgram(0);
 		nglBindProgramPipeline(ppoId);
 		m_PPOBound = true;
+		m_DriverShaderProgram = NULL;
 	}
 
 	if (program == NULL)
@@ -607,6 +609,16 @@ bool CDriverGL3::activePixelProgram(CPixelProgram *program, bool driver)
 
 uint32 CDriverGL3::getProgramId(TProgram program) const
 {
+	// When a linked shader program is active, both VP and PP target the same GL program
+	if (m_DriverShaderProgram)
+	{
+		IProgramDrvInfos *di = m_DriverShaderProgram->m_DrvInfo;
+		if (di == NULL)
+			return 0;
+		CProgramDrvInfosGL3 *drvInfo = static_cast<CProgramDrvInfosGL3 *>(di);
+		return drvInfo->getProgramId();
+	}
+
 	IProgramDrvInfos *di;
 	switch(program)
 	{
@@ -626,16 +638,20 @@ uint32 CDriverGL3::getProgramId(TProgram program) const
 		di = NULL;
 		break;
 	}
-	
+
 	if (di == NULL)
 		return 0;
-	
+
 	CProgramDrvInfosGL3 *drvInfo = static_cast<CProgramDrvInfosGL3 *>(di);
 	return drvInfo->getProgramId();
 }
 
 IProgram* CDriverGL3::getProgram(TProgram program) const
 {
+	// When a linked shader program is active, both VP and PP resolve against the same program
+	if (m_DriverShaderProgram)
+		return m_DriverShaderProgram;
+
 	switch(program)
 	{
 	case IDriver::VertexProgram:
@@ -1089,6 +1105,33 @@ bool CDriverGL3::setupBuiltinPixelProgram()
 
 bool CDriverGL3::setupUniforms()
 {
+	if (m_DriverShaderProgram)
+	{
+		// Linked shader program path: only UBOs, no individual uniforms.
+		bool vpSkipBuiltin = m_ProgramNoUniforms[VertexProgram] || m_ProgramNoBuiltinUniforms[VertexProgram];
+		bool ppSkipBuiltin = m_ProgramNoUniforms[PixelProgram] || m_ProgramNoBuiltinUniforms[PixelProgram];
+
+		// Upload builtin UBOs based on union of VP and PP stage needs.
+		if (!vpSkipBuiltin || !ppSkipBuiltin)
+		{
+			if (m_ProgramUsesObjectUBO[VertexProgram] || m_ProgramUsesObjectUBO[PixelProgram])
+				uploadObjectUBO();
+			if (m_ProgramUsesMaterialUBO[VertexProgram] || m_ProgramUsesMaterialUBO[PixelProgram])
+				uploadMaterialUBO();
+			if (m_ProgramUsesCameraUBO[VertexProgram] || m_ProgramUsesCameraUBO[PixelProgram])
+				uploadCameraUBO();
+			if (m_ProgramUsesLightTableUBO[VertexProgram] || m_ProgramUsesLightTableUBO[PixelProgram])
+				uploadLightTableUBO();
+		}
+
+		// Flush user-bound UBOs — skip only when truly no uniforms at all on both stages
+		if (!m_ProgramNoUniforms[VertexProgram] || !m_ProgramNoUniforms[PixelProgram])
+			flushUserUBOs();
+
+		return true;
+	}
+
+	// SSO path: separate VP and PP programs
 	bool vpSkipBuiltin = m_ProgramNoUniforms[VertexProgram] || m_ProgramNoBuiltinUniforms[VertexProgram];
 	bool ppSkipBuiltin = m_ProgramNoUniforms[PixelProgram] || m_ProgramNoBuiltinUniforms[PixelProgram];
 
@@ -1873,50 +1916,28 @@ bool CDriverGL3::initMegaLinkedPrograms()
 										nldebug("GL3: Linked mega program (fogOrPpl=%d, hwClip=%d, cube=%d, spec=%d, ppClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d) id=%u",
 											fogOrPpl, hwClip, cube, specular, ppClip, tableUBO, cameraUBO, objectUBO, materialUBO, linkedProg);
 
-										// Create VP proxy wrapping the linked program
-										CVertexProgram *vpProxy = new CVertexProgram();
+										// Create CShaderProgram wrapping the combined linked program.
+										// A single buildInfo() resolves all uniforms from both VP and PP stages.
+										CShaderProgram *sp = new CShaderProgram();
 										{
-											IProgram::CSource *vpSrc = vpProg->source();
-											IProgram::CSource *proxySrc = new IProgram::CSource();
-											proxySrc->Profile = vpSrc->Profile;
-											proxySrc->DisplayName = vpSrc->DisplayName + " [linked-proxy]";
-											proxySrc->Features = vpSrc->Features;
-											proxySrc->setSource(vpSrc->SourcePtr);
-											vpProxy->addSource(proxySrc);
+											IProgram::CSource *src = new IProgram::CSource();
+											src->Profile = IProgram::glsl330v;
+											src->DisplayName = vpProg->source()->DisplayName + "+" + ppProg->source()->DisplayName + " [linked]";
+											sp->VPFeatures = vpProg->source()->Features;
+											sp->PPFeatures = ppProg->source()->Features;
+											src->Features = vpProg->source()->Features;
+											sp->addSource(src);
 
 											ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(), (NL3D::IProgramDrvInfos*)NULL);
-											CProgramDrvInfosGL3 *vpDrv = new CProgramDrvInfosGL3(this, it);
-											*it = vpDrv;
-											vpDrv->setProgramId(linkedProg);
-											vpProxy->m_DrvInfo = vpDrv;
-											vpProxy->buildInfo(proxySrc);
-											setupInitialUniforms(vpProxy);
+											CProgramDrvInfosGL3 *drv = new CProgramDrvInfosGL3(this, it);
+											*it = drv;
+											drv->setProgramId(linkedProg);
+											sp->m_DrvInfo = drv;
+											sp->buildInfo(src);
+											setupInitialUniforms(sp);
 										}
 
-										// Create PP proxy wrapping the same linked program
-										CPixelProgram *ppProxy = new CPixelProgram();
-										{
-											IProgram::CSource *ppSrc = ppProg->source();
-											IProgram::CSource *proxySrc = new IProgram::CSource();
-											proxySrc->Profile = ppSrc->Profile;
-											proxySrc->DisplayName = ppSrc->DisplayName + " [linked-proxy]";
-											proxySrc->Features = ppSrc->Features;
-											proxySrc->setSource(ppSrc->SourcePtr);
-											ppProxy->addSource(proxySrc);
-
-											ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(), (NL3D::IProgramDrvInfos*)NULL);
-											CProgramDrvInfosGL3 *ppDrv = new CProgramDrvInfosGL3(this, it);
-											*it = ppDrv;
-											ppDrv->setProgramId(linkedProg);
-											ppProxy->m_DrvInfo = ppDrv;
-											ppProxy->buildInfo(proxySrc);
-											// setupInitialUniforms already done via vpProxy (same progId); UBO bindings are idempotent
-										}
-
-										CMegaLinkedProgram &entry = m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
-										entry.progId = linkedProg;
-										entry.vpProxy = vpProxy;
-										entry.ppProxy = ppProxy;
+										m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO] = sp;
 									}
 								}
 							}
@@ -1964,10 +1985,13 @@ bool CDriverGL3::setupMegaLinkedPrograms()
 	// fogOrPpl=0 + tableUBO=1 variant doesn't exist
 	if (!fogOrPpl) tableUBO = 0;
 
-	CMegaLinkedProgram &entry = m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
-	nlassert(entry.progId != 0);
-	nlassert(entry.vpProxy);
-	nlassert(entry.ppProxy);
+	CShaderProgram *sp = m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
+	nlassert(sp);
+	nlassert(sp->m_DrvInfo);
+
+	CProgramDrvInfosGL3 *spDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)sp->m_DrvInfo);
+	GLuint linkedProgId = spDrvInfo->getProgramId();
+	nlassert(linkedProgId != 0);
 
 	// Unbind PPO and activate linked program
 	if (m_PPOBound)
@@ -1975,28 +1999,29 @@ bool CDriverGL3::setupMegaLinkedPrograms()
 		nglBindProgramPipeline(0);
 		m_PPOBound = false;
 	}
-	nglUseProgram(entry.progId);
+	nglUseProgram(linkedProgId);
 
-	m_DriverVertexProgram = entry.vpProxy;
-	m_DriverPixelProgram = entry.ppProxy;
+	// Set shader program — getProgram/getProgramId will use this for both VP and PP
+	m_DriverShaderProgram = sp;
+	m_DriverVertexProgram = NULL;
+	m_DriverPixelProgram = NULL;
 
-	// Set per-program UBO flags for VP
+	// Set per-program UBO flags (identical for both stages in linked path)
 	m_ProgramNoUniforms[VertexProgram] = false;
 	m_ProgramNoBuiltinUniforms[VertexProgram] = false;
 	m_ProgramOnlyUBOs[VertexProgram] = false;
-	m_ProgramUsesLightTableUBO[VertexProgram] = tableUBO;
-	m_ProgramUsesCameraUBO[VertexProgram] = cameraUBO;
-	m_ProgramUsesObjectUBO[VertexProgram] = objectUBO;
-	m_ProgramUsesMaterialUBO[VertexProgram] = materialUBO;
+	m_ProgramUsesLightTableUBO[VertexProgram] = sp->VPFeatures.UsesLightTableUBO;
+	m_ProgramUsesCameraUBO[VertexProgram] = sp->VPFeatures.UsesCameraUBO;
+	m_ProgramUsesObjectUBO[VertexProgram] = sp->VPFeatures.UsesObjectUBO;
+	m_ProgramUsesMaterialUBO[VertexProgram] = sp->VPFeatures.UsesMaterialUBO;
 
-	// Set per-program UBO flags for PP
 	m_ProgramNoUniforms[PixelProgram] = false;
 	m_ProgramNoBuiltinUniforms[PixelProgram] = false;
 	m_ProgramOnlyUBOs[PixelProgram] = false;
-	m_ProgramUsesLightTableUBO[PixelProgram] = tableUBO;
-	m_ProgramUsesCameraUBO[PixelProgram] = cameraUBO;
-	m_ProgramUsesObjectUBO[PixelProgram] = objectUBO;
-	m_ProgramUsesMaterialUBO[PixelProgram] = materialUBO;
+	m_ProgramUsesLightTableUBO[PixelProgram] = sp->PPFeatures.UsesLightTableUBO;
+	m_ProgramUsesCameraUBO[PixelProgram] = sp->PPFeatures.UsesCameraUBO;
+	m_ProgramUsesObjectUBO[PixelProgram] = sp->PPFeatures.UsesObjectUBO;
+	m_ProgramUsesMaterialUBO[PixelProgram] = sp->PPFeatures.UsesMaterialUBO;
 
 	return true;
 }
