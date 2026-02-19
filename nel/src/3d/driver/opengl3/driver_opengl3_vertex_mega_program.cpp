@@ -238,21 +238,32 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 	ss << std::endl;
 
 	// All varyings output unconditionally
+	// layout(location) qualifiers required for SSO (glsl330v), not allowed for linked (glsl300esv)
 	for (int i = Weight; i < NumOffsets; ++i)
 	{
 		if (i == PrimaryColor || i == SecondaryColor)
 			continue;
 		if (fogOrPpl && i == VaryingLocationVertexColor)
 			continue; // Slot used by vertexColor
-		ss << "layout(location = " << i << ") smooth out vec4 " << g_AttribNames[i] << ";" << std::endl;
+		if (!linked)
+			ss << "layout(location = " << i << ") ";
+		ss << "smooth out vec4 " << g_AttribNames[i] << ";" << std::endl;
 	}
 	if (fogOrPpl)
 	{
-		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
-		ss << "layout(location = " << VaryingLocationVertexColor << ") smooth out vec4 vertexColor;" << std::endl;
+		if (!linked)
+			ss << "layout(location = " << VaryingLocationEcPos << ") ";
+		ss << "smooth out vec4 ecPos;" << std::endl;
+		if (!linked)
+			ss << "layout(location = " << VaryingLocationVertexColor << ") ";
+		ss << "smooth out vec4 vertexColor;" << std::endl;
 	}
-	ss << "layout(location = " << VaryingLocationDiffuseColor << ") smooth out vec4 diffuseColor;" << std::endl;
-	ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth out vec4 specularColor;" << std::endl;
+	if (!linked)
+		ss << "layout(location = " << VaryingLocationDiffuseColor << ") ";
+	ss << "smooth out vec4 diffuseColor;" << std::endl;
+	if (!linked)
+		ss << "layout(location = " << VaryingLocationSpecularColor << ") ";
+	ss << "smooth out vec4 specularColor;" << std::endl;
 	ss << std::endl;
 
 	// Light computation function (handles all modes via switch)
@@ -595,7 +606,6 @@ bool CDriverGL3::initMegaVertexPrograms()
 								src->Features.UsesCameraUBO = (cameraUBO != 0);
 								src->Features.UsesObjectUBO = (objectUBO != 0);
 								src->Features.UsesMaterialUBO = (materialUBO != 0);
-								src->Features.PipelineStage = (linked != 0);
 								src->setSource(result);
 								vp->addSource(src);
 

@@ -167,7 +167,6 @@ CFXAA::CFXAA(NL3D::UDriver *driver) : m_Driver(driver), m_VP(NULL), m_PP(NULL), 
 		{
 			IProgram::CSource *source = new IProgram::CSource();
 			source->Features.MaterialFlags = CProgramFeatures::TextureStages;
-			source->Features.PipelineStage = true;
 			source->Features.OnlyUBOs = true;
 			source->Features.NoBuiltinUniforms = true;
 			source->UniformBufferFormats[UBBindingPixelProgram] = s_FXAAUBFormat;
@@ -226,7 +225,6 @@ CFXAA::CFXAA(NL3D::UDriver *driver) : m_Driver(driver), m_VP(NULL), m_PP(NULL), 
 		{
 			IProgram::CSource *source = new IProgram::CSource();
 			source->Features.MaterialFlags = CProgramFeatures::TextureStages;
-			source->Features.PipelineStage = true;
 			source->Features.OnlyUBOs = true;
 			source->Features.UsesObjectUBO = true;
 			source->Profile = IProgram::glsl300esv;

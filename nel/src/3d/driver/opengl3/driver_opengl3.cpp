@@ -239,7 +239,6 @@ CDriverGL3::CDriverGL3()
 	_CurrentMode.Windowed = true;
 	_CurrentMode.AntiAlias = -1;
 
-	_DefaultVAO = 0;
 	_Interval = 1;
 	_Resizable = false;
 
@@ -287,10 +286,7 @@ CDriverGL3::CDriverGL3()
 		_MaterialAllTextureTouchedFlag|= IDRV_TOUCHED_TEX[i];
 	}
 
-	for (i = 0; i < IDRV_MAT_MAXTEXTURES; i++)
-		_UserTexMat[i].identity();
-
-	_UserTexMatEnabled = 0;
+	// _UserTexMat removed — texture matrices read directly from material
 
 	// reserve enough space to never reallocate, nor test for reallocation.
 	_LightMapLUT.resize(NL3D_DRV_MAX_LIGHTMAP);
@@ -388,7 +384,7 @@ CDriverGL3::CDriverGL3()
 	memset(m_ProgramUsesMaterialUBO, 0, sizeof(m_ProgramUsesMaterialUBO));
 	_ObjectUBOId = 0;
 	_ObjectUBOCapacity = 0;
-	_OverrideMaterialUBOId = 0;
+	// _OverrideMaterialUBOId = 0; // Replaced by per-material UBO slots
 	for (sint i = 0; i < UBBindingCount; ++i)
 	{
 		_BoundUserUB[i] = NULL;
@@ -474,19 +470,13 @@ bool CDriverGL3::setupDisplay()
 		_ClipPlaneEye[i][3] = 0.f;
 	}
 
-	// init _DriverGLStates
-	_DriverGLStates.init();
-
 	// Init OpenGL/Driver defaults.
 	//=============================
-	glViewport(0,0,_CurrentMode.Width,_CurrentMode.Height);
+	_DriverGLStates.init();
+	_DriverGLStates.viewport(0, 0, _CurrentMode.Width, _CurrentMode.Height);
 	glEnable(GL_DITHER);
-	glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
-
-	// Create and bind a default VAO (required for core profile)
-	nglGenVertexArrays(1, &_DefaultVAO);
-	nglBindVertexArray(_DefaultVAO);
 	glEnable(GL_DEPTH_TEST);
+	_DriverGLStates.polygonMode(GL_FILL);
 	//glDisable(GL_NORMALIZE);
 	//glDisable(GL_COLOR_SUM_EXT); // FIXME GL3
 
@@ -494,7 +484,7 @@ bool CDriverGL3::setupDisplay()
 	_CurrScissor.initFullScreen();
 	_ForceNormalize = false;
 	// Setup defaults for blend, lighting ...
-	_DriverGLStates.forceDefaults(IDRV_MAT_MAXTEXTURES);
+	_DriverGLStates.forceDefaults();
 	// Default delta camera pos.
 	_PZBCameraPos = CVector::Null;
 
@@ -521,7 +511,7 @@ bool CDriverGL3::setupDisplay()
 		// init no texture.
 		_CurrentTexture[stage] = NULL;
 		_CurrentTextureInfoGL[stage] = NULL;
-		// texture are disabled in DriverGLStates.forceDefaults().
+		// init no texture.
 	}
 	for (uint stage = 0; stage < IDRV_MAT_MAXTEXTURES; ++stage)
 	{
@@ -540,7 +530,7 @@ bool CDriverGL3::setupDisplay()
 	nglGenBuffers(1, &_LightTableUBOId);
 	nglGenBuffers(1, &_CameraUBOId);
 	nglGenBuffers(1, &_ObjectUBOId);
-	nglGenBuffers(1, &_OverrideMaterialUBOId);
+	// nglGenBuffers(1, &_OverrideMaterialUBOId); // Replaced by per-material UBO slots
 	nglGenBuffers(1, &_PixelUploadPBO);
 
 	if (m_UseMegaShaders)
@@ -656,7 +646,7 @@ bool CDriverGL3::activeFrameBufferObject(ITexture * tex)
 		}
 		else
 		{
-			nglBindFramebuffer(GL_FRAMEBUFFER, 0);
+			_DriverGLStates.forceBindFramebuffer(0);
 			return true;
 		}
 	}
@@ -719,7 +709,7 @@ bool CDriverGL3::clearStencilBuffer(sint stencilval)
 void CDriverGL3::setColorMask (bool bRed, bool bGreen, bool bBlue, bool bAlpha)
 {
 	H_AUTO_OGL(CDriverGL3_setColorMask)
-	glColorMask (bRed, bGreen, bBlue, bAlpha);
+	_DriverGLStates.colorMask(bRed, bGreen, bBlue, bAlpha);
 }
 
 // --------------------------------------------------
@@ -793,14 +783,14 @@ bool CDriverGL3::swapBuffers()
 		// init no texture.
 		_CurrentTexture[stage]= NULL;
 		_CurrentTextureInfoGL[stage]= NULL;
-		// texture are disabled in DriverGLStates.forceDefaults().
+		// init no texture.
 		setTexGenModeVP(stage, TexGenDisabled);
 	}
 
 	// Activate the default material.
 	//===========================================================
 	// Same reasoning as textures :)
-	_DriverGLStates.forceDefaults(IDRV_MAT_MAXTEXTURES);
+	_DriverGLStates.forceDefaults();
 
 	_CurrentMaterial= NULL;
 
@@ -907,11 +897,12 @@ bool CDriverGL3::release()
 		nglDeleteBuffers(1, &_ObjectUBOId);
 		_ObjectUBOId = 0;
 	}
-	if (_OverrideMaterialUBOId)
-	{
-		nglDeleteBuffers(1, &_OverrideMaterialUBOId);
-		_OverrideMaterialUBOId = 0;
-	}
+	// Replaced by per-material UBO slots
+	// if (_OverrideMaterialUBOId)
+	// {
+	// 	nglDeleteBuffers(1, &_OverrideMaterialUBOId);
+	// 	_OverrideMaterialUBOId = 0;
+	// }
 	if (_PixelUploadPBO)
 	{
 		nglDeleteBuffers(1, &_PixelUploadPBO);
@@ -947,11 +938,7 @@ bool CDriverGL3::release()
 	// FIXME VERTEXBUFFER
 
 	// Delete default VAO
-	if (_DefaultVAO)
-	{
-		nglDeleteVertexArrays(1, &_DefaultVAO);
-		_DefaultVAO = 0;
-	}
+	_DriverGLStates.release();
 
 	// destroy window and associated ressources
 	destroyWindow();
@@ -1010,7 +997,7 @@ void CDriverGL3::setupViewport (const class CViewport& viewport)
 	clamp (iwidth, 0, (sint)clientWidth-ix);
 	sint iheight=(sint)((float)clientHeight*height+0.5f);
 	clamp (iheight, 0, (sint)clientHeight-iy);
-	glViewport (ix, iy, iwidth, iheight);
+	_DriverGLStates.viewport(ix, iy, iwidth, iheight);
 }
 
 // --------------------------------------------------
@@ -1058,7 +1045,7 @@ void CDriverGL3::setupScissor (const class CScissor& scissor)
 	// enable or disable Scissor, but AFTER textureTarget adjust
 	if (x==0.f && y==0.f && width>=1.f && height>=1.f)
 	{
-		glDisable(GL_SCISSOR_TEST);
+		_DriverGLStates.enableScissorTest(false);
 	}
 	else
 	{
@@ -1078,8 +1065,8 @@ void CDriverGL3::setupScissor (const class CScissor& scissor)
 		sint iheight= iy1 - iy0;
 		clamp (iheight, 0, (sint)clientHeight);
 
-		glScissor (ix0, iy0, iwidth, iheight);
-		glEnable(GL_SCISSOR_TEST);
+		_DriverGLStates.scissor(ix0, iy0, iwidth, iheight);
+		_DriverGLStates.enableScissorTest(true);
 	}
 }
 
@@ -1144,8 +1131,8 @@ void CDriverGL3::getZBufferPart (std::vector<float>  &zbuffer, NLMISC::CRect &re
 	{
 		zbuffer.resize(rect.Width*rect.Height);
 
-		glPixelTransferf(GL_DEPTH_SCALE, 1.0f) ;
-		glPixelTransferf(GL_DEPTH_BIAS, 0.f) ;
+		// glPixelTransferf(GL_DEPTH_SCALE/GL_DEPTH_BIAS) removed: does not exist
+		// in GL 3.3 core profile. Depth readback returns raw values without transfer.
 		glReadPixels (rect.X, rect.Y, rect.Width, rect.Height, GL_DEPTH_COMPONENT , GL_FLOAT, &(zbuffer[0]));
 	}
 }
@@ -1205,12 +1192,12 @@ void CDriverGL3::copyFrameBufferToTexture(ITexture *tex,
 	// FIXME GL3 TEXTUREMODE _DriverGLStates.setTextureMode(textureMode);
 	if (tex->isTextureCube())
 	{
-		glBindTexture(GL_TEXTURE_CUBE_MAP, gltext->ID);
+		_DriverGLStates.forceBindTexture(GL_TEXTURE_CUBE_MAP, gltext->ID);
 		glCopyTexSubImage2D(NLCubeFaceToGLCubeFace[cubeFace], level, offsetx, offsety, x, y, width, height);
 	}
 	else
 	{
-		glBindTexture(gltext->TextureMode, gltext->ID);
+		_DriverGLStates.forceBindTexture(gltext->TextureMode, gltext->ID);
 		glCopyTexSubImage2D(gltext->TextureMode, level, offsetx, offsety, x, y, width, height);
 	}
 	// disable texturing.
@@ -1231,13 +1218,13 @@ void CDriverGL3::setPolygonMode (TPolygonMode mode)
 	switch (_PolygonMode)
 	{
 	case Filled:
-		glPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
+		_DriverGLStates.polygonMode(GL_FILL);
 		break;
 	case Line:
-		glPolygonMode (GL_FRONT_AND_BACK, GL_LINE);
+		_DriverGLStates.polygonMode(GL_LINE);
 		break;
 	case Point:
-		glPolygonMode (GL_FRONT_AND_BACK, GL_POINT);
+		_DriverGLStates.polygonMode(GL_POINT);
 		break;
 	}
 }
@@ -1443,11 +1430,7 @@ void CDriverGL3::setBlendConstantColor(NLMISC::CRGBA col)
 {
 	H_AUTO_OGL(CDriverGL3_setBlendConstantColor)
 
-	// bkup
-	_CurrentBlendConstantColor = col;
-
-	static const float OO255 = 1.0f / 255.0f;
-	nglBlendColor(col.R * OO255, col.G * OO255, col.B * OO255, col.A * OO255);
+	_DriverGLStates.blendColor(col);
 }
 
 // ***************************************************************************
@@ -1455,7 +1438,7 @@ NLMISC::CRGBA CDriverGL3::getBlendConstantColor() const
 {
 	H_AUTO_OGL(CDriverGL3_CDriverGL)
 
-	return	_CurrentBlendConstantColor;
+	return	_DriverGLStates.getBlendColor();
 }
 
 // ***************************************************************************

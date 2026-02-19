@@ -31,159 +31,157 @@ namespace NLDRIVERGL3 {
 
 CMaterialDrvInfosGL3::~CMaterialDrvInfosGL3()
 {
-	if (MaterialUBOId)
+	for (int i = 0; i < (int)MaterialUBOId.size(); ++i)
 	{
-		nglDeleteBuffers(1, &MaterialUBOId);
-		MaterialUBOId = 0;
+		if (MaterialUBOId[i])
+		{
+			nglDeleteBuffers(1, &MaterialUBOId[i]);
+			MaterialUBOId[i] = 0;
+		}
 	}
 }
 
 // Water fragment program GLSL source (4 variants via #defines)
-static const char *WaterFPGLSL_Header =
-	"#version 330\n"
-	"#extension GL_ARB_separate_shader_objects : enable\n";
+static const char *WaterFPGLSL_Header = "#version 330\n"
+                                        "#extension GL_ARB_separate_shader_objects : enable\n";
 
-static const char *WaterFPGLSL_ES_Header =
-	"#version 300 es\n"
-	"precision highp float;\n"
-	"precision highp int;\n";
+static const char *WaterFPGLSL_ES_Header = "#version 300 es\n"
+                                           "precision highp float;\n"
+                                           "precision highp int;\n";
 
 // Water shader uses linear fog only; exp/exp2 fog modes are not supported here
-static const char *WaterFPGLSL_Body =
-	"layout(location = 8) smooth in vec4 texCoord0;\n"
-	"layout(location = 9) smooth in vec4 texCoord1;\n"
-	"layout(location = 10) smooth in vec4 texCoord2;\n"
-	"#ifdef USE_DIFFUSE\n"
-	"layout(location = 11) smooth in vec4 texCoord3;\n"
-	"#endif\n"
-	"#ifdef USE_FOG\n"
-	"layout(location = 0) smooth in vec4 ecPos;\n"
-	"#endif\n"
-	"uniform sampler2D sampler0;\n"
-	"uniform sampler2D sampler1;\n"
-	"uniform sampler2D sampler2;\n"
-	"#ifdef USE_DIFFUSE\n"
-	"uniform sampler2D sampler3;\n"
-	"#endif\n"
-	"uniform vec4 bump0ScaleBias;\n"
-	"uniform vec4 bump1ScaleBias;\n"
-	"#ifdef USE_FOG\n"
-	"uniform vec2 fogParams;\n"
-	"uniform vec4 fogColor;\n"
-	"#endif\n"
-	"layout(location = 0) out vec4 fragColor;\n"
-	"void main()\n"
-	"{\n"
-	"  vec2 b0 = texture(sampler0, texCoord0.xy).xy;\n"
-	"  b0 = b0 * bump0ScaleBias.x + bump0ScaleBias.y;\n"
-	"  vec2 uv1 = texCoord1.xy + b0;\n"
-	"  vec2 b1 = texture(sampler1, uv1).xy;\n"
-	"  b1 = b1 * bump1ScaleBias.x + bump1ScaleBias.y;\n"
-	"  vec2 uv2 = texCoord2.xy + b1;\n"
-	"  vec4 col = texture(sampler2, uv2);\n"
-	"#ifdef USE_DIFFUSE\n"
-	"  col *= texture(sampler3, texCoord3.xy);\n"
-	"#endif\n"
-	"#ifdef USE_FOG\n"
-	"  float z = abs(ecPos.y / ecPos.w);\n"
-	"  float fogFactor = clamp((fogParams.t - z) / (fogParams.t - fogParams.s), 0.0, 1.0);\n"
-	"  col = vec4(mix(fogColor.rgb, col.rgb, fogFactor), col.a);\n"
-	"#endif\n"
-	"  fragColor = col;\n"
-	"}\n";
+static const char *WaterFPGLSL_Body = "layout(location = 8) smooth in vec4 texCoord0;\n"
+                                      "layout(location = 9) smooth in vec4 texCoord1;\n"
+                                      "layout(location = 10) smooth in vec4 texCoord2;\n"
+                                      "#ifdef USE_DIFFUSE\n"
+                                      "layout(location = 11) smooth in vec4 texCoord3;\n"
+                                      "#endif\n"
+                                      "#ifdef USE_FOG\n"
+                                      "layout(location = 0) smooth in vec4 ecPos;\n"
+                                      "#endif\n"
+                                      "uniform sampler2D sampler0;\n"
+                                      "uniform sampler2D sampler1;\n"
+                                      "uniform sampler2D sampler2;\n"
+                                      "#ifdef USE_DIFFUSE\n"
+                                      "uniform sampler2D sampler3;\n"
+                                      "#endif\n"
+                                      "uniform vec4 bump0ScaleBias;\n"
+                                      "uniform vec4 bump1ScaleBias;\n"
+                                      "#ifdef USE_FOG\n"
+                                      "uniform vec2 fogParams;\n"
+                                      "uniform vec4 fogColor;\n"
+                                      "#endif\n"
+                                      "layout(location = 0) out vec4 fragColor;\n"
+                                      "void main()\n"
+                                      "{\n"
+                                      "  vec2 b0 = texture(sampler0, texCoord0.xy).xy;\n"
+                                      "  b0 = b0 * bump0ScaleBias.x + bump0ScaleBias.y;\n"
+                                      "  vec2 uv1 = texCoord1.xy + b0;\n"
+                                      "  vec2 b1 = texture(sampler1, uv1).xy;\n"
+                                      "  b1 = b1 * bump1ScaleBias.x + bump1ScaleBias.y;\n"
+                                      "  vec2 uv2 = texCoord2.xy + b1;\n"
+                                      "  vec4 col = texture(sampler2, uv2);\n"
+                                      "#ifdef USE_DIFFUSE\n"
+                                      "  col *= texture(sampler3, texCoord3.xy);\n"
+                                      "#endif\n"
+                                      "#ifdef USE_FOG\n"
+                                      "  float z = abs(ecPos.y / ecPos.w);\n"
+                                      "  float fogFactor = clamp((fogParams.t - z) / (fogParams.t - fogParams.s), 0.0, 1.0);\n"
+                                      "  col = vec4(mix(fogColor.rgb, col.rgb, fogFactor), col.a);\n"
+                                      "#endif\n"
+                                      "  fragColor = col;\n"
+                                      "}\n";
 
 // UBO-based water FP body: uses NlCamera UBO for fog, NlWater user UBO for bump params.
 // Fog/diffuse variants are folded: runtime fog from camera UBO, diffuse via #define.
-static const char *WaterFPGLSL_UBO_Body =
-	"layout(location = 8) smooth in vec4 texCoord0;\n"
-	"layout(location = 9) smooth in vec4 texCoord1;\n"
-	"layout(location = 10) smooth in vec4 texCoord2;\n"
-	"#ifdef USE_DIFFUSE\n"
-	"layout(location = 11) smooth in vec4 texCoord3;\n"
-	"#endif\n"
-	"layout(location = 0) smooth in vec4 ecPos;\n"
-	"uniform sampler2D sampler0;\n"
-	"uniform sampler2D sampler1;\n"
-	"uniform sampler2D sampler2;\n"
-	"#ifdef USE_DIFFUSE\n"
-	"uniform sampler2D sampler3;\n"
-	"#endif\n"
-	"// bump0ScaleBias and bump1ScaleBias from NlWater user UBO\n"
-	"// fogParams and fogColor from NlCamera UBO\n"
-	"layout(location = 0) out vec4 fragColor;\n"
-	"void main()\n"
-	"{\n"
-	"  vec2 b0 = texture(sampler0, texCoord0.xy).xy;\n"
-	"  b0 = b0 * bump0ScaleBias.x + bump0ScaleBias.y;\n"
-	"  vec2 uv1 = texCoord1.xy + b0;\n"
-	"  vec2 b1 = texture(sampler1, uv1).xy;\n"
-	"  b1 = b1 * bump1ScaleBias.x + bump1ScaleBias.y;\n"
-	"  vec2 uv2 = texCoord2.xy + b1;\n"
-	"  vec4 col = texture(sampler2, uv2);\n"
-	"#ifdef USE_DIFFUSE\n"
-	"  col *= texture(sampler3, texCoord3.xy);\n"
-	"#endif\n"
-	"  float z = abs(ecPos.y / ecPos.w);\n"
-	"  float fogFactor = clamp((fogParams.t - z) / (fogParams.t - fogParams.s), 0.0, 1.0);\n"
-	"  col = vec4(mix(fogColor.rgb, col.rgb, fogFactor), col.a);\n"
-	"  fragColor = col;\n"
-	"}\n";
+static const char *WaterFPGLSL_UBO_Body = "smooth in vec4 texCoord0;\n"
+                                          "smooth in vec4 texCoord1;\n"
+                                          "smooth in vec4 texCoord2;\n"
+                                          "#ifdef USE_DIFFUSE\n"
+                                          "smooth in vec4 texCoord3;\n"
+                                          "#endif\n"
+                                          "smooth in vec4 ecPos;\n"
+                                          "uniform sampler2D sampler0;\n"
+                                          "uniform sampler2D sampler1;\n"
+                                          "uniform sampler2D sampler2;\n"
+                                          "#ifdef USE_DIFFUSE\n"
+                                          "uniform sampler2D sampler3;\n"
+                                          "#endif\n"
+                                          "// bump0ScaleBias and bump1ScaleBias from NlWater user UBO\n"
+                                          "// fogParams and fogColor from NlCamera UBO\n"
+                                          "layout(location = 0) out vec4 fragColor;\n"
+                                          "void main()\n"
+                                          "{\n"
+                                          "  vec2 b0 = texture(sampler0, texCoord0.xy).xy;\n"
+                                          "  b0 = b0 * bump0ScaleBias.x + bump0ScaleBias.y;\n"
+                                          "  vec2 uv1 = texCoord1.xy + b0;\n"
+                                          "  vec2 b1 = texture(sampler1, uv1).xy;\n"
+                                          "  b1 = b1 * bump1ScaleBias.x + bump1ScaleBias.y;\n"
+                                          "  vec2 uv2 = texCoord2.xy + b1;\n"
+                                          "  vec4 col = texture(sampler2, uv2);\n"
+                                          "#ifdef USE_DIFFUSE\n"
+                                          "  col *= texture(sampler3, texCoord3.xy);\n"
+                                          "#endif\n"
+                                          "  float z = abs(ecPos.y / ecPos.w);\n"
+                                          "  float fogFactor = clamp((fogParams.t - z) / (fogParams.t - fogParams.s), 0.0, 1.0);\n"
+                                          "  col = vec4(mix(fogColor.rgb, col.rgb, fogFactor), col.a);\n"
+                                          "  fragColor = col;\n"
+                                          "}\n";
 
-static void convBlend(CMaterial::TBlend blend, GLenum& glenum)
+static void convBlend(CMaterial::TBlend blend, GLenum &glenum)
 {
 	H_AUTO_OGL(convBlend)
-	switch(blend)
+	switch (blend)
 	{
-		case CMaterial::one:		glenum=GL_ONE; break;
-		case CMaterial::zero:		glenum=GL_ZERO; break;
-		case CMaterial::srcalpha:	glenum=GL_SRC_ALPHA; break;
-		case CMaterial::invsrcalpha:glenum=GL_ONE_MINUS_SRC_ALPHA; break;
-		case CMaterial::srccolor:	glenum=GL_SRC_COLOR; break;
-		case CMaterial::invsrccolor:glenum=GL_ONE_MINUS_SRC_COLOR; break;
+	case CMaterial::one: glenum = GL_ONE; break;
+	case CMaterial::zero: glenum = GL_ZERO; break;
+	case CMaterial::srcalpha: glenum = GL_SRC_ALPHA; break;
+	case CMaterial::invsrcalpha: glenum = GL_ONE_MINUS_SRC_ALPHA; break;
+	case CMaterial::srccolor: glenum = GL_SRC_COLOR; break;
+	case CMaterial::invsrccolor: glenum = GL_ONE_MINUS_SRC_COLOR; break;
 
-		// Extended Blend modes.
-		case CMaterial::blendConstantColor:		glenum=GL_CONSTANT_COLOR_EXT; break;
-		case CMaterial::blendConstantInvColor:	glenum=GL_ONE_MINUS_CONSTANT_COLOR_EXT; break;
-		case CMaterial::blendConstantAlpha:		glenum=GL_CONSTANT_ALPHA_EXT; break;
-		case CMaterial::blendConstantInvAlpha:	glenum=GL_ONE_MINUS_CONSTANT_ALPHA_EXT; break;
+	// Extended Blend modes.
+	case CMaterial::blendConstantColor: glenum = GL_CONSTANT_COLOR_EXT; break;
+	case CMaterial::blendConstantInvColor: glenum = GL_ONE_MINUS_CONSTANT_COLOR_EXT; break;
+	case CMaterial::blendConstantAlpha: glenum = GL_CONSTANT_ALPHA_EXT; break;
+	case CMaterial::blendConstantInvAlpha: glenum = GL_ONE_MINUS_CONSTANT_ALPHA_EXT; break;
 
-		default: nlstop;
+	default: nlstop;
 	}
 }
 
-static void convZFunction(CMaterial::ZFunc zfunc, GLenum& glenum)
+static void convZFunction(CMaterial::ZFunc zfunc, GLenum &glenum)
 {
 	H_AUTO_OGL(convZFunction)
-	switch(zfunc)
+	switch (zfunc)
 	{
-		case CMaterial::lessequal:	glenum=GL_LEQUAL; break;
-		case CMaterial::less:		glenum=GL_LESS; break;
-		case CMaterial::always:		glenum=GL_ALWAYS; break;
-		case CMaterial::never:		glenum=GL_NEVER; break;
-		case CMaterial::equal:		glenum=GL_EQUAL; break;
-		case CMaterial::notequal:	glenum=GL_NOTEQUAL; break;
-		case CMaterial::greater:	glenum=GL_GREATER; break;
-		case CMaterial::greaterequal:	glenum=GL_GEQUAL; break;
-		default: nlstop;
+	case CMaterial::lessequal: glenum = GL_LEQUAL; break;
+	case CMaterial::less: glenum = GL_LESS; break;
+	case CMaterial::always: glenum = GL_ALWAYS; break;
+	case CMaterial::never: glenum = GL_NEVER; break;
+	case CMaterial::equal: glenum = GL_EQUAL; break;
+	case CMaterial::notequal: glenum = GL_NOTEQUAL; break;
+	case CMaterial::greater: glenum = GL_GREATER; break;
+	case CMaterial::greaterequal: glenum = GL_GEQUAL; break;
+	default: nlstop;
 	}
 }
 
-static void	convColor(CRGBA col, GLfloat glcol[4])
+static void convColor(CRGBA col, GLfloat glcol[4])
 {
 	H_AUTO_OGL(convColor)
-	static	const float	OO255= 1.0f/255;
-	glcol[0]= col.R*OO255;
-	glcol[1]= col.G*OO255;
-	glcol[2]= col.B*OO255;
-	glcol[3]= col.A*OO255;
+	static const float OO255 = 1.0f / 255;
+	glcol[0] = col.R * OO255;
+	glcol[1] = col.G * OO255;
+	glcol[2] = col.B * OO255;
+	glcol[3] = col.A * OO255;
 }
 
 static inline void convTexAddr(ITexture *tex, CMaterial::TTexAddressingMode mode, GLenum &glenum)
 {
 	H_AUTO_OGL(convTexAddr)
 	nlassert(mode < CMaterial::TexAddrCount);
-	static const GLenum glTex2dAddrModesNV[] =
-	{
+	static const GLenum glTex2dAddrModesNV[] = {
 		GL_NONE, GL_TEXTURE_2D,
 		GL_PASS_THROUGH_NV, GL_CULL_FRAGMENT_NV,
 		GL_OFFSET_TEXTURE_2D_NV, GL_OFFSET_TEXTURE_2D_SCALE_NV,
@@ -193,8 +191,7 @@ static inline void convTexAddr(ITexture *tex, CMaterial::TTexAddressingMode mode
 		GL_DOT_PRODUCT_DIFFUSE_CUBE_MAP_NV, GL_DOT_PRODUCT_DEPTH_REPLACE_NV
 	};
 
-	static const GLenum glTexCubeAddrModesNV[] =
-	{
+	static const GLenum glTexCubeAddrModesNV[] = {
 		GL_NONE, GL_TEXTURE_CUBE_MAP,
 		GL_PASS_THROUGH_NV, GL_CULL_FRAGMENT_NV,
 		GL_OFFSET_TEXTURE_2D_NV, GL_OFFSET_TEXTURE_2D_SCALE_NV,
@@ -206,16 +203,21 @@ static inline void convTexAddr(ITexture *tex, CMaterial::TTexAddressingMode mode
 
 	if (!tex || !tex->isTextureCube())
 	{
-		glenum = glTex2dAddrModesNV[(uint) mode];
+		glenum = glTex2dAddrModesNV[(uint)mode];
 	}
 	else
 	{
-		glenum = glTexCubeAddrModesNV[(uint) mode];
+		glenum = glTexCubeAddrModesNV[(uint)mode];
 	}
 }
 
+static CMaterialDrvInfosGL3 *getMatDrv(const CMaterial &mat)
+{
+	return static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+}
+
 // --------------------------------------------------
-void CDriverGL3::setTexGenFunction(uint stage, CMaterial& mat)
+void CDriverGL3::setTexGenFunction(uint stage, CMaterial &mat)
 {
 	H_AUTO_OGL(CDriverGL3_setTexGenFunction)
 	ITexture *text = mat.getTexture(uint8(stage));
@@ -224,7 +226,7 @@ void CDriverGL3::setTexGenFunction(uint stage, CMaterial& mat)
 		if (mat.getTexCoordGen(stage))
 		{
 			// set mode and enable.
-			CMaterial::TTexCoordGenMode	mode = mat.getTexCoordGenMode(stage);
+			CMaterial::TTexCoordGenMode mode = mat.getTexCoordGenMode(stage);
 			if (mode == CMaterial::TexCoordGenReflect)
 			{
 				// Cubic or normal ?
@@ -251,173 +253,200 @@ void CDriverGL3::setTexGenFunction(uint stage, CMaterial& mat)
 }
 
 //--------------------------------
-void CDriverGL3::setupUserTextureMatrix(uint numStages, CMaterial& mat)
-{
-	H_AUTO_OGL(CDriverGL3_setupUserTextureMatrix)
-	if (
-		(_UserTexMatEnabled != 0 && (mat.getFlags() & IDRV_MAT_USER_TEX_MAT_ALL) == 0)
-		|| (mat.getFlags() & IDRV_MAT_USER_TEX_MAT_ALL) != 0
-	  )
-	{
-		// for each stage, setup the texture matrix if needed
-		uint newMask = (mat.getFlags() & IDRV_MAT_USER_TEX_MAT_ALL) >> IDRV_MAT_USER_TEX_FIRST_BIT;
-		uint shiftMask = 1;
-		for (uint k = 0; k < numStages ; ++k)
-		{
-			if (newMask & shiftMask) // user matrix for this stage
-			{
-				_UserTexMat[k] = mat.getUserTexMat(k);
-				_UserTexMatEnabled |= shiftMask;
-			}
-			else
-			{
-				/// check if matrix disabled
-				if (
-					(newMask & shiftMask) != (_UserTexMatEnabled & shiftMask)
-				  )
-				{
-					_UserTexMat[k].identity();
-					_UserTexMatEnabled &= ~shiftMask;
-				}
-			}
-			shiftMask <<= 1;
-		}
-	}
-}
-
-void CDriverGL3::disableUserTextureMatrix()
-{
-	H_AUTO_OGL(CDriverGL3_disableUserTextureMatrix)
-	if (_UserTexMatEnabled != 0)
-	{
-		uint k = 0;
-		do
-		{
-			if (_UserTexMatEnabled & (1 << k)) // user matrix for this stage
-			{
-				_UserTexMat[k].identity();
-				_UserTexMatEnabled &= ~ (1 << k);
-			}
-			++k;
-		}
-		while (_UserTexMatEnabled != 0);
-	}
-}
+// Texture matrices are now read directly from the material in setupNormalPass.
+// void CDriverGL3::setupUserTextureMatrix(uint numStages, CMaterial &mat)
+// void CDriverGL3::disableUserTextureMatrix()
 
 // --------------------------------------------------
-CMaterial::TShader	CDriverGL3::getSupportedShader(CMaterial::TShader shader)
+CMaterial::TShader CDriverGL3::getSupportedShader(CMaterial::TShader shader)
 {
 	H_AUTO_OGL(CDriverGL3_CDriverGL)
-	switch (shader)
+	switch (shader) // Normal, UserColor, LightMap, Specular, Water
 	{
-	case CMaterial::Bump:
-		return CMaterial::Normal; // Bump shader was never implemented in any driver.
-	case CMaterial::PerPixelLighting:
-		return CMaterial::Normal; // FIXME GL3
-	case CMaterial::PerPixelLightingNoSpec:
-		return CMaterial::Normal; // FIXME GL3
+	case CMaterial::Normal: // fixed pipeline texenv setup
+		return CMaterial::Normal;
+	// case CMaterial::Bump: // legacy bump technique, deprecated
+	case CMaterial::UserColor:
+		return CMaterial::UserColor; // similar to "normal" but trades a texture stage for a color constant
+	case CMaterial::LightMap:
+		return CMaterial::LightMap; // lighmap reflections
+	case CMaterial::Specular:
+		return CMaterial::Specular; // cubemap reflections
+	// case CMaterial::Caustics: // not implemented anywhere, deprecated
+	// case CMaterial::PerPixelLighting: // legacy ppl technique, deprecated
+	// case CMaterial::PerPixelLightingNoSpec:
+	// case CMaterial::Cloud: // fluffy snowballs clouds, deprecated
+	case CMaterial::Water:
+		return CMaterial::Water;
 	default:
-		return shader;
+		return CMaterial::Normal;
 	}
 }
 
 // --------------------------------------------------
-bool CDriverGL3::setupMaterial(CMaterial& mat)
+bool CDriverGL3::setupMaterial(CMaterial &mat)
 {
 	H_AUTO_OGL(CDriverGL3_setupMaterial)
 
-	CMaterialDrvInfosGL3*	pShader;
+	CMaterialDrvInfosGL3 *matDrv;
 	CMaterial::TShader matShader;
-	GLenum		glenum = GL_ZERO;
-	uint32		touched = mat.getTouched();
+	GLenum glenum = GL_ZERO;
+	uint32 matTouched = mat.getTouched();
 
 	// profile.
 	_NbSetupMaterialCall++;
-
 
 	// 0. Retrieve/Create driver shader.
 	//==================================
 	if (!mat._MatDrvInfo)
 	{
 		// insert into driver list. (so it is deleted when driver is deleted).
-		ItMatDrvInfoPtrList		it= _MatDrvInfos.insert(_MatDrvInfos.end(), (NL3D::IMaterialDrvInfos*)NULL);
+		ItMatDrvInfoPtrList it = _MatDrvInfos.insert(_MatDrvInfos.end(), (NL3D::IMaterialDrvInfos *)NULL);
 		// create and set iterator, for future deletion.
-		*it= mat._MatDrvInfo= new CMaterialDrvInfosGL3(this, it);
+		*it = mat._MatDrvInfo = new CMaterialDrvInfosGL3(this, it);
 
 		// Must create all OpenGL shader states.
-		touched= IDRV_TOUCHED_ALL;
+		matTouched = IDRV_TOUCHED_ALL;
 	}
-	pShader=static_cast<CMaterialDrvInfosGL3*>((IMaterialDrvInfos*)(mat._MatDrvInfo));
+	matDrv = getMatDrv(mat);
+	nlassert(matDrv->getDriver() == this);
+	const uint32 touched = matTouched | matDrv->SetupMaterialTouched;
 
-	// 1. Setup modified fields of material conversion cache (FIXME GL3)
+	// 1. Setup modified fields of material conversion cache
 	//=====================================
 	if (touched)
 	{
+		// Forward CMaterial::getTouched to setupPass
+		matDrv->SetupPass0Touched |= matTouched;
+
+		// ??? is this comment still relevant ???
 		/* Exception: if only Textures are modified in the material, no need to "Bind OpenGL States", or even to test
-			for change, because textures are activated alone, see below.
-			No problem with delete/new problem (see below), because in this case, IDRV_TOUCHED_ALL is set (see above).
+		    for change, because textures are activated alone, see below.
+		    No problem with delete/new problem (see below), because in this case, IDRV_TOUCHED_ALL is set (see above).
 		*/
-		// If any flag is set (but a flag of texture)
-		if (touched & (~_MaterialAllTextureTouchedFlag))
+		// If any relevant
+		static const uint32 touchedConvState = IDRV_TOUCHED_BLENDFUNC | IDRV_TOUCHED_ZFUNC;
+		static const uint32 touchedUBOState = IDRV_TOUCHED_SHADER | IDRV_TOUCHED_COLOR | IDRV_TOUCHED_LIGHTING
+		    | IDRV_TOUCHED_ALPHA_TEST_THRE | IDRV_TOUCHED_ALPHA_TEST; // Flags touched on material UBO at the end
+		static const uint32 touchedBuiltinPPState = IDRV_TOUCHED_SHADER | IDRV_TOUCHED_ALPHA_TEST; // Flags touched on PPBuiltin at the end
+		// IDRV_TOUCHED_TEXENV
+		if (touched & (touchedConvState | touchedUBOState | touchedBuiltinPPState))
 		{
+			CMaterialUBOData &matUBO = matDrv->MaterialUBO[0];
+			CMaterial::TShader shader = getSupportedShader(mat.getShader());
+			if (touched & IDRV_TOUCHED_SHADER)
+			{
+				matDrv->PPBuiltin.Shader = shader;
+				matDrv->HasEMBM = false; // Reset shader-specific feature flags
+				matDrv->MaterialUBOCurrent = 0;
+				matDrv->SetupPass0Touched = IDRV_TOUCHED_ALL; // any downstream pass needs to be fully reset
+				matUBO.nlShader = (sint32)shader;
+				if (shader == CMaterial::Normal || shader == CMaterial::UserColor)
+				{
+					// TexEnv shader: clear flag so setupNormalPass writes the real values
+					matDrv->TexEnvMatDefault = false;
+				}
+				else if (!matDrv->TexEnvMatDefault)
+				{
+					// Non-TexEnv shaders (LightMap, Specular, etc.) don't use texenv modes,
+					// constants, EMBM, or texture matrices from the material UBO. Set them
+					// to safe defaults so stale data from a prior Normal/UserColor usage of
+					// the same CMaterialDrvInfosGL3 doesn't leak through.
+					// PPBuiltin and UBO are already marked touched because IDRV_TOUCHED_SHADER.
+					CMaterial::CTexEnv defaultEnv;
+					defaultEnv.setDefault(); // Modulate(Texture, Previous), white constant
+					for (uint stage = 0; stage < IDRV_MAT_MAXTEXTURES; ++stage)
+					{
+						matDrv->PPBuiltin.TexEnvMode[stage] = defaultEnv.EnvPacked;
+						matUBO.nlTexEnvMode[stage] = defaultEnv.EnvPacked;
+						convColor(defaultEnv.ConstantColor, matUBO.constant[stage]);
+					}
+					// Zero EMBM / lightmap factor slots (constant[4-7])
+					memset(&matUBO.constant[IDRV_MAT_MAXTEXTURES], 0,
+					    IDRV_MAT_MAXTEXTURES * 4 * sizeof(float));
+					// Identity texture matrices
+					for (uint stage = 0; stage < IDRV_MAT_MAXTEXTURES; ++stage)
+						memcpy(matUBO.texMatrix[stage], CMatrix::Identity.get(), 16 * sizeof(float));
+					matDrv->HasEMBM = false;
+					matDrv->TexEnvMatDefault = true;
+				}
+			}
+
 			// Convert Material to driver shader.
 			if (touched & IDRV_TOUCHED_BLENDFUNC)
 			{
-				convBlend(mat.getSrcBlend(),glenum);
-				pShader->SrcBlend=glenum;
-				convBlend(mat.getDstBlend(),glenum);
-				pShader->DstBlend=glenum;
+				convBlend(mat.getSrcBlend(), glenum);
+				matDrv->SrcBlend = glenum; // Driver state
+				convBlend(mat.getDstBlend(), glenum);
+				matDrv->DstBlend = glenum; // Driver state
 			}
 			if (touched & IDRV_TOUCHED_ZFUNC)
 			{
-				convZFunction(mat.getZFunc(),glenum);
-				pShader->ZComp= glenum;
+				convZFunction(mat.getZFunc(), glenum);
+				matDrv->ZComp = glenum; // Driver state
+			}
+			/*
+			const uint32 IDRV_TOUCHED_BLENDFUNC			=	0x00000001; // OK
+			const uint32 IDRV_TOUCHED_BLEND				=	0x00000002;
+			const uint32 IDRV_TOUCHED_SHADER			=	0x00000004;
+			const uint32 IDRV_TOUCHED_ZFUNC				=	0x00000008; // OK
+			const uint32 IDRV_TOUCHED_ZBIAS				=	0x00000010;
+			const uint32 IDRV_TOUCHED_COLOR				=	0x00000020; // OK
+			const uint32 IDRV_TOUCHED_LIGHTING			=	0x00000040;
+			const uint32 IDRV_TOUCHED_DEFMAT			=	0x00000080;
+			const uint32 IDRV_TOUCHED_ZWRITE			=	0x00000100;
+			const uint32 IDRV_TOUCHED_DOUBLE_SIDED		=	0x00000200;
+			const uint32 IDRV_TOUCHED_LIGHTMAP			=	0x00000400;
+			const uint32 IDRV_TOUCHED_ALPHA_TEST		=	0x00000800;
+			const uint32 IDRV_TOUCHED_ALPHA_TEST_THRE	=	0x00001000; // OK
+			const uint32 IDRV_TOUCHED_TEXENV			=	0x00002000;
+			const uint32 IDRV_TOUCHED_TEXGEN			=	0x00004000;
+			*/
+			if (touched & IDRV_TOUCHED_COLOR)
+			{
+				convColor(mat.getColor(), matUBO.materialColor);
 			}
 			if (touched & IDRV_TOUCHED_LIGHTING)
 			{
-				convColor(mat.getEmissive(), pShader->Emissive);
-				convColor(mat.getAmbient(), pShader->Ambient);
-				convColor(mat.getDiffuse(), pShader->Diffuse);
-				convColor(mat.getSpecular(), pShader->Specular);
-				pShader->PackedEmissive= mat.getEmissive().getPacked();
-				pShader->PackedAmbient= mat.getAmbient().getPacked();
-				pShader->PackedDiffuse= mat.getDiffuse().getPacked();
-				pShader->PackedSpecular= mat.getSpecular().getPacked();
+				matDrv->Ambient = NLMISC::CRGBAF(mat.getEmissive()); // Object UBO
+				matDrv->Emissive = NLMISC::CRGBAF(mat.getAmbient()); // Object UBO
+				convColor(mat.getDiffuse(), matUBO.materialDiffuse);
+				convColor(mat.getSpecular(), matUBO.materialSpecular);
+				matUBO.materialShininess = mat.getShininess();
 			}
-			if (touched & IDRV_TOUCHED_SHADER)
+			if (touched & IDRV_TOUCHED_ALPHA_TEST_THRE)
 			{
-				// Get shader. Fallback to other shader if not supported.
-				pShader->SupportedShader= getSupportedShader(mat.getShader());
+				matUBO.alphaRef = mat.getAlphaTestThreshold();
 			}
-
-			// Since modified, must rebind all openGL states. And do this also for the delete/new problem.
-			/* If an old material is deleted, _CurrentMaterial is invalid. But this is grave only if a new
-				material is created, with the same pointer (bad luck). Since an newly allocated material always
-				pass here before use, we are sure to avoid any problems.
-			*/
-			_CurrentMaterial= NULL;
+			if (touched & IDRV_TOUCHED_ALPHA_TEST)
+			{
+				uint32 flags = mat.getFlags() & IDRV_MAT_ALPHA_TEST;
+				matDrv->PPBuiltin.Flags = flags;
+				matUBO.nlAlphaTest = flags ? 1 : 0;
+			}
+			// TexEnv, EMBM, and Texture matrices are handled in the setupNormalPass
 		}
 
-		// Optimize: reset all flags at the end.
-		// mat.clearTouched(0xFFFFFFFF); // FIXME GL3 THIS IS NOW DONE IN GENERATE OF PP DESC, THIS NEED RESTRUCTURING
+		if (touched & touchedUBOState)
+			matDrv->MaterialUBOTouched[0] = true;
+		if (touched & touchedBuiltinPPState)
+			matDrv->PPBuiltin.Touched = true;
 
-		// Mark material UBO dirty for CMaterial property changes (color, diffuse, specular,
-		// shininess, alphaRef, texenv). The other half of the material UBO (Shader, Flags,
-		// TextureActive, TexEnvMode) is tracked by PPBuiltin.MaterialUBOTouched, propagated
-		// in setupBuiltinPixelProgram/setupMegaPixelProgram.
-		if (touched & (IDRV_TOUCHED_COLOR | IDRV_TOUCHED_LIGHTING | IDRV_TOUCHED_DEFMAT | IDRV_TOUCHED_ALPHA_TEST_THRE | IDRV_TOUCHED_TEXENV))
-			pShader->MaterialUBODirty = true;
-		// TexMatrix and EMBM are driver state packed into the material UBO.
-		// Always dirty when user tex mat flags are present (different materials
-		// have different matrices, but the UBO cache is per-material).
-		if (mat.getFlags() & IDRV_MAT_USER_TEX_MAT_ALL)
-			pShader->MaterialUBODirty = true;
+		// Force GL state rebind if any flag that affects bind-time state changed.
+		// Covers blend, cull, depth, zbias, lighting, and the conversion cache.
+		// Also handles the delete/new pointer reuse problem (TOUCHED_ALL includes these).
+		static const uint32 touchedGLState = touchedConvState | IDRV_TOUCHED_BLEND
+		    | IDRV_TOUCHED_DOUBLE_SIDED | IDRV_TOUCHED_ZWRITE | IDRV_TOUCHED_ZBIAS | IDRV_TOUCHED_LIGHTING;
+		if (touched & touchedGLState)
+			_CurrentMaterial = NULL;
+
+		mat.clearTouched(IDRV_TOUCHED_ALL);
 	}
 
 	// 2b. User supplied pixel shader overrides material
 	//==================================
 	// Now we can get the supported shader from the cache.
-	matShader = pShader->SupportedShader;
+	matShader = matDrv->PPBuiltin.Shader;
 
 	// 2b. Update more shader state
 	//==================================
@@ -471,10 +500,9 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 	// Do not do it for Lightmap and per pixel lighting , because done in multipass in a very special fashion.
 	// This avoid the useless multiple change of texture states per lightmapped object.
 	if (matShader != CMaterial::LightMap
-		&& matShader != CMaterial::PerPixelLighting
-		&& matShader != CMaterial::Cloud
-		&& matShader != CMaterial::Water
-	  )
+	    && matShader != CMaterial::PerPixelLighting
+	    && matShader != CMaterial::Cloud
+	    && matShader != CMaterial::Water)
 	{
 		uint maxTex = matShader == CMaterial::Specular ? 2 : IDRV_MAT_MAXTEXTURES;
 		for (uint stage = 0; stage < maxTex; ++stage)
@@ -483,7 +511,7 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 
 			// activate the texture, or disable texturing if NULL.
 			activateTexture(stage, text);
-			
+
 			if (text && mat.getTexCoordGen(stage))
 			{
 				// Material explicitly requests texgen — use it even if VB has texcoords
@@ -542,10 +570,10 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 	{
 		// Bind Blend Part.
 		//=================
-		bool blend = (mat.getFlags() & IDRV_MAT_BLEND)!=0;
+		bool blend = (mat.getFlags() & IDRV_MAT_BLEND) != 0;
 		_DriverGLStates.enableBlend(blend);
 		if (blend)
-			_DriverGLStates.blendFunc(pShader->SrcBlend, pShader->DstBlend);
+			_DriverGLStates.blendFunc(matDrv->SrcBlend, matDrv->DstBlend);
 
 		// Double Sided Part.
 		//===================
@@ -556,7 +584,7 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 		// Bind ZBuffer Part.
 		//===================
 		_DriverGLStates.enableZWrite(mat.getFlags() & IDRV_MAT_ZWRITE);
-		_DriverGLStates.depthFunc(pShader->ZComp);
+		_DriverGLStates.depthFunc(matDrv->ZComp);
 		_DriverGLStates.setZBias(mat.getZBias() * _OODeltaZ);
 
 		// Color-Lighting Part.
@@ -568,7 +596,7 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 		// Fog Part.
 		//=================
 		// Disable fog if dest blend is ONE or restore fog state to its current value
-		enableFogVP((blend && (pShader->DstBlend == GL_ONE)) ? false : _FogEnabled);
+		enableFogVP((blend && (matDrv->DstBlend == GL_ONE)) ? false : _FogEnabled);
 
 		// Done.
 		_CurrentMaterial = &mat;
@@ -576,17 +604,8 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 
 	// 4. Misc
 	//=====================================
-	// Textures user matrix
-	// NOTE: Only supported for Normal shader. D3D applies it generically for all shaders,
-	// but in practice only Normal uses it. Specular handles its own matrix separately.
-	if (matShader == CMaterial::Normal)
-	{
-		setupUserTextureMatrix(IDRV_MAT_MAXTEXTURES, mat);
-	}
-	else // deactivate texture matrix
-	{
-		disableUserTextureMatrix();
-	}
+	// Texture matrices are read directly from the material in setupNormalPass.
+	// Specular handles its own matrix (_SpecularTexMtx) separately.
 
 	// 5. Set up the program
 	// =====================
@@ -607,19 +626,19 @@ sint CDriverGL3::beginMultiPass()
 	H_AUTO_OGL(CDriverGL3_beginMultiPass)
 
 	// Depending on material type and hardware, return number of pass required to draw this material.
-	switch(_CurrentMaterialSupportedShader)
+	switch (_CurrentMaterialSupportedShader)
 	{
 	case CMaterial::LightMap:
-		return  beginLightMapMultiPass();
+		return beginLightMapMultiPass();
 	case CMaterial::Specular:
-		return  beginSpecularMultiPass();
+		return beginSpecularMultiPass();
 	case CMaterial::Water:
-		return  beginWaterMultiPass();
-	case CMaterial::PerPixelLighting:
-		return  beginPPLMultiPass();
-	case CMaterial::PerPixelLightingNoSpec:
-		return  beginPPLNoSpecMultiPass();
-	default: 
+		return beginWaterMultiPass();
+	// case CMaterial::PerPixelLighting: // deprecated, folded to Normal
+	// 	return beginPPLMultiPass();
+	// case CMaterial::PerPixelLightingNoSpec:
+	// 	return beginPPLNoSpecMultiPass();
+	default:
 		return 1;
 	}
 }
@@ -628,10 +647,11 @@ sint CDriverGL3::beginMultiPass()
 bool CDriverGL3::setupPass(uint pass)
 {
 	H_AUTO_OGL(CDriverGL3_setupPass)
-	
-	switch(_CurrentMaterialSupportedShader)
+
+	switch (_CurrentMaterialSupportedShader)
 	{
 	case CMaterial::Normal:
+	case CMaterial::UserColor:
 		setupNormalPass();
 		break;
 	case CMaterial::LightMap:
@@ -643,15 +663,15 @@ bool CDriverGL3::setupPass(uint pass)
 	case CMaterial::Water:
 		setupWaterPass(pass);
 		break;
-	case CMaterial::PerPixelLighting:
-		setupPPLPass(pass);
-		break;
-	case CMaterial::PerPixelLightingNoSpec:
-		setupPPLNoSpecPass(pass);
-		break;
-	case CMaterial::Cloud:
-		setupCloudPass();
-		break;
+		// case CMaterial::PerPixelLighting: // deprecated, folded to Normal
+		// 	setupPPLPass(pass);
+		// 	break;
+		// case CMaterial::PerPixelLightingNoSpec:
+		// 	setupPPLNoSpecPass(pass);
+		// 	break;
+		// case CMaterial::Cloud:
+		// 	setupCloudPass();
+		// 	break;
 	}
 
 	// Upload per-pass uniforms and flush dirty UBOs.
@@ -661,11 +681,11 @@ bool CDriverGL3::setupPass(uint pass)
 }
 
 // ***************************************************************************
-void			CDriverGL3::endMultiPass()
+void CDriverGL3::endMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_endMultiPass)
 
-	switch(_CurrentMaterialSupportedShader)
+	switch (_CurrentMaterialSupportedShader)
 	{
 	case CMaterial::LightMap:
 		endLightMapMultiPass();
@@ -676,69 +696,115 @@ void			CDriverGL3::endMultiPass()
 	case CMaterial::Water:
 		endWaterMultiPass();
 		return;
-	case CMaterial::PerPixelLighting:
-		endPPLMultiPass();
-		break;
-	case CMaterial::PerPixelLightingNoSpec:
-		endPPLNoSpecMultiPass();
-		break;
+	// case CMaterial::PerPixelLighting: // deprecated, folded to Normal
+	// 	endPPLMultiPass();
+	// 	break;
+	// case CMaterial::PerPixelLightingNoSpec:
+	// 	endPPLNoSpecMultiPass();
+	// 	break;
 	default: return;
 	}
 }
 
 void CDriverGL3::setupNormalPass()
 {
-	// In UBO mode, TexEnv constants, EMBM, and TexMatrix are in the material UBO.
-	// Data is already staged; flushPassUniforms() at end of setupPass() will flush.
-	if (m_ProgramOnlyUBOs[PixelProgram] && m_ProgramOnlyUBOs[VertexProgram])
-		return;
-
-	IProgram *pp = getProgram(PixelProgram);
-	IProgram *vp = getProgram(VertexProgram);
-	nlassert(pp);
-
 	const CMaterial &mat = *_CurrentMaterial;
+	CMaterialDrvInfosGL3 *matDrv = getMatDrv(mat);
+	matDrv->MaterialUBOCurrent = 0;
+	const uint32 touched = matDrv->SetupPass0Touched;
 
-	for (uint stage = 0; stage < IDRV_MAT_MAXTEXTURES; ++stage)
+	static const uint32 touchedPP = IDRV_TOUCHED_ALLTEX | IDRV_TOUCHED_TEXENV;
+	static const uint32 touchedUBO = IDRV_TOUCHED_ALLTEX | IDRV_TOUCHED_TEXENV | IDRV_TOUCHED_TEXMAT;
+	if (touched & (touchedPP | touchedUBO))
 	{
-		// Set pixel program constants for TexEnv
-		if (!m_ProgramOnlyUBOs[PixelProgram])
-		{
-			uint constantIdx = pp->getUniformIndex(CProgramIndex::TName(CProgramIndex::Constant0 + stage));
-			if (constantIdx != ~0)
-			{
-				GLfloat glCol[4];
-				convColor(mat._TexEnvs[stage].ConstantColor, glCol);
-				setUniform4f(IDriver::PixelProgram, constantIdx, glCol[0], glCol[1], glCol[2], glCol[3]);
-			}
+		CMaterial::TShader shader = matDrv->PPBuiltin.Shader;
+		CMaterialUBOData &matUBO = matDrv->MaterialUBO[0];
+		uint maxTex = maxTextures(shader);
 
-			// Set pixel program EMBM matrix
-			uint embmIdx = pp->getUniformIndex(CProgramIndex::TName(CProgramIndex::EmbmMatrix0 + stage));
-			if (embmIdx != ~0u)
+		// --- PPBuiltin state: TextureActive, TexSamplerMode, TexEnvMode ---
+
+		if (touched & IDRV_TOUCHED_ALLTEX)
+		{
+			uint32 textureActive = 0;
+			uint64 texSamplerMode = 0;
+			for (uint stage = 0; stage < maxTex; ++stage)
 			{
-				setUniform4f(IDriver::PixelProgram, embmIdx,
-					_EMBMMatrix[stage][0], _EMBMMatrix[stage][1],
-					_EMBMMatrix[stage][2], _EMBMMatrix[stage][3]);
+				NL3D::ITexture *tex = mat._Textures[stage];
+				if (tex)
+				{
+					textureActive |= (1 << stage);
+					texSamplerMode |= (tex->isTextureCube() ? SamplerCube : Sampler2D) << (stage * 2);
+				}
+			}
+			matDrv->PPBuiltin.TextureActive = textureActive;
+			matDrv->PPBuiltin.TexSamplerMode = texSamplerMode;
+			matUBO.nlTextureActive = textureActive;
+		}
+
+		if (touched & IDRV_TOUCHED_TEXENV)
+		{
+			bool hasEMBM = false;
+			for (uint stage = 0; stage < maxTex; ++stage)
+			{
+				matDrv->PPBuiltin.TexEnvMode[stage] = mat._TexEnvs[stage].EnvPacked;
+				if ((mat._TexEnvs[stage].EnvPacked & 0xF) == CMaterial::EMBM)
+					hasEMBM = true;
+			}
+			matDrv->HasEMBM = hasEMBM;
+		}
+
+		// --- Material UBO: TexEnv block ---
+
+		if (touched & IDRV_TOUCHED_TEXENV)
+		{
+			// TexEnvMode (packed uint per stage)
+			for (uint stage = 0; stage < maxTex; ++stage)
+				matUBO.nlTexEnvMode[stage] = matDrv->PPBuiltin.TexEnvMode[stage];
+
+			// TexEnv constant colors (from material)
+			for (uint stage = 0; stage < maxTex; ++stage)
+				convColor(mat._TexEnvs[stage].ConstantColor, matUBO.constant[stage]);
+		}
+
+		// Texture matrices (from material)
+		if (touched & IDRV_TOUCHED_TEXMAT)
+		{
+			uint texMatMask = (mat.getFlags() & IDRV_MAT_USER_TEX_MAT_ALL) >> IDRV_MAT_USER_TEX_FIRST_BIT;
+			for (uint stage = 0; stage < IDRV_MAT_MAXTEXTURES; ++stage)
+			{
+				if (texMatMask & (1 << stage))
+					memcpy(matUBO.texMatrix[stage], mat.getUserTexMat(stage).get(), 16 * sizeof(float));
+				else
+					memcpy(matUBO.texMatrix[stage], CMatrix::Identity.get(), 16 * sizeof(float));
 			}
 		}
 
-		// Set vertex program constants for TexMatrix
-		if (!m_ProgramOnlyUBOs[VertexProgram] && vp)
+		// Flag dirty
+		if (touched & touchedPP)
+			matDrv->PPBuiltin.Touched = true;
+		matDrv->MaterialUBOTouched[0] = true;
+	}
+
+	// EMBM matrices (driver state, no touch flag — compare and update)
+	// Stored in constant[4-7], shared with lightmap factors (mutually exclusive by shader type)
+	if (matDrv->HasEMBM)
+	{
+		CMaterialUBOData &matUBO = matDrv->MaterialUBO[0];
+		if (memcmp(&matUBO.constant[IDRV_MAT_MAXTEXTURES], _EMBMMatrix, sizeof(_EMBMMatrix)) != 0)
 		{
-			uint texMatrixIdx = vp->getUniformIndex((CProgramIndex::TName)(CProgramIndex::TexMatrix0 + stage));
-			if (texMatrixIdx != ~0)
-			{
-				setUniform4x4f(IDriver::VertexProgram, texMatrixIdx, _UserTexMat[stage]);
-			}
+			memcpy(&matUBO.constant[IDRV_MAT_MAXTEXTURES], _EMBMMatrix, sizeof(_EMBMMatrix));
+			matDrv->MaterialUBOTouched[0] = true;
 		}
 	}
+
+	matDrv->SetupPass0Touched = 0;
 }
 
 // ***************************************************************************
 void CDriverGL3::computeLightMapInfos(const CMaterial &mat)
 {
 	H_AUTO_OGL(CDriverGL3_computeLightMapInfos)
-	static const uint32 RGBMaskPacked = CRGBA(255,255,255,0).getPacked();
+	static const uint32 RGBMaskPacked = CRGBA(255, 255, 255, 0).getPacked();
 
 	// For optimisation consideration, suppose there is not too much lightmap.
 	nlassert(mat._LightMaps.size() <= NL3D_DRV_MAX_LIGHTMAP);
@@ -770,9 +836,9 @@ sint CDriverGL3::beginLightMapMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_beginLightMapMultiPass)
 
-	//setupBuiltinPrograms(); // FIXME GL3
+	// setupBuiltinPrograms(); // FIXME GL3
 
-	const CMaterial &mat= *_CurrentMaterial;
+	const CMaterial &mat = *_CurrentMaterial;
 
 	// compute how many lightmap and pass we must process.
 	computeLightMapInfos(mat);
@@ -789,6 +855,18 @@ sint CDriverGL3::beginLightMapMultiPass()
 	// Ambient/specular zeroing: In GL3, selfIllumination is overridden per-pass in
 	// setupLightMapPass() with the LMC ambient, and specular uniforms are zeroed there too.
 
+	// Ensure per-material UBO arrays have enough slots for each lightmap pass.
+	// Slot 0 = base material (from setupMaterial), slots 1..N = per-pass overrides.
+	CMaterialDrvInfosGL3 *matDrv = getMatDrv(mat);
+	uint numPasses = std::max(_NLightMapPass, (uint)1);
+	uint neededSlots = numPasses + 1;
+	if (matDrv->MaterialUBO.size() < neededSlots)
+	{
+		matDrv->MaterialUBO.resize(neededSlots);
+		matDrv->MaterialUBOId.resize(neededSlots, 0);
+		matDrv->MaterialUBOTouched.resize(neededSlots, false);
+	}
+
 	// Manage too if no lightmaps.
 	return std::max(_NLightMapPass, (uint)1);
 }
@@ -800,8 +878,8 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	nlassert(!m_UserPixelProgram);
 
 	H_AUTO_OGL(CDriverGL3_setupLightMapPass)
-	const CMaterial &mat= *_CurrentMaterial;
-	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+	const CMaterial &mat = *_CurrentMaterial;
+	CMaterialDrvInfosGL3 *matDrv = getMatDrv(mat);
 
 	// No lightmap or all blacks??, just setup "black texture" for stage 0.
 	if (_NLightMaps == 0)
@@ -821,32 +899,58 @@ void CDriverGL3::setupLightMapPass(uint pass)
 			activateTexture(stage, NULL);
 		}
 
-		// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up.
-		// Always set unconditionally: m_ProgramUsesObjectUBO/m_ProgramUsesMaterialUBO may be stale here
-		// (setupMaterial skips setupBuiltinPrograms for lightmap materials), and the override is
-		// harmless when UBOs aren't active (only uploadObjectUBO/uploadMaterialUBO read it).
-		_LightMapUBOOverride.Active = true;
-		memset(_LightMapUBOOverride.SelfIllumination, 0, sizeof(_LightMapUBOOverride.SelfIllumination));
-		_LightMapUBOOverride.ZeroLightFactors = false;
-		// White diffuse (material diffuse not applied to dynamic light)
-		_LightMapUBOOverride.MaterialDiffuse[0] = 1.0f;
-		_LightMapUBOOverride.MaterialDiffuse[1] = 1.0f;
-		_LightMapUBOOverride.MaterialDiffuse[2] = 1.0f;
-		_LightMapUBOOverride.MaterialDiffuse[3] = 1.0f;
-		// Zero specular (lightmaps have no specular)
-		memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
-		// No x2 scale when no lightmaps
-		_LightMapUBOOverride.LightMapScale = 1.0f;
-		// Zero constants (no lightmap factors)
-		memset(_LightMapUBOOverride.Constants, 0, sizeof(_LightMapUBOOverride.Constants));
-
-		if (matDrv && matDrv->PPBuiltin.LightMapScale)
+		// Stage per-material UBO slot for this pass (slot 1, no-lightmap case)
 		{
-			matDrv->PPBuiltin.LightMapScale = false;
+			uint slot = 1;
+			matDrv->MaterialUBOCurrent = slot;
+			CMaterialUBOData &matUBO = matDrv->MaterialUBO[slot];
+			matUBO = matDrv->MaterialUBO[0]; // Copy base material state
+
+			// White diffuse (material diffuse not applied to dynamic light)
+			matUBO.materialDiffuse[0] = 1.0f;
+			matUBO.materialDiffuse[1] = 1.0f;
+			matUBO.materialDiffuse[2] = 1.0f;
+			matUBO.materialDiffuse[3] = 1.0f;
+			// Zero specular (lightmaps have no specular)
+			memset(matUBO.materialSpecular, 0, sizeof(matUBO.materialSpecular));
+			// No x2 scale when no lightmaps
+			matUBO.nlLightMapScale = 1.0f;
+			// Zero constants (no lightmap factors, also zeros EMBM slots 4-7)
+			memset(matUBO.constant, 0, sizeof(matUBO.constant));
+			// Identity texture matrices
+			for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+				memcpy(matUBO.texMatrix[i], CMatrix::Identity.get(), 16 * sizeof(float));
+
+			// TextureActive from activated textures
+			uint maxSam = maxSamplers(matDrv->PPBuiltin.Shader, _Extensions);
+			uint32 textureActive = 0;
+			uint64 texSamplerMode = 0;
+			for (uint stage = 0; stage < maxSam; ++stage)
+			{
+				ITexture *tex = _CurrentTexture[stage];
+				if (tex)
+				{
+					textureActive |= (1 << stage);
+					texSamplerMode |= (tex->isTextureCube() ? SamplerCube : Sampler2D) << (stage * 2);
+				}
+			}
+			matUBO.nlTextureActive = textureActive;
+			matDrv->MaterialUBOTouched[slot] = true;
+
+			// Stage PPBuiltin
+			matDrv->PPBuiltin.TextureActive = textureActive;
+			matDrv->PPBuiltin.TexSamplerMode = texSamplerMode;
+			if (matDrv->PPBuiltin.LightMapScale)
+				matDrv->PPBuiltin.LightMapScale = false;
 			matDrv->PPBuiltin.Touched = true;
 		}
 
-		// Setup the programs now
+		// Object UBO override: selfIllumination = black, no light factor zeroing
+		_LightMapUBOOverride.Active = true;
+		memset(_LightMapUBOOverride.SelfIllumination, 0, sizeof(_LightMapUBOOverride.SelfIllumination));
+		_LightMapUBOOverride.ZeroLightFactors = false;
+
+		// Setup the programs now (triggers uploadMaterialUBO for the active slot)
 		setupBuiltinPrograms();
 
 		_LightMapUBOOverride.Active = false;
@@ -869,7 +973,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 					{
 						if (!_LightEnable[i]) continue;
 						uint lsc = vp->getUniformIndex(
-							CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
+						    CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
 						if (lsc != ~0u)
 							setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
 					}
@@ -891,8 +995,8 @@ void CDriverGL3::setupLightMapPass(uint pass)
 
 	// setup Texture Pass.
 	//=========================
-	uint	lmapId;
-	uint	nstages;
+	uint lmapId;
+	uint nstages;
 	lmapId = pass * _NLightMapPerPass; // Nb lightmaps already processed
 	// N lightmaps for this pass, plus the texture.
 	nstages = std::min(_NLightMapPerPass, _NLightMaps - lmapId) + 1; // at most 4
@@ -918,7 +1022,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	b = std::min(b, (uint32)255);
 
 	// this color will be added to the first lightmap (with help of emissive)
-	CRGBA col((uint8)r,(uint8)g,(uint8)b,255);
+	CRGBA col((uint8)r, (uint8)g, (uint8)b, 255);
 
 	// Lightmap factors
 	NLMISC::CRGBAF selfIllumination(col);
@@ -936,11 +1040,11 @@ void CDriverGL3::setupLightMapPass(uint pass)
 			ITexture *text = mat._LightMaps[whichLightMap].Texture;
 			CRGBA lmapFactor = mat._LightMaps[whichLightMap].Factor;
 			// Modulate the factor with LightMap compression Diffuse
-			CRGBA lmcDiff= mat._LightMaps[whichLightMap].LMCDiffuse;
+			CRGBA lmcDiff = mat._LightMaps[whichLightMap].LMCDiffuse;
 
-			lmapFactor.R = (uint8)(((uint32)lmapFactor.R  * ((uint32)lmcDiff.R+(lmcDiff.R>>7))) >>8);
-			lmapFactor.G = (uint8)(((uint32)lmapFactor.G  * ((uint32)lmcDiff.G+(lmcDiff.G>>7))) >>8);
-			lmapFactor.B = (uint8)(((uint32)lmapFactor.B  * ((uint32)lmcDiff.B+(lmcDiff.B>>7))) >>8);
+			lmapFactor.R = (uint8)(((uint32)lmapFactor.R * ((uint32)lmcDiff.R + (lmcDiff.R >> 7))) >> 8);
+			lmapFactor.G = (uint8)(((uint32)lmapFactor.G * ((uint32)lmcDiff.G + (lmcDiff.G >> 7))) >> 8);
+			lmapFactor.B = (uint8)(((uint32)lmapFactor.B * ((uint32)lmcDiff.B + (lmcDiff.B >> 7))) >> 8);
 			lmapFactor.A = 255;
 
 			activateTexture(stage, text);
@@ -962,25 +1066,26 @@ void CDriverGL3::setupLightMapPass(uint pass)
 
 				/*static CMaterial::CTexEnv	stdEnv;
 				{
-					// setup constant color with Lightmap factor.
-					stdEnv.ConstantColor = lmapFactor;
+				    // setup constant color with Lightmap factor.
+				    stdEnv.ConstantColor = lmapFactor;
 
-					int cl = m_DriverPixelProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::Constant0 + stage));
-					if (cl != -1)
-					{
-						GLfloat glCol[ 4 ];
-						convColor(lmapFactor, glCol);
-						setUniform4f(IDriver::PixelProgram, cl, glCol[ 0 ], glCol[ 1 ], glCol[ 2 ], glCol[ 3 ]);
-					}
+				    int cl = m_DriverPixelProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::Constant0 + stage));
+				    if (cl != -1)
+				    {
+				        GLfloat glCol[ 4 ];
+				        convColor(lmapFactor, glCol);
+				        setUniform4f(IDriver::PixelProgram, cl, glCol[ 0 ], glCol[ 1 ], glCol[ 2 ], glCol[ 3 ]);
+				    }
 
-					// activateTexEnvColor(stage, stdEnv); // FIXME GL3
+				    // activateTexEnvColor(stage, stdEnv); // FIXME GL3
 
-					// setup TexEnvCombine4 (ignore alpha part).
-					/*if (_CurrentTexEnvSpecial[stage] != TexEnvSpecialLightMap)
-					{
-						// TexEnv is special.
-						_CurrentTexEnvSpecial[stage] = TexEnvSpecialLightMap;
-					}*/ // FIXME GL3
+				    // setup TexEnvCombine4 (ignore alpha part).
+				    /*if (_CurrentTexEnvSpecial[stage] != TexEnvSpecialLightMap)
+				    {
+				        // TexEnv is special.
+				        _CurrentTexEnvSpecial[stage] = TexEnvSpecialLightMap;
+				    }*/
+				// FIXME GL3
 				/*}*/
 			}
 
@@ -1020,6 +1125,8 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	// a 2x scale to the entire (vertexLighting + lightmapSum) result. This matches the
 	// legacy clamping behavior: 2 * clamp(dynLight/2 + lmcAmb, 0, 1) gives effective [0,2].
 	float lightMapScale = mat._LightMapsMulx2 ? 2.0f : 1.0f;
+	// Material diffuse: white normally, halved for x2 (halves dynamic light in VP)
+	float lmDiffuse = 1.0f / lightMapScale;
 
 	// setup blend / lighting.
 	//=========================
@@ -1028,12 +1135,12 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	if (!mat.getBlend())
 	{
 		// Not blended, std case.
-		if (pass==0)
+		if (pass == 0)
 		{
 			// no transparency for first pass.
 			_DriverGLStates.enableBlend(false);
 		}
-		else if (pass==1)
+		else if (pass == 1)
 		{
 			// setup an Additive transparency (only for pass 1, will be kept for successives pass).
 			_DriverGLStates.enableBlend(true);
@@ -1043,26 +1150,26 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	else
 	{
 		/* 1st pass, std alphaBlend. 2nd pass, add to background. Demo:
-			T: texture.
-			l0: lightmap (or group of lightmap) of pass 0.
-			l1: lightmap (or group of lightmap) of pass 1. (same thing with 2,3 etc....)
-			B:	Background.
-			A:	Alpha of texture.
+		    T: texture.
+		    l0: lightmap (or group of lightmap) of pass 0.
+		    l1: lightmap (or group of lightmap) of pass 1. (same thing with 2,3 etc....)
+		    B:	Background.
+		    A:	Alpha of texture.
 
-			finalResult= T*(l0+l1) * A + B * (1-A).
+		    finalResult= T*(l0+l1) * A + B * (1-A).
 
-			We get it in two pass:
-				fint=			T*l0 * A + B * (1-A).
-				finalResult=	T*l1 * A + fint = T*l1 * A + T*l0 * A + B * (1-A)=
-					T* (l0+l1) * A + B * (1-A)
+		    We get it in two pass:
+		        fint=			T*l0 * A + B * (1-A).
+		        finalResult=	T*l1 * A + fint = T*l1 * A + T*l0 * A + B * (1-A)=
+		            T* (l0+l1) * A + B * (1-A)
 		*/
-		if (pass==0)
+		if (pass == 0)
 		{
 			// no transparency for first pass.
 			_DriverGLStates.enableBlend(true);
 			_DriverGLStates.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		}
-		else if (pass==1)
+		else if (pass == 1)
 		{
 			// setup an Additive transparency (only for pass 1, will be kept for successives pass).
 			_DriverGLStates.enableBlend(true);
@@ -1080,42 +1187,69 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		_CameraUBODirty = true;
 	}
 
-	// Set CPPBuiltin.LightMapScale flag for small PP (gates nlLightMapScale uniform declaration)
-	bool needLmScale = (lightMapScale != 1.0f);
-	if (matDrv && matDrv->PPBuiltin.LightMapScale != needLmScale)
+	// Stage per-material UBO slot for this pass
 	{
-		matDrv->PPBuiltin.LightMapScale = needLmScale;
+		uint slot = pass + 1;
+		matDrv->MaterialUBOCurrent = slot;
+		CMaterialUBOData &matUBO = matDrv->MaterialUBO[slot];
+		matUBO = matDrv->MaterialUBO[0]; // Copy base material state
+
+		// Override per-pass fields
+		matUBO.materialDiffuse[0] = lmDiffuse;
+		matUBO.materialDiffuse[1] = lmDiffuse;
+		matUBO.materialDiffuse[2] = lmDiffuse;
+		matUBO.materialDiffuse[3] = 1.0f;
+		// Zero specular (lightmaps have no specular contribution)
+		memset(matUBO.materialSpecular, 0, sizeof(matUBO.materialSpecular));
+		// Lightmap scale factor (x2 mode: 2.0, normal: 1.0)
+		matUBO.nlLightMapScale = lightMapScale;
+		// Stage lightmap factor constants 0-7
+		for (int i = 0; i < IDRV_PROGRAM_MAXSAMPLERS; ++i)
+		{
+			matUBO.constant[i][0] = constant[i].R;
+			matUBO.constant[i][1] = constant[i].G;
+			matUBO.constant[i][2] = constant[i].B;
+			matUBO.constant[i][3] = constant[i].A;
+		}
+		// No separate EMBM zeroing needed — lightmap factors in constant[4-7] overwrite EMBM slots
+		// Identity texture matrices
+		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+			memcpy(matUBO.texMatrix[i], CMatrix::Identity.get(), 16 * sizeof(float));
+
+		// TextureActive from activated textures
+		uint maxSam = maxSamplers(matDrv->PPBuiltin.Shader, _Extensions);
+		uint32 textureActive = 0;
+		uint64 texSamplerMode = 0;
+		for (uint stage = 0; stage < maxSam; ++stage)
+		{
+			ITexture *tex = _CurrentTexture[stage];
+			if (tex)
+			{
+				textureActive |= (1 << stage);
+				texSamplerMode |= (tex->isTextureCube() ? SamplerCube : Sampler2D) << (stage * 2);
+			}
+		}
+		matUBO.nlTextureActive = textureActive;
+		matDrv->MaterialUBOTouched[slot] = true;
+
+		// Stage PPBuiltin
+		matDrv->PPBuiltin.TextureActive = textureActive;
+		matDrv->PPBuiltin.TexSamplerMode = texSamplerMode;
+		bool needLmScale = (lightMapScale != 1.0f);
+		if (matDrv->PPBuiltin.LightMapScale != needLmScale)
+			matDrv->PPBuiltin.LightMapScale = needLmScale;
 		matDrv->PPBuiltin.Touched = true;
 	}
 
-	// Set lightmap UBO overrides before setupBuiltinPrograms so the UBO upload picks them up.
-	// Always set unconditionally (see _NLightMaps==0 path above for rationale).
+	// Object UBO override: selfIllumination and light factor zeroing for pass > 0
 	_LightMapUBOOverride.Active = true;
 	_LightMapUBOOverride.SelfIllumination[0] = selfIllumination.R;
 	_LightMapUBOOverride.SelfIllumination[1] = selfIllumination.G;
 	_LightMapUBOOverride.SelfIllumination[2] = selfIllumination.B;
 	_LightMapUBOOverride.SelfIllumination[3] = 0.0f;
 	_LightMapUBOOverride.ZeroLightFactors = (pass > 0);
-	// Material diffuse: white normally, halved for x2 (halves dynamic light in VP)
-	float lmDiffuse = 1.0f / lightMapScale;
-	_LightMapUBOOverride.MaterialDiffuse[0] = lmDiffuse;
-	_LightMapUBOOverride.MaterialDiffuse[1] = lmDiffuse;
-	_LightMapUBOOverride.MaterialDiffuse[2] = lmDiffuse;
-	_LightMapUBOOverride.MaterialDiffuse[3] = 1.0f;
-	// Zero specular (lightmaps have no specular contribution)
-	memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
-	// Lightmap scale factor (x2 mode: 2.0, normal: 1.0)
-	_LightMapUBOOverride.LightMapScale = lightMapScale;
-	// Stage lightmap factor constants 0-3 for the material UBO
-	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-	{
-		_LightMapUBOOverride.Constants[i][0] = constant[i].R;
-		_LightMapUBOOverride.Constants[i][1] = constant[i].G;
-		_LightMapUBOOverride.Constants[i][2] = constant[i].B;
-		_LightMapUBOOverride.Constants[i][3] = constant[i].A;
-	}
 
-	// Setup the programs now
+	// Setup the programs now (triggers uploadMaterialUBO for the active slot)
 	setupBuiltinPrograms();
 
 	_LightMapUBOOverride.Active = false;
@@ -1124,13 +1258,12 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	if (pass > 0 && _FogEnabled)
 		memcpy(_CurrentFogColor, savedFogColor, sizeof(savedFogColor));
 
-	// Set PP constants (lightmap factors) as individual uniforms.
-	// constant0-3 are in the material UBO when materialUBO is active (staged above).
-	// constant4-7 are always individual uniforms.
+	// Set PP constants (lightmap factors) as individual uniforms for non-UBO paths.
+	// When materialUBO is active, all constants 0-7 are in the UBO (staged above).
+	if (!m_ProgramUsesMaterialUBO[PixelProgram])
 	{
 		IProgram *pp = getProgram(PixelProgram);
-		uint startStage = m_ProgramUsesMaterialUBO[PixelProgram] ? IDRV_MAT_MAXTEXTURES : 0;
-		for (uint stage = startStage; stage < std::min(_Extensions.MaxFragmentTextureImageUnits, (GLint)IDRV_PROGRAM_MAXSAMPLERS); ++stage)
+		for (uint stage = 0; stage < std::min(_Extensions.MaxFragmentTextureImageUnits, (GLint)IDRV_PROGRAM_MAXSAMPLERS); ++stage)
 		{
 			uint constantIdx = pp->getUniformIndex(CProgramIndex::TName(CProgramIndex::Constant0 + stage));
 			if (constantIdx != ~0)
@@ -1152,7 +1285,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 				int siIdx = vp->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
 				if (siIdx != -1)
 					setUniform4f(IDriver::VertexProgram, siIdx,
-						selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
+					    selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
 			}
 
 			if (!m_ProgramUsesLightTableUBO[VertexProgram])
@@ -1166,7 +1299,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 				{
 					if (!_LightEnable[i]) continue;
 					uint ldc = vp->getUniformIndex(
-						CProgramIndex::TName(CProgramIndex::Light0ColDiff + i));
+					    CProgramIndex::TName(CProgramIndex::Light0ColDiff + i));
 					if (ldc != ~0u)
 					{
 						if (pass == 0)
@@ -1189,7 +1322,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 				{
 					if (!_LightEnable[i]) continue;
 					uint lsc = vp->getUniformIndex(
-						CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
+					    CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
 					if (lsc != ~0u)
 						setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
 				}
@@ -1215,7 +1348,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 					for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 					{
 						uint lfIdx = vp->getUniformIndex(
-							CProgramIndex::TName(CProgramIndex::NlLightFactor0 + i));
+						    CProgramIndex::TName(CProgramIndex::NlLightFactor0 + i));
 						if (lfIdx != ~0u)
 							setUniform1f(IDriver::VertexProgram, lfIdx, 0.0f);
 					}
@@ -1227,9 +1360,14 @@ void CDriverGL3::setupLightMapPass(uint pass)
 }
 
 // ***************************************************************************
-void			CDriverGL3::endLightMapMultiPass()
+void CDriverGL3::endLightMapMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_endLightMapMultiPass)
+
+	// Reset to base material UBO slot
+	const CMaterial &mat = *_CurrentMaterial;
+	CMaterialDrvInfosGL3 *matDrv = getMatDrv(mat);
+	matDrv->MaterialUBOCurrent = 0;
 
 	// If multi-pass was used with fog, ensure the real fog color is restored.
 	// The camera UBO was uploaded with black fog for pass 1+; dirty it so the
@@ -1239,64 +1377,46 @@ void			CDriverGL3::endLightMapMultiPass()
 }
 
 // ***************************************************************************
-void			CDriverGL3::startSpecularBatch()
+void CDriverGL3::startSpecularBatch()
 {
 	H_AUTO_OGL(CDriverGL3_startSpecularBatch)
-	_SpecularBatchOn= true;
+	_SpecularBatchOn = true;
 
 	setupSpecularBegin();
 }
 
 // ***************************************************************************
-void			CDriverGL3::endSpecularBatch()
+void CDriverGL3::endSpecularBatch()
 {
 	H_AUTO_OGL(CDriverGL3_endSpecularBatch)
-	_SpecularBatchOn= false;
+	_SpecularBatchOn = false;
 
 	setupSpecularEnd();
 }
 
 // ***************************************************************************
-void			CDriverGL3::setupSpecularBegin()
+void CDriverGL3::setupSpecularBegin()
 {
 	H_AUTO_OGL(CDriverGL3_setupSpecularBegin)
 
-	// setup the good matrix for stage 1.
-	// NB: Cannot set uniforms here directly, because the program does not exist yet
-	_UserTexMat[1] = _SpecularTexMtx;
-
-	// Mark material UBO dirty so flushPassUniforms picks up the new texMatrix1
-	CMaterialDrvInfosGL3 *matDrv = _CurrentMaterial
-		? static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(_CurrentMaterial->_MatDrvInfo))
-		: NULL;
-	if (matDrv)
-		matDrv->MaterialUBODirty = true;
+	// Stage 1 texMatrix for specular cubemap tex coords is _SpecularTexMtx.
+	// Packed into material UBO texMatrix[1] by setupSpecularPass or uploadMaterialUBO.
 }
 
 // ***************************************************************************
-void			CDriverGL3::setupSpecularEnd()
+void CDriverGL3::setupSpecularEnd()
 {
 	H_AUTO_OGL(CDriverGL3_setupSpecularEnd)
 
 	// Disable Texture coord generation // FIXME GL3: This should not be necessary...
 	setTexGenModeVP(1, TexGenDisabled);
-
-	// Happiness !!! we have already enabled the stage 1 - lolwhat
-	_UserTexMat[1].identity();
-
-	// Mark material UBO dirty so the identity gets packed on next flush
-	CMaterialDrvInfosGL3 *matDrv = _CurrentMaterial
-		? static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(_CurrentMaterial->_MatDrvInfo))
-		: NULL;
-	if (matDrv)
-		matDrv->MaterialUBODirty = true;
 }
 
 // ***************************************************************************
-sint			CDriverGL3::beginSpecularMultiPass()
+sint CDriverGL3::beginSpecularMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_beginSpecularMultiPass)
-	const CMaterial &mat= *_CurrentMaterial;
+	const CMaterial &mat = *_CurrentMaterial;
 
 	// End specular , only if not Batching mode.
 	if (!_SpecularBatchOn)
@@ -1309,7 +1429,7 @@ sint			CDriverGL3::beginSpecularMultiPass()
 	{
 		uint idx = vp->getUniformIndex((CProgramIndex::TName)(CProgramIndex::TexMatrix1));
 		if (idx != ~0)
-			setUniform4x4f(IDriver::VertexProgram, idx, _UserTexMat[1]);
+			setUniform4x4f(IDriver::VertexProgram, idx, _SpecularTexMtx);
 	}
 
 	// Only need one pass for specular
@@ -1317,7 +1437,7 @@ sint			CDriverGL3::beginSpecularMultiPass()
 }
 
 // ***************************************************************************
-void			CDriverGL3::setupSpecularPass(uint pass)
+void CDriverGL3::setupSpecularPass(uint pass)
 {
 	nlassert(getProgram(PixelProgram));
 	nlassert(getProgram(VertexProgram));
@@ -1326,7 +1446,7 @@ void			CDriverGL3::setupSpecularPass(uint pass)
 }
 
 // ***************************************************************************
-void			CDriverGL3::endSpecularMultiPass()
+void CDriverGL3::endSpecularMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_endSpecularMultiPass)
 
@@ -1335,140 +1455,25 @@ void			CDriverGL3::endSpecularMultiPass()
 		setupSpecularEnd();
 }
 
-// ***************************************************************************
-sint			CDriverGL3::beginPPLMultiPass()
-{
-	H_AUTO_OGL(CDriverGL3_beginPPLMultiPass)
+// PPL, PPLNoSpec, and Cloud shader types are deprecated and folded to Normal
+// by getSupportedShader(). The multipass functions below are dead code.
 
-	// Deprecated
-
-	#ifdef NL_DEBUG
-		nlassert(supportPerPixelLighting(true)); // make sure the hardware can do that
-	#endif
-	return 1;
-}
-
-// ***************************************************************************
-void			CDriverGL3::setupPPLPass(uint pass)
-{
-	H_AUTO_OGL(CDriverGL3_setupPPLPass)
-	const CMaterial &mat= *_CurrentMaterial;
-
-	nlassert(pass == 0);
-
-	/*ITexture *tex0 = getSpecularCubeMap(1);
-	if (tex0) setupTexture(*tex0);
-	ITexture *tex2 = getSpecularCubeMap((uint) mat.getShininess());
-	if (tex2) setupTexture(*tex2);
-	if (mat.getTexture(0)) setupTexture(*mat.getTexture(0));*/
-
-	// tex coord 0 = texture coordinates
-	// tex coord 1 = normal in tangent space
-	// tex coord 2 = half angle vector in tangent space
-
-	/*activateTexture(0, tex0);
-	activateTexture(1, mat.getTexture(0));
-	activateTexture(2, tex2);*/
-
-	/*for (uint k = 3; k < IDRV_MAT_MAXTEXTURES; ++k)
-	{
-		activateTexture(k, NULL);
-	}*/
-
-	// setup the tex envs
-
-	// Stage 0 is rgb = DiffuseCubeMap * LightColor + DiffuseGouraud * 1
-
-	// activateTexEnvColor(0, _PPLightDiffuseColor); // FIXME GL3
-
-	// Stage 1
-	// alpha = diffuse alpha
-
-	// Stage 2 is rgb = SpecularCubeMap * SpecularLightColor + Prec * 1
-	// alpha = prec alpha
-
-	// activateTexEnvColor(2, _PPLightSpecularColor); // FIXME GL3
-
-}
-
-// ***************************************************************************
-void			CDriverGL3::endPPLMultiPass()
-{
-	H_AUTO_OGL(CDriverGL3_endPPLMultiPass)
-	// nothing to do there ...
-}
-
-// ******PER PIXEL LIGHTING, NO SPECULAR**************************************
-sint			CDriverGL3::beginPPLNoSpecMultiPass()
-{
-	H_AUTO_OGL(CDriverGL3_beginPPLNoSpecMultiPass)
-
-	//setupBuiltinPrograms(); // FIXME GL3
-
-	#ifdef NL_DEBUG
-		nlassert(supportPerPixelLighting(false)); // make sure the hardware can do that
-	#endif
-	return 1;
-}
-
-// ******PER PIXEL LIGHTING, NO SPECULAR**************************************
-void			CDriverGL3::setupPPLNoSpecPass(uint pass)
-{
-	H_AUTO_OGL(CDriverGL3_setupPPLNoSpecPass)
-	const CMaterial &mat= *_CurrentMaterial;
-
-	nlassert(pass == 0);
-
-/*	ITexture *tex0 = getSpecularCubeMap(1);
-	if (tex0) setupTexture(*tex0);
-
-	if (mat.getTexture(0)) setupTexture(*mat.getTexture(0));*/
-
-	// tex coord 0 = texture coordinates
-	// tex coord 1 = normal in tangent space
-
-/*	activateTexture(0, tex0);
-	activateTexture(1, mat.getTexture(0));
+/*
+sint CDriverGL3::beginPPLMultiPass() { return 1; }
+void CDriverGL3::setupPPLPass(uint pass) { }
+void CDriverGL3::endPPLMultiPass() { }
+sint CDriverGL3::beginPPLNoSpecMultiPass() { return 1; }
+void CDriverGL3::setupPPLNoSpecPass(uint pass) { }
+void CDriverGL3::endPPLNoSpecMultiPass() { }
+void CDriverGL3::setupCloudPass() { }
 */
-	/*for (uint k = 2; k < IDRV_MAT_MAXTEXTURES; ++k)
-	{
-		activateTexture(k, NULL);
-	}*/
-
-	// setup the tex envs
-
-	// Stage 0 is rgb = DiffuseCubeMap * LightColor + DiffuseGouraud * 1 (TODO : EnvCombine3)
-
-	// activateTexEnvColor(0, _PPLightDiffuseColor); // FIXME GL3
-
-	// Stage 1
-	/*static CMaterial::CTexEnv	env;
-	env.Env.SrcArg1Alpha = CMaterial::Diffuse;
-	activateTexEnvMode(1, env);*/ // FIXME GL3
-
-}
-
-// ******PER PIXEL LIGHTING, NO SPECULAR**************************************
-void			CDriverGL3::endPPLNoSpecMultiPass()
-{
-	H_AUTO_OGL(CDriverGL3_endPPLNoSpecMultiPass)
-	// nothing to do there ...
-}
-
-// ***************************************************************************
-void		CDriverGL3::setupCloudPass()
-{
-	H_AUTO_OGL(CDriverGL3_setupCloudPass)
-	nlassert(_CurrentMaterial->getShader() == CMaterial::Cloud);
-	// Cloud shader is deprecated and will not be supported in the GL3 driver.
-}
 
 // ***************************************************************************
 sint CDriverGL3::beginWaterMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_beginWaterMultiPass)
 
-	//setupBuiltinPrograms(); // FIXME GL3
+	// setupBuiltinPrograms(); // FIXME GL3
 
 	nlassert(_CurrentMaterial->getShader() == CMaterial::Water);
 	return 1;
@@ -1476,17 +1481,15 @@ sint CDriverGL3::beginWaterMultiPass()
 
 // ***************************************************************************
 /** Presetupped texture shader for water shader on NV20
-  */
-static const uint8 WaterNoDiffuseTexAddrMode[IDRV_MAT_MAXTEXTURES] =
-{
+ */
+static const uint8 WaterNoDiffuseTexAddrMode[IDRV_MAT_MAXTEXTURES] = {
 	CMaterial::FetchTexture,
 	CMaterial::OffsetTexture,
 	CMaterial::OffsetTexture,
 	CMaterial::TextureOff
 };
 
-static const uint8 WaterTexAddrMode[IDRV_MAT_MAXTEXTURES] =
-{
+static const uint8 WaterTexAddrMode[IDRV_MAT_MAXTEXTURES] = {
 	CMaterial::FetchTexture,
 	CMaterial::OffsetTexture,
 	CMaterial::OffsetTexture,
@@ -1499,7 +1502,7 @@ static const float IdentityTexMat[4] = { 1.f, 0.f, 0.f, 1.f };
 void CDriverGL3::setupWaterPass(uint /* pass */)
 {
 	H_AUTO_OGL(CDriverGL3_setupWaterPass)
-	nlassert (_CurrentMaterial);
+	nlassert(_CurrentMaterial);
 	CMaterial &mat = *_CurrentMaterial;
 	nlassert(_CurrentMaterial->getShader() == CMaterial::Water);
 
@@ -1562,12 +1565,11 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 		{
 			IProgram::CSource *s = new IProgram::CSource();
 			s->Profile = IProgram::glsl300esf;
-			s->Features.PipelineStage = true;
 			s->Features.UsesCameraUBO = true;
 			s->Features.OnlyUBOs = true;
 			s->UniformBufferFormats[UBBindingPixelProgram] = _WaterUBFormat;
 			s->DisplayName = NLMISC::toString("glsl300esf/WaterFP/%s",
-				(fpIdx & 2) ? "diffuse" : "noDiffuse");
+			    (fpIdx & 2) ? "diffuse" : "noDiffuse");
 			s->setSource(std::string(WaterFPGLSL_ES_Header) + defines + WaterFPGLSL_UBO_Body);
 			_WaterFP[fpIdx]->addSource(s);
 		}
@@ -1582,8 +1584,8 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 			IProgram::CSource *s = new IProgram::CSource();
 			s->Profile = IProgram::glsl330f;
 			s->DisplayName = NLMISC::toString("glsl330f/WaterFP/%s/%s",
-				(fpIdx & 1) ? "fog" : "noFog",
-				(fpIdx & 2) ? "diffuse" : "noDiffuse");
+			    (fpIdx & 1) ? "fog" : "noFog",
+			    (fpIdx & 2) ? "diffuse" : "noDiffuse");
 			s->setSource(src);
 			_WaterFP[fpIdx]->addSource(s);
 		}

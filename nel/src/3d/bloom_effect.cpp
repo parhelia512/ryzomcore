@@ -106,11 +106,11 @@ static const char *TextureOffsetGLSL_UBO =
 	"precision highp int;\n"
 	"layout(location = 0) in vec4 vposition;\n"
 	"layout(location = 8) in vec4 vtexCoord0;\n"
-	"layout(location = 3) smooth out vec4 diffuseColor;\n"
-	"layout(location = 8) smooth out vec4 texCoord0;\n"
-	"layout(location = 9) smooth out vec4 texCoord1;\n"
-	"layout(location = 10) smooth out vec4 texCoord2;\n"
-	"layout(location = 11) smooth out vec4 texCoord3;\n"
+	"smooth out vec4 diffuseColor;\n"
+	"smooth out vec4 texCoord0;\n"
+	"smooth out vec4 texCoord1;\n"
+	"smooth out vec4 texCoord2;\n"
+	"smooth out vec4 texCoord3;\n"
 	"// color, posW, offset0-3 from NlBloom UBO\n"
 	"void main()\n"
 	"{\n"
@@ -207,7 +207,6 @@ CBloomEffect::CBloomEffect()
 		{
 			IProgram::CSource *src = new IProgram::CSource();
 			src->Profile = CVertexProgram::glsl300esv;
-			src->Features.PipelineStage = true;
 			src->Features.OnlyUBOs = true;
 			src->UniformBufferFormats[UBBindingVertexProgram] = s_BloomUBFormat;
 			src->DisplayName = "TextureOffset/glsl300esv/UBO";

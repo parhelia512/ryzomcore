@@ -432,7 +432,7 @@ void		CDriverGL3::setupGlArrays(CVertexBufferInfo &vb)
 	uint32	flags= vb.VertexFormat;
 
 	nlctassert(CVertexBuffer::NumValue == sizeof(ARBVertexProgramMustNormalizeAttrib) / sizeof(ARBVertexProgramMustNormalizeAttrib[0]));
-	_DriverGLStates.bindARBVertexBuffer(vb.VertexObjectId);
+	_DriverGLStates.bindArrayBuffer(vb.VertexObjectId);
 
 	{
 		// For each value
@@ -449,7 +449,7 @@ void		CDriverGL3::setupGlArrays(CVertexBufferInfo &vb)
 				// Not setuped value and used
 				if (flags & flag)
 				{
-					_DriverGLStates.enableVertexAttribArrayARB(glIndex, true);
+					_DriverGLStates.enableVertexAttribArray(glIndex, true);
 					GLboolean mustNormalize = GL_FALSE;
 					if (GLTypeIsIntegral[type])
 					{
@@ -459,7 +459,7 @@ void		CDriverGL3::setupGlArrays(CVertexBufferInfo &vb)
 				}
 				else
 				{
-					_DriverGLStates.enableVertexAttribArrayARB(glIndex, false);
+					_DriverGLStates.enableVertexAttribArray(glIndex, false);
 				}
 			}
 		}

@@ -1001,7 +1001,7 @@ const char *a_glsl300esv =
 	"precision highp int;\n"
 	"layout(location = 0) in vec4 vposition;\n"
 	"layout(location = 8) in vec4 vtexCoord0;\n"
-	"layout(location = 8) smooth out vec4 texCoord0;\n"
+	"smooth out vec4 texCoord0;\n"
 	"// modelViewProjection from NlModel UBO\n"
 	"void main()\n"
 	"{\n"
@@ -1038,7 +1038,7 @@ const char *a_glsl300esf =
 	"precision highp float;\n"
 	"precision highp int;\n"
 	"out vec4 fragColor;\n"
-	"layout(location = 8) smooth in vec4 texCoord0;\n"
+	"smooth in vec4 texCoord0;\n"
 	"uniform sampler2D sampler0;\n"
 	"// fxaaQualityRcpFrame, fxaaQualitySubpix, fxaaQualityEdgeThreshold,\n"
 	"// fxaaQualityEdgeThresholdMin from NlFXAA UBO\n";

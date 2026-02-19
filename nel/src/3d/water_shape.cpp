@@ -93,13 +93,13 @@ END";
 // Fog is not used in VP — PP handles fog via ecPos.
 static const char *WaterVPGLSL_UBO_Body =
 	"layout(location = 0) in vec4 vposition;\n"
-	"layout(location = 8) smooth out vec4 texCoord0;\n"
-	"layout(location = 9) smooth out vec4 texCoord1;\n"
-	"layout(location = 10) smooth out vec4 texCoord2;\n"
+	"smooth out vec4 texCoord0;\n"
+	"smooth out vec4 texCoord1;\n"
+	"smooth out vec4 texCoord2;\n"
 	"#ifdef USE_DIFFUSE\n"
-	"layout(location = 11) smooth out vec4 texCoord3;\n"
+	"smooth out vec4 texCoord3;\n"
 	"#endif\n"
-	"layout(location = 0) smooth out vec4 ecPos;\n"
+	"smooth out vec4 ecPos;\n"
 	"// bumpMap0Scale..scaleReflectedRay from NlWaterVP user UBO\n"
 	"// modelViewProjection, modelView from NlModel UBO\n"
 	"void main()\n"
@@ -169,7 +169,6 @@ CVertexProgramWaterVPNoWave::CVertexProgramWaterVPNoWave(bool diffuse)
 	{
 		CSource *source = new CSource();
 		source->Profile = glsl300esv;
-		source->Features.PipelineStage = true;
 		source->Features.OnlyUBOs = true;
 		source->Features.UsesObjectUBO = true;
 		source->UniformBufferFormats[UBBindingVertexProgram] = CWaterShape::_WaterVPUBFormat;

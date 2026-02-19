@@ -30,44 +30,6 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
-namespace /* anonymous */ {
-
-uint maxTextures(CMaterial::TShader shader)
-{
-	switch (shader)
-	{
-	case CMaterial::Specular:
-	case CMaterial::UserColor: // UserColor has the same texture set up twice
-		return 2;
-	default:
-		return IDRV_MAT_MAXTEXTURES;
-	}
-}
-
-uint maxSamplers(CMaterial::TShader shader, CGlExtensions &glext)
-{
-	switch (shader)
-	{
-	case CMaterial::LightMap:
-		return std::min((GLint)IDRV_PROGRAM_MAXSAMPLERS, glext.MaxFragmentTextureImageUnits);
-	default:
-		return maxTextures(shader);
-	}
-}
-
-bool useTexEnv(CMaterial::TShader shader)
-{
-	return shader == CMaterial::Normal
-		|| shader == CMaterial::UserColor;
-}
-
-bool useTex(const CPPBuiltin &desc, uint stage)
-{
-	return (desc.TextureActive & (1 << stage)) != 0;
-}
-
-} /* anonymous namespace */
-
 bool operator<(const CPPBuiltin &left, const CPPBuiltin &right)
 {	
 	// Material state
@@ -217,19 +179,8 @@ const char *s_ShaderNames[] =
 	"Water"
 };
 
-CMaterial::TShader getSupportedShader(CMaterial::TShader shader)
-{
-	switch (shader)
-	{
-	case CMaterial::Normal:
-	case CMaterial::UserColor:
-	case CMaterial::Specular:
-	case CMaterial::LightMap:
-		return shader;
-	default:
-		return CMaterial::Normal;
-	}
-}
+// Canonical getSupportedShader is CDriverGL3::getSupportedShader in driver_opengl3_material.cpp.
+// setupMaterial writes PPBuiltin.Shader; downstream code reads it from there.
 	
 void ppTexEnv(std::stringstream &ss, const CPPBuiltin &desc)
 {
@@ -962,9 +913,14 @@ void CPPBuiltin::checkDriverStateTouched(CDriverGL3 *driver) // MUST NOT depend 
 	}
 }
 
-void CPPBuiltin::checkDriverMaterialStateTouched(CDriverGL3 *driver, CMaterial &mat)
+// TODO: Restructure — material-derived PPBuiltin state (Shader, Flags, TextureActive,
+// TexSamplerMode, TexEnvMode) should be pushed directly from setupMaterial.
+// LightMap texture state (TextureActive, TexSamplerMode from _CurrentTexture[])
+// should be pushed from setupLightmapPass.
+// These functions are no longer called; kept for reference during restructuring.
+#if 0
+void CPPBuiltin::checkDriverMaterialStateTouched(CDriverGL3 *driver, CMaterial::TShader shader)
 {
-	CMaterial::TShader shader = getSupportedShader(mat.getShader());
 	switch (shader)
 	{
 	case CMaterial::LightMap:
@@ -985,7 +941,6 @@ void CPPBuiltin::checkDriverMaterialStateTouched(CDriverGL3 *driver, CMaterial &
 		{
 			TextureActive = textureActive;
 			Touched = true;
-			MaterialUBOTouched = true;
 		}
 		if (TexSamplerMode != texSamplerMode)
 		{
@@ -996,46 +951,39 @@ void CPPBuiltin::checkDriverMaterialStateTouched(CDriverGL3 *driver, CMaterial &
 	}
 }
 
-void CPPBuiltin::checkMaterialStateTouched(CMaterial &mat) // MUST NOT depend on any state set by checkDriverStateTouched
+void CPPBuiltin::checkMaterialStateTouched(CMaterial &mat, CMaterial::TShader shader)
 {
-	// Optimize
 	uint32 touched = !PixelProgram ? IDRV_TOUCHED_ALL : mat.getTouched();
 	if (touched == 0) return;
 
-	// Compare values
-	CMaterial::TShader shader = getSupportedShader(mat.getShader());
 	if (Shader != shader)
 	{
 		Shader = shader;
 		Touched = true;
-		MaterialUBOTouched = true;
 	}
 	uint32 flags = mat.getFlags();
-	flags &= IDRV_MAT_ALPHA_TEST; // TODO: |= with the wanted flags from the VP when flags are added to the VP
+	flags &= IDRV_MAT_ALPHA_TEST;
 	if (Flags != flags)
 	{
 		Flags = flags;
 		Touched = true;
-		MaterialUBOTouched = true;
 	}
 	uint maxTex = maxTextures(shader);
-	if (touched & IDRV_TOUCHED_ALLTEX) // Note: There is a case where textures are provided where no texture coordinates are provided, this is handled gracefully by the pixel program generation (it will use a vec(0) texture coordinate). The inverse is an optimization issue
+	if (touched & IDRV_TOUCHED_ALLTEX)
 	{
 		switch (shader)
 		{
 		case CMaterial::LightMap:
 			break;
 		default:
-			// Use textures directly from the CMaterial
 			uint32 textureActive = 0;
 			uint64 texSamplerMode = 0;
-			for (uint stage = 0; stage < maxTex; ++stage) // NB: Limited to IDRV_MAT_MAXTEXTURES here
+			for (uint stage = 0; stage < maxTex; ++stage)
 			{
 				NL3D::ITexture *tex = mat._Textures[stage];
 				if (tex)
 				{
 					textureActive |= (1 << stage);
-					// Issue: Due to the IDRV_TOUCHED_ALLTEX check, the sampler mode of an ITexture cannot be modified after it has been added to the CMaterial
 					texSamplerMode |= (tex->isTextureCube() ? SamplerCube : Sampler2D) << (stage * 2);
 				}
 			}
@@ -1043,7 +991,6 @@ void CPPBuiltin::checkMaterialStateTouched(CMaterial &mat) // MUST NOT depend on
 			{
 				TextureActive = textureActive;
 				Touched = true;
-				MaterialUBOTouched = true;
 			}
 			if (TexSamplerMode != texSamplerMode)
 			{
@@ -1061,14 +1008,13 @@ void CPPBuiltin::checkMaterialStateTouched(CMaterial &mat) // MUST NOT depend on
 			{
 				TexEnvMode[stage] = mat._TexEnvs[stage].EnvPacked;
 				Touched = true;
-				MaterialUBOTouched = true;
 			}
 		}
 	}
 
-	// Optimize
 	mat.clearTouched(0xFFFFFFFF);
 }
+#endif
 
 } // NLDRIVERGL3
 } // NL3D

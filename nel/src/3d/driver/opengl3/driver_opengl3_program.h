@@ -66,7 +66,7 @@ static const uint64 SamplerCube = 1;
 /// are read by uploadMaterialUBO() to pack the NlMaterial UBO.
 struct CPPBuiltin
 {
-	CPPBuiltin() : Touched(true), MaterialUBOTouched(true), FogMode(0), SpecularSeparate(false), WorldSpacePosition(false), LightMapScale(false), PPL(false), PPLVertexColor(false), PPClipPlane(false) { }
+	CPPBuiltin() : Touched(true), FogMode(0), SpecularSeparate(false), WorldSpacePosition(false), LightMapScale(false), PPL(false), PPLVertexColor(false), PPClipPlane(false) { }
 
 	// Driver state (per-draw-call, not in material UBO)
 	uint16 VertexFormat;
@@ -93,11 +93,14 @@ struct CPPBuiltin
 	// MaterialUBOTouched: only set when material-UBO-relevant fields change
 	// (Shader, Flags, TextureActive, TexEnvMode). Avoids spurious material UBO
 	// re-uploads when only driver state (fog, vertex format, etc.) changes.
-	bool MaterialUBOTouched;
+	// bool MaterialUBOTouched; // nonsense field
 
 	void checkDriverStateTouched(CDriverGL3 *driver);
-	void checkDriverMaterialStateTouched(CDriverGL3 *driver, CMaterial &mat);
-	void checkMaterialStateTouched(CMaterial &mat);
+	// TODO: Restructure — material-derived state (Shader, Flags, TextureActive, TexSamplerMode,
+	// TexEnvMode) should be pushed from setupMaterial. LightMap texture state should be pushed
+	// from setupLightmapPass. These functions are no longer called.
+	// void checkDriverMaterialStateTouched(CDriverGL3 *driver, CMaterial::TShader shader);
+	// void checkMaterialStateTouched(CMaterial &mat, CMaterial::TShader shader);
 };
 
 bool operator<(const CPPBuiltin &left, const CPPBuiltin &right);

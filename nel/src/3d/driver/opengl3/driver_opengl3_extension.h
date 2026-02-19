@@ -189,6 +189,8 @@ extern PFNGLGETPROGRAMIVPROC							nglGetProgramiv;
 extern PFNGLGETPROGRAMINFOLOGPROC						nglGetProgramInfoLog;
 extern PFNGLGETSHADERIVPROC								nglGetShaderiv;
 extern PFNGLGETSHADERINFOLOGPROC						nglGetShaderInfoLog;
+extern PFNGLGETACTIVEUNIFORMPROC						nglGetActiveUniform;
+extern PFNGLGETACTIVEUNIFORMSIVPROC					nglGetActiveUniformsiv;
 extern PFNGLGETUNIFORMLOCATIONPROC						nglGetUniformLocation;
 extern PFNGLISPROGRAMPROC								nglIsProgram;
 extern PFNGLISSHADERPROC								nglIsShader;

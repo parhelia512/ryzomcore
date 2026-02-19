@@ -379,25 +379,7 @@ void			CDriverGL3::setupLightMapDynamicLighting(bool enable)
 	}
 }
 
-// ***************************************************************************
-// CPU-side struct matching the std140 NlLightInfo layout (96 bytes)
-struct CLightTableEntry
-{
-	float dirOrPos[3];     // 0
-	sint32 mode;           // 12
-	float diffuse[4];      // 16
-	float specular[4];     // 32
-	float constAttn;       // 48
-	float linAttn;         // 52
-	float quadAttn;        // 56
-	float spotExp;         // 60
-	float spotDir[3];      // 64
-	float spotCutoff;      // 76
-	float ambient[4];      // 80
-};                         // 96 bytes
-static_assert(sizeof(CLightTableEntry) == 96, "CLightTableEntry must match std140 NlLightInfo layout");
-
-static void packLightToEntry(CLightTableEntry &e, const CLight &light)
+static void packLightToEntry(CLightTableUBOEntry &e, const CLight &light)
 {
 	CLight::TLightMode lmode = light.getMode();
 	e.mode = (sint32)lmode;
@@ -447,10 +429,10 @@ static void packLightToEntry(CLightTableEntry &e, const CLight &light)
 	e.ambient[3] = amb.A;
 }
 
-static void uploadLightUBOData(const CLightTableEntry *entries, sint count, GLuint uboId, sint &uboCapacity)
+static void uploadLightUBOData(CDriverGLStates3 &glStates, const CLightTableUBOEntry *entries, sint count, GLuint uboId, sint &uboCapacity)
 {
-	GLsizeiptr dataSize = count * sizeof(CLightTableEntry);
-	nglBindBuffer(GL_UNIFORM_BUFFER, uboId);
+	GLsizeiptr dataSize = count * sizeof(CLightTableUBOEntry);
+	glStates.forceBindUniformBuffer(uboId);
 
 	if (count > uboCapacity)
 	{
@@ -461,14 +443,14 @@ static void uploadLightUBOData(const CLightTableEntry *entries, sint count, GLui
 	else
 	{
 		// Orphan + rewrite (avoids GPU sync)
-		nglBufferData(GL_UNIFORM_BUFFER, uboCapacity * sizeof(CLightTableEntry), NULL, GL_STREAM_DRAW);
+		nglBufferData(GL_UNIFORM_BUFFER, uboCapacity * sizeof(CLightTableUBOEntry), NULL, GL_STREAM_DRAW);
 		nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, entries);
 	}
 
-	nglBindBuffer(GL_UNIFORM_BUFFER, 0);
+	glStates.forceBindUniformBuffer(0);
 
 	// Bind to the light table binding point
-	nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_LIGHT_TABLE_BINDING, uboId);
+	glStates.forceBindUniformBufferBase(NL_BUILTIN_LIGHT_TABLE_BINDING, uboId);
 }
 
 void CDriverGL3::uploadLightTableUBO()
@@ -496,11 +478,11 @@ void CDriverGL3::uploadLightTableUBO()
 		if (count > maxLights)
 			count = maxLights;
 
-		std::vector<CLightTableEntry> entries(count);
+		std::vector<CLightTableUBOEntry> entries(count);
 		for (sint i = 0; i < count; ++i)
 			packLightToEntry(entries[i], _LightTable[i]);
 
-		uploadLightUBOData(&entries[0], count, _LightTableUBOId, _LightTableUBOCapacity);
+		uploadLightUBOData(_DriverGLStates, &entries[0], count, _LightTableUBOId, _LightTableUBOCapacity);
 		_LightTableDirty = false;
 	}
 	else
@@ -509,31 +491,14 @@ void CDriverGL3::uploadLightTableUBO()
 		if (!_UserLightUBODirty)
 			return;
 
-		CLightTableEntry entries[MaxLight];
+		CLightTableUBOEntry entries[MaxLight];
 		for (uint i = 0; i < MaxLight; ++i)
 			packLightToEntry(entries[i], _UserLight[i]);
 
-		uploadLightUBOData(entries, MaxLight, _LightTableUBOId, _LightTableUBOCapacity);
+		uploadLightUBOData(_DriverGLStates, entries, MaxLight, _LightTableUBOId, _LightTableUBOCapacity);
 		_UserLightUBODirty = false;
 	}
 }
-
-// ***************************************************************************
-// Camera UBO data layout (std140, 240 bytes, matches GLSL NlCamera block)
-struct CCameraUBOData
-{
-	float viewMatrix[16];    // 64
-	float fogColor[4];       // 16
-	float pzbCameraPos[3];   // 12
-	float fogDensity;        //  4
-	float fogParams[2];      //  8
-	sint32 fogMode;          //  4
-	sint32 clipPlaneMask;    //  4
-	float clipPlane[6][4];   // 96
-	float cameraWorldPos[3]; // 12  (inverse view translation: actual camera world position)
-	float _pad0;             //  4
-};                           // 224
-static_assert(sizeof(CCameraUBOData) == 224, "Camera UBO layout mismatch");
 
 void CDriverGL3::uploadCameraUBO()
 {
@@ -592,7 +557,7 @@ void CDriverGL3::uploadCameraUBO()
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CCameraUBOData);
-	nglBindBuffer(GL_UNIFORM_BUFFER, _CameraUBOId);
+	_DriverGLStates.forceBindUniformBuffer(_CameraUBOId);
 
 	if (_CameraUBOCapacity < (sint)dataSize)
 	{
@@ -606,8 +571,8 @@ void CDriverGL3::uploadCameraUBO()
 		nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, &data);
 	}
 
-	nglBindBuffer(GL_UNIFORM_BUFFER, 0);
-	nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_CAMERA_BINDING, _CameraUBOId);
+	_DriverGLStates.forceBindUniformBuffer(0);
+	_DriverGLStates.forceBindUniformBufferBase(NL_BUILTIN_CAMERA_BINDING, _CameraUBOId);
 
 	_CameraUBODirty = false;
 }
@@ -624,10 +589,7 @@ void CDriverGL3::enableClipPlane(uint index, bool enable)
 	// Enable/disable GL clip distance (for builtin VPs that write gl_ClipDistance)
 	if (!m_PPClipPlanes)
 	{
-		if (enable)
-			glEnable(GL_CLIP_DISTANCE0 + index);
-		else
-			glDisable(GL_CLIP_DISTANCE0 + index);
+		_DriverGLStates.enableClipDistance(index, enable);
 	}
 
 	// Trigger VP regeneration to include/exclude gl_ClipDistance output
@@ -665,30 +627,6 @@ void CDriverGL3::setClipPlane(uint index, const NLMISC::CPlane &plane)
 	_ClipPlaneEye[index][3] = invPos.x * pa + invPos.y * pb + invPos.z * pc + pd;
 	_CameraUBODirty = true;
 }
-
-// ***************************************************************************
-// Per-Object UBO data layout (std140, 304 bytes, matches GLSL NlModel block)
-struct CObjectUBOData
-{
-	float modelViewProjection[16]; // 64
-	float modelView[16];           // 64
-	float normalMatrix[12];        // 48 (3 cols × {x,y,z,pad} for std140 mat3)
-	sint32 lightIndices01[4];      // 16
-	sint32 lightIndices45[4];      // 16
-	float lightFactors01[4];       // 16
-	float lightFactors45[4];       // 16
-	float selfIllumination[4];     // 16
-	sint32 texGenMode[4];          // 16
-	sint32 lighting;               // 4
-	sint32 vertexColorLighted;     // 4
-	sint32 vertexFormat;           // 4
-	sint32 worldSpaceNormal;       // 4
-	sint32 worldSpacePosition;     // 4
-	sint32 numPerPixelLights;      // 4
-	sint32 fogEnabled;             // 4
-	sint32 _pad[1];                // 4 (pad to 16-byte std140 alignment)
-};                                 // 304
-static_assert(sizeof(CObjectUBOData) == 304, "Object UBO layout mismatch");
 
 void CDriverGL3::uploadObjectUBO()
 {
@@ -785,7 +723,7 @@ void CDriverGL3::uploadObjectUBO()
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CObjectUBOData);
-	nglBindBuffer(GL_UNIFORM_BUFFER, _ObjectUBOId);
+	_DriverGLStates.forceBindUniformBuffer(_ObjectUBOId);
 
 	if (_ObjectUBOCapacity < (sint)dataSize)
 	{
@@ -799,30 +737,9 @@ void CDriverGL3::uploadObjectUBO()
 		nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, &data);
 	}
 
-	nglBindBuffer(GL_UNIFORM_BUFFER, 0);
-	nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_MODEL_BINDING, _ObjectUBOId);
+	_DriverGLStates.forceBindUniformBuffer(0);
+	_DriverGLStates.forceBindUniformBufferBase(NL_BUILTIN_MODEL_BINDING, _ObjectUBOId);
 }
-
-// ***************************************************************************
-// Per-Material UBO data layout (std140, 96 bytes, matches GLSL NlMaterial block)
-struct CMaterialUBOData
-{
-	float materialColor[4];        // 16
-	float materialDiffuse[4];      // 16
-	float materialSpecular[4];     // 16
-	float materialShininess;       // 4
-	float alphaRef;                // 4
-	sint32 nlShader;               // 4
-	sint32 nlTextureActive;        // 4
-	sint32 nlAlphaTest;            // 4
-	uint32 nlTexEnvMode[4];        // 16 (4 separate uint in GLSL, not an array — avoids std140 vec4 padding)
-	float nlLightMapScale;         // 4
-	sint32 _pad[2];               // 8
-	float constant[4][4];          // 64 (TexEnv constant colors, PP)
-	float embmMatrix[4][4];        // 64 (EMBM matrices, PP)
-	float texMatrix[4][16];        // 256 (texture matrices, VP — mat4 stored column-major)
-};                                 // 480
-static_assert(sizeof(CMaterialUBOData) == 480, "Material UBO layout mismatch");
 
 void CDriverGL3::uploadMaterialUBO()
 {
@@ -832,159 +749,23 @@ void CDriverGL3::uploadMaterialUBO()
 	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
 	if (!matDrv) return;
 
-	// Lightmap multipass: upload to global override buffer, not per-material cache.
-	// This avoids corrupting the per-material MaterialUBOId with per-pass overrides
-	// (materialDiffuse/Specular change per pass). TextureActive also changes per
-	// lightmap pass (via checkDriverMaterialStateTouched) but is read from PPBuiltin.
-	if (_LightMapUBOOverride.Active)
+	// Upload and bind the active material UBO slot.
+	// Slot 0 = base material (from setupMaterial/setupNormalPass).
+	// Slots 1..N = per-pass overrides (from setupLightMapPass, etc.).
+	uint slot = matDrv->MaterialUBOCurrent;
+	if (matDrv->MaterialUBOTouched[slot])
 	{
-		CMaterialUBOData data;
-
-		// Material color (from material)
-		CRGBA col = mat.getColor();
-		data.materialColor[0] = col.R / 255.0f;
-		data.materialColor[1] = col.G / 255.0f;
-		data.materialColor[2] = col.B / 255.0f;
-		data.materialColor[3] = col.A / 255.0f;
-
-		// Overridden diffuse and specular
-		memcpy(data.materialDiffuse, _LightMapUBOOverride.MaterialDiffuse, sizeof(data.materialDiffuse));
-		memcpy(data.materialSpecular, _LightMapUBOOverride.MaterialSpecular, sizeof(data.materialSpecular));
-
-		data.materialShininess = mat.getShininess();
-		data.alphaRef = mat.getAlphaTestThreshold();
-
-		int shaderInt = 0;
-		switch (matDrv->PPBuiltin.Shader)
-		{
-		case CMaterial::Normal:    shaderInt = 0; break;
-		case CMaterial::UserColor: shaderInt = 1; break;
-		case CMaterial::Specular:  shaderInt = 2; break;
-		case CMaterial::LightMap:  shaderInt = 3; break;
-		default:                   shaderInt = 0; break;
-		}
-		data.nlShader = shaderInt;
-		data.nlTextureActive = (sint32)matDrv->PPBuiltin.TextureActive;
-		data.nlAlphaTest = (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0;
-		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-			data.nlTexEnvMode[i] = matDrv->PPBuiltin.TexEnvMode[i];
-		data.nlLightMapScale = _LightMapUBOOverride.LightMapScale;
-		data._pad[0] = 0; data._pad[1] = 0;
-
-		// Lightmap factor constants (staged in _LightMapUBOOverride.Constants)
-		memcpy(data.constant, _LightMapUBOOverride.Constants, sizeof(data.constant));
-		// EMBM not used in lightmap pass
-		memset(data.embmMatrix, 0, sizeof(data.embmMatrix));
-		// TexMatrix (lightmap doesn't use user tex mat, but pack current state anyway)
-		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-			memcpy(data.texMatrix[i], _UserTexMat[i].get(), 16 * sizeof(float));
+		if (!matDrv->MaterialUBOId[slot])
+			nglGenBuffers(1, &matDrv->MaterialUBOId[slot]);
 
 		const GLsizeiptr dataSize = sizeof(CMaterialUBOData);
-		nglBindBuffer(GL_UNIFORM_BUFFER, _OverrideMaterialUBOId);
-		nglBufferData(GL_UNIFORM_BUFFER, dataSize, &data, GL_STREAM_DRAW);
-		nglBindBuffer(GL_UNIFORM_BUFFER, 0);
-		nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_MATERIAL_BINDING, _OverrideMaterialUBOId);
-		return;
+		_DriverGLStates.forceBindUniformBuffer(matDrv->MaterialUBOId[slot]);
+		nglBufferData(GL_UNIFORM_BUFFER, dataSize, &matDrv->MaterialUBO[slot], GL_STREAM_DRAW);
+		_DriverGLStates.forceBindUniformBuffer(0);
+		matDrv->MaterialUBOTouched[slot] = false;
 	}
 
-	// Per-material cache: skip re-pack if nothing changed since last upload.
-	// MaterialUBODirty is set by setupMaterial() (CMaterial property changes) and
-	// by PP setup (PPBuiltin.MaterialUBOTouched for shader/flags/textureActive/texEnvMode).
-	if (!matDrv->MaterialUBODirty && matDrv->MaterialUBOId)
-	{
-		// Just bind the existing buffer
-		nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_MATERIAL_BINDING, matDrv->MaterialUBOId);
-		return;
-	}
-
-	// Create buffer if needed
-	if (!matDrv->MaterialUBOId)
-		nglGenBuffers(1, &matDrv->MaterialUBOId);
-
-	CMaterialUBOData data;
-
-	// Material color
-	CRGBA col = mat.getColor();
-	data.materialColor[0] = col.R / 255.0f;
-	data.materialColor[1] = col.G / 255.0f;
-	data.materialColor[2] = col.B / 255.0f;
-	data.materialColor[3] = col.A / 255.0f;
-
-	// Material diffuse (raw, not adjusted for vertexColorLighted)
-	CRGBA diff = mat.getDiffuse();
-	data.materialDiffuse[0] = diff.R / 255.0f;
-	data.materialDiffuse[1] = diff.G / 255.0f;
-	data.materialDiffuse[2] = diff.B / 255.0f;
-	data.materialDiffuse[3] = diff.A / 255.0f;
-
-	// Material specular
-	CRGBA spec = mat.getSpecular();
-	data.materialSpecular[0] = spec.R / 255.0f;
-	data.materialSpecular[1] = spec.G / 255.0f;
-	data.materialSpecular[2] = spec.B / 255.0f;
-	data.materialSpecular[3] = spec.A / 255.0f;
-
-	// Material shininess
-	data.materialShininess = mat.getShininess();
-
-	// Alpha ref
-	data.alphaRef = mat.getAlphaTestThreshold();
-
-	// Shader type
-	int shaderInt = 0;
-	switch (matDrv->PPBuiltin.Shader)
-	{
-	case CMaterial::Normal:    shaderInt = 0; break;
-	case CMaterial::UserColor: shaderInt = 1; break;
-	case CMaterial::Specular:  shaderInt = 2; break;
-	case CMaterial::LightMap:  shaderInt = 3; break;
-	default:                   shaderInt = 0; break;
-	}
-	data.nlShader = shaderInt;
-
-	// Texture active
-	data.nlTextureActive = (sint32)matDrv->PPBuiltin.TextureActive;
-
-	// Alpha test
-	data.nlAlphaTest = (matDrv->PPBuiltin.Flags & IDRV_MAT_ALPHA_TEST) ? 1 : 0;
-
-	// TexEnv modes
-	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-		data.nlTexEnvMode[i] = matDrv->PPBuiltin.TexEnvMode[i];
-
-	// Lightmap scale (1.0 default; override path sets per-pass value)
-	data.nlLightMapScale = 1.0f;
-
-	// Padding
-	data._pad[0] = 0;
-	data._pad[1] = 0;
-
-	// TexEnv constant colors (PP)
-	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-	{
-		CRGBA cc = mat._TexEnvs[i].ConstantColor;
-		data.constant[i][0] = cc.R / 255.0f;
-		data.constant[i][1] = cc.G / 255.0f;
-		data.constant[i][2] = cc.B / 255.0f;
-		data.constant[i][3] = cc.A / 255.0f;
-	}
-
-	// EMBM matrices (PP)
-	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-		memcpy(data.embmMatrix[i], _EMBMMatrix[i], 4 * sizeof(float));
-
-	// Texture matrices (VP, column-major mat4)
-	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-		memcpy(data.texMatrix[i], _UserTexMat[i].get(), 16 * sizeof(float));
-
-	// Upload
-	const GLsizeiptr dataSize = sizeof(CMaterialUBOData);
-	nglBindBuffer(GL_UNIFORM_BUFFER, matDrv->MaterialUBOId);
-	nglBufferData(GL_UNIFORM_BUFFER, dataSize, &data, GL_STREAM_DRAW);
-	nglBindBuffer(GL_UNIFORM_BUFFER, 0);
-	nglBindBufferBase(GL_UNIFORM_BUFFER, NL_BUILTIN_MATERIAL_BINDING, matDrv->MaterialUBOId);
-
-	matDrv->MaterialUBODirty = false;
+	_DriverGLStates.bindUniformBufferBase(NL_BUILTIN_MATERIAL_BINDING, matDrv->MaterialUBOId[slot]);
 }
 
 } // NLDRIVERGL3

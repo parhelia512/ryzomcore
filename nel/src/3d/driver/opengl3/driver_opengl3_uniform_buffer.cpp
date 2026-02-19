@@ -103,21 +103,21 @@ const char *GLSLMaterialHeader =
 	"    int   nlShader;\n"
 	"    int   nlTextureActive;\n"
 	"    int   nlAlphaTest;\n"
+	"    float nlLightMapScale;\n"
+	"    int   _matPad0;\n"
+	"    int   _matPad1;\n"
 	"    uint  nlTexEnvMode0;\n"
 	"    uint  nlTexEnvMode1;\n"
 	"    uint  nlTexEnvMode2;\n"
 	"    uint  nlTexEnvMode3;\n"
-	"    float nlLightMapScale;\n"
-	"    int   _matPad0;\n"
-	"    int   _matPad1;\n"
 	"    vec4  constant0;\n"
 	"    vec4  constant1;\n"
 	"    vec4  constant2;\n"
 	"    vec4  constant3;\n"
-	"    vec4  embmMatrix0;\n"
-	"    vec4  embmMatrix1;\n"
-	"    vec4  embmMatrix2;\n"
-	"    vec4  embmMatrix3;\n"
+	"    vec4  constant4;\n"  // EMBM matrix stage 0 (Normal/UserColor) or lightmap factor 4 (LightMap)
+	"    vec4  constant5;\n"  // EMBM matrix stage 1 or lightmap factor 5
+	"    vec4  constant6;\n"  // EMBM matrix stage 2 or lightmap factor 6
+	"    vec4  constant7;\n"  // EMBM matrix stage 3 or lightmap factor 7
 	"    mat4  texMatrix0;\n"
 	"    mat4  texMatrix1;\n"
 	"    mat4  texMatrix2;\n"
@@ -242,7 +242,7 @@ bool CDriverGL3::bindUniformBuffer(TUBBinding binding, CUniformBuffer *ub)
 		// Immediate unbind — avoid dangling pointer if buffer is released before next flush
 		if (_UserUBBoundId[binding])
 		{
-			nglBindBufferBase(GL_UNIFORM_BUFFER, s_UBBindingToGL[binding], 0);
+			_DriverGLStates.forceBindUniformBufferBase(s_UBBindingToGL[binding], 0);
 			_UserUBBoundId[binding] = 0;
 		}
 	}
@@ -264,7 +264,7 @@ void CDriverGL3::flushUserUBOs()
 			// Detect auto-nullification: CRefPtr cleared it behind our back
 			if (_UserUBBoundId[i])
 			{
-				nglBindBufferBase(GL_UNIFORM_BUFFER, s_UBBindingToGL[i], 0);
+				_DriverGLStates.forceBindUniformBufferBase(s_UBBindingToGL[i], 0);
 				_UserUBBoundId[i] = 0;
 			}
 			continue;
@@ -287,7 +287,7 @@ void CDriverGL3::flushUserUBOs()
 			sint dataSize = ub->Format.size();
 			GLenum usage = usageHintToGL(ub->UsageHint);
 
-			nglBindBuffer(GL_UNIFORM_BUFFER, info->getBufferId());
+			_DriverGLStates.forceBindUniformBuffer(info->getBufferId());
 
 			if (info->getCapacity() < dataSize)
 			{
@@ -309,7 +309,7 @@ void CDriverGL3::flushUserUBOs()
 		GLuint bufId = info->getBufferId();
 		if (_UserUBBoundId[i] != bufId)
 		{
-			nglBindBufferBase(GL_UNIFORM_BUFFER, s_UBBindingToGL[i], bufId);
+			_DriverGLStates.forceBindUniformBufferBase(s_UBBindingToGL[i], bufId);
 			_UserUBBoundId[i] = bufId;
 		}
 	}

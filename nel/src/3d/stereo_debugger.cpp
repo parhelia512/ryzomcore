@@ -143,7 +143,7 @@ const char *a_glsl300esf =
 	"precision highp float;\n"
 	"precision highp int;\n"
 	"out vec4 fragColor;\n"
-	"layout(location = 8) smooth in vec4 texCoord0;\n"
+	"smooth in vec4 texCoord0;\n"
 	"uniform sampler2D sampler0;\n"
 	"uniform sampler2D sampler1;\n"
 	"void main()\n"
@@ -264,10 +264,9 @@ void CStereoDebugger::setDriver(NL3D::UDriver *driver)
 		{
 			IProgram::CSource *source = new IProgram::CSource();
 			source->Features.MaterialFlags = CProgramFeatures::TextureStages;
-			source->Features.PipelineStage = true;
 			source->Features.NoUniforms = true;
 			source->Profile = IProgram::glsl300esf;
-			source->DisplayName = "glsl300esf/StereoDebug/PipelineStage";
+			source->DisplayName = "glsl300esf/StereoDebug";
 			source->setSourcePtr(a_glsl300esf);
 			m_PixelProgram->addSource(source);
 		}

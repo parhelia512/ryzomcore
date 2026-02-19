@@ -3,7 +3,7 @@
 //
 // This source file has been modified by the following contributors:
 // Copyright (C) 2013  Laszlo KIS-ADAM (dfighter) <dfighter1985@gmail.com>
-// Copyright (C) 2014  Jan BOON (Kaetemi) <jan.boon@kaetemi.be>
+// Copyright (C) 2014-2026  Jan BOON (Kaetemi) <jan.boon@kaetemi.be>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as
@@ -27,103 +27,286 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
-// ***************************************************************************
 /**
- * Class for optimizing GL3 core profile state calls by caching previous values.
- * All following GL calls must go through a single instance of this class:
- *   - glEnable() / glDisable(): GL_BLEND, GL_CULL_FACE, GL_STENCIL_TEST
- *   - glBlendFunc()
- *   - glDepthMask()
- *   - glDepthFunc()
- *   - glDepthRange()
- *   - glStencilFunc(), glStencilOp(), glStencilMask()
- *   - glCullFace()
- *   - glActiveTexture()
- *   - glEnableVertexAttribArray() / glDisableVertexAttribArray()
- *   - glBindBuffer(GL_ARRAY_BUFFER)
+ * @brief GL3 core profile state cache.
+ *
+ * Optimizes GL state changes by caching previous values and skipping
+ * redundant calls. All GL state listed below must go through this class;
+ * direct GL calls will desynchronize the cache.
+ *
+ * Define @c NL3D_GLSTATE_DISABLE_CACHE to bypass all cache checks
+ * (forces every GL call through, useful for debugging).
+ *
+ * @par Managed GL calls
+ * - Rasterizer: glEnable/glDisable(GL_CULL_FACE), glCullFace(), glPolygonMode()
+ * - Fragment ops: glEnable/glDisable(GL_BLEND), glBlendFunc(),
+ *   glDepthMask(), glDepthFunc(),
+ *   glEnable/glDisable(GL_STENCIL_TEST), glStencilFunc(), glStencilOp(), glStencilMask(),
+ *   glColorMask()
+ * - Viewport/scissor: glViewport(), glEnable/glDisable(GL_SCISSOR_TEST), glScissor()
+ * - Depth range: glDepthRange()
+ * - Clip planes: glEnable/glDisable(GL_CLIP_DISTANCE0..5)
+ * - Vertex input: glEnableVertexAttribArray(), glDisableVertexAttribArray(),
+ *   glBindBuffer(GL_ARRAY_BUFFER)
+ * - Textures: glActiveTexture(), glBindTexture()
+ * - Framebuffer: glBindFramebuffer(GL_FRAMEBUFFER)
+ * - Shader programs: glUseProgram(), glBindProgramPipeline()
+ * - Buffer objects: glBindBuffer(GL_UNIFORM_BUFFER),
+ *   glBindBufferBase(GL_UNIFORM_BUFFER),
+ *   glBindBuffer(GL_PIXEL_UNPACK_BUFFER)
  */
 class CDriverGLStates3
 {
 public:
-	/// Constructor. no-op.
+	/// @name Lifecycle
+	/// @{
+
 	CDriverGLStates3();
-	// init. Do it just after setDisplay()
+
+	/**
+	 * @brief Create and bind the single default VAO required by core profile.
+	 *
+	 * Must be called once after the GL context is current and extensions are loaded.
+	 * The driver uses exactly one VAO for its entire lifetime; vertex attrib
+	 * enable/disable state (which is per-VAO in GL 3.3) is cached here as if
+	 * it were context state since there is only ever one VAO.
+	 */
 	void init();
 
-	/// Reset all OpenGL states of interest to default, and update caching.
-	void forceDefaults(uint nbTextureStages);
+	/// Delete the default VAO. Call while the GL context is still current.
+	void release();
 
-	/// \name enable if !0
-	// @{
-	void enableBlend(uint enable);
+	/**
+	 * @brief Reset cached rendering state to defaults and update the GL context.
+	 *
+	 * Resets: blend, cull, depth write, stencil, scissor test, color mask,
+	 * polygon mode, clip distances, blend/depth/stencil functions,
+	 * depth range, and cull order.
+	 *
+	 * Does @b not reset: active texture unit, viewport, scissor rect,
+	 * vertex attrib arrays, buffer bindings, texture bindings, framebuffer,
+	 * or shader programs (these are caller-specific or managed by their
+	 * own subsystem).
+	 */
+	void forceDefaults();
+
+	/// @}
+
+	// =========================================================================
+	// Rendering state -- reset by forceDefaults()
+	// =========================================================================
+
+	/// @name Rasterizer state
+	/// @{
+
+	enum TCullMode { CCW = 0, CW };
+
+	/// glEnable/glDisable(GL_CULL_FACE).
 	void enableCullFace(uint enable);
-	/// glDepthMask.
+
+	/// glCullFace(). CCW = GL_BACK, CW = GL_FRONT.
+	void setCullMode(TCullMode cullMode);
+	TCullMode getCullMode() const;
+
+	/// glPolygonMode(GL_FRONT_AND_BACK, mode).
+	void polygonMode(GLenum mode);
+
+	/// @}
+
+	/// @name Fragment operations
+	/// @{
+
+	/// glEnable/glDisable(GL_BLEND).
+	void enableBlend(uint enable);
+
+	/// glBlendFunc().
+	void blendFunc(GLenum src, GLenum dst);
+
+	/// glBlendColor().
+	void blendColor(NLMISC::CRGBA color);
+	NLMISC::CRGBA getBlendColor() const { return m_CurBlendColor; }
+
+	/// glDepthMask().
 	void enableZWrite(uint enable);
-	/// enable/disable stencil test
+
+	/// glDepthFunc().
+	void depthFunc(GLenum zcomp);
+
+	/// glEnable/glDisable(GL_STENCIL_TEST).
 	void enableStencilTest(bool enable);
 	bool isStencilTestEnabled() const { return m_CurStencilTest; }
-	// @}
 
-	/// glBlendFunc.
-	void blendFunc(GLenum src, GLenum dst);
-	/// glDepthFunc.
-	void depthFunc(GLenum zcomp);
-	/// glStencilFunc
+	/// glStencilFunc().
 	void stencilFunc(GLenum stencilFunc, GLint ref, GLuint mask);
-	/// glStencilOp
+
+	/// glStencilOp().
 	void stencilOp(GLenum fail, GLenum zfail, GLenum zpass);
-	/// glStencilMask
+
+	/// glStencilMask().
 	void stencilMask(uint mask);
 
-	/// \name Depth range.
-	// @{
+	/// glColorMask().
+	void colorMask(bool red, bool green, bool blue, bool alpha);
+
+	/// @}
+
+	/// @name Scissor test
+	/// @{
+
+	/// glEnable/glDisable(GL_SCISSOR_TEST).
+	void enableScissorTest(bool enable);
+
+	/// @}
+
+	/// @name Depth range
+	/// @{
+
+	/// glDepthRange(). Applies z-bias offset internally.
 	void setDepthRange(float znear, float zfar);
+
 	void getDepthRange(float &znear, float &zfar) const
 	{
 		znear = m_DepthRangeNear;
 		zfar = m_DepthRangeFar;
 	}
-	/** Set z-bias
-	 * NB : this is done in window coordinate, not in world coordinate as with CMaterial
-	 */
+
+	/// Set z-bias in window coordinates (not world coordinates as with CMaterial).
 	void setZBias(float zbias);
-	// @}
 
-	/// \name Active texture unit.
-	// @{
-	/// glActiveTexture.
+	/// @}
+
+	/// @name Clip planes
+	/// @{
+
+	/// glEnable/glDisable(GL_CLIP_DISTANCE0 + index). Index must be < 6.
+	void enableClipDistance(uint index, bool enable);
+
+	/// @}
+
+	// =========================================================================
+	// Geometry state -- NOT reset by forceDefaults()
+	// Caller-specific; tied to the window or render target dimensions.
+	// =========================================================================
+
+	/// @name Viewport and scissor rect
+	/// @{
+
+	/// glViewport().
+	void viewport(sint x, sint y, sint width, sint height);
+
+	/// glScissor().
+	void scissor(sint x, sint y, sint width, sint height);
+
+	/// @}
+
+	// =========================================================================
+	// Binding state -- NOT reset by forceDefaults()
+	// These are caller-specific or managed by their own subsystem.
+	// =========================================================================
+
+	/// @name Vertex input
+	/// @{
+	/// @note Vertex attrib enable/disable is per-VAO state in GL 3.3 core profile,
+	/// but is cached here as context state because the driver uses a single default VAO.
+
+	/// glBindVertexArray(). Bind a VAO other than the default.
+	/// Attrib enable cache is only valid for the default VAO.
+	void bindVertexArray(GLuint id);
+	void forceBindVertexArray(GLuint id);
+
+	/// glEnableVertexAttribArray() / glDisableVertexAttribArray().
+	/// Operates on the default VAO only. If another VAO is currently bound,
+	/// the default VAO will be rebound before modifying attrib state.
+	void enableVertexAttribArray(uint glIndex, bool enable);
+
+	/// glBindBuffer(GL_ARRAY_BUFFER). Context state, not per-VAO.
+	void bindArrayBuffer(uint objectID);
+	void forceBindArrayBuffer(uint objectID);
+	uint getCurrBoundArrayBuffer() const { return m_CurrArrayBuffer; }
+
+	/// @}
+
+	/// @name Texture state
+	/// @{
+	/// @note activeTexture() is an API selector (determines which unit glBindTexture
+	/// targets), not rendering state. All callers explicitly set the unit before
+	/// texture work.
+
+	/// glActiveTexture(GL_TEXTURE0 + stage).
 	void activeTexture(uint stage);
-	/// glActiveTexture without cache check
-	void forceActiveTexture(uint stage);
-	/// get active texture
 	uint getActiveTexture() const { return m_CurrentActiveTexture; }
-	// @}
 
-	/// glEnableVertexAttribArray / glDisableVertexAttribArray.
-	void enableVertexAttribArrayARB(uint glIndex, bool enable);
+	/// glBindTexture(). Operates on the current active texture unit.
+	/// Cache is keyed by both target and id per unit.
+	void bindTexture(GLenum target, GLuint id);
+	void forceBindTexture(GLenum target, GLuint id);
 
-	/// glBindBuffer(GL_ARRAY_BUFFER).
-	void bindARBVertexBuffer(uint objectID);
-	void forceBindARBVertexBuffer(uint objectID);
-	uint getCurrBoundARBVertexBuffer() const { return m_CurrARBVertexBuffer; }
+	/// @}
 
-	enum TCullMode
-	{
-		CCW = 0,
-		CW
-	};
-	void setCullMode(TCullMode cullMode);
-	TCullMode getCullMode() const;
+	/// @name Framebuffer
+	/// @{
+
+	/// glBindFramebuffer(GL_FRAMEBUFFER).
+	void bindFramebuffer(GLuint id);
+	void forceBindFramebuffer(GLuint id);
+	GLuint getCurrBoundFramebuffer() const { return m_CurFramebuffer; }
+
+	/// @}
+
+	/// @name Shader programs
+	/// @{
+
+	/// glUseProgram().
+	void useProgram(GLuint id);
+	void forceUseProgram(GLuint id);
+	GLuint getCurrUsedProgram() const { return m_CurProgram; }
+
+	/// glBindProgramPipeline().
+	void bindProgramPipeline(GLuint id);
+	void forceBindProgramPipeline(GLuint id);
+	GLuint getCurrBoundProgramPipeline() const { return m_CurProgramPipeline; }
+
+	/// @}
+
+	/// @name Buffer objects
+	/// @{
+
+	/// glBindBuffer(GL_UNIFORM_BUFFER). For data upload; not an indexed binding point.
+	void bindUniformBuffer(GLuint id);
+	void forceBindUniformBuffer(GLuint id);
+	GLuint getCurrBoundUniformBuffer() const { return m_CurUniformBuffer; }
+
+	/// glBindBufferBase(GL_UNIFORM_BUFFER, binding, bufferId). Indexed binding points.
+	void bindUniformBufferBase(GLuint binding, GLuint bufferId);
+	void forceBindUniformBufferBase(GLuint binding, GLuint bufferId);
+
+	/// glBindBuffer(GL_PIXEL_UNPACK_BUFFER). For texture upload via PBO.
+	void bindPixelUnpackBuffer(GLuint id);
+	void forceBindPixelUnpackBuffer(GLuint id);
+	GLuint getCurrBoundPixelUnpackBuffer() const { return m_CurPixelUnpackBuffer; }
+
+	/// @}
 
 private:
-	bool m_CurBlend;
-	bool m_CurCullFace;
-	bool m_CurZWrite;
-	bool m_CurStencilTest;
+	// =========================================================================
+	// Rendering state (reset by forceDefaults)
+	// =========================================================================
 
+	// Rasterizer
+	bool m_CurCullFace;
+	TCullMode m_CullMode;
+	GLenum m_CurPolygonMode;
+
+	// Fragment operations
+	bool m_CurBlend;
 	GLenum m_CurBlendSrc;
 	GLenum m_CurBlendDst;
+	NLMISC::CRGBA m_CurBlendColor;
+
+	bool m_CurZWrite;
 	GLenum m_CurDepthFunc;
+
+	bool m_CurStencilTest;
 	GLenum m_CurStencilFunc;
 	GLint m_CurStencilRef;
 	GLuint m_CurStencilMask;
@@ -132,20 +315,58 @@ private:
 	GLenum m_CurStencilOpZPass;
 	GLuint m_CurStencilWriteMask;
 
-	uint m_CurrentActiveTexture;
+	bool m_CurColorMaskR, m_CurColorMaskG, m_CurColorMaskB, m_CurColorMaskA;
 
-	bool m_VertexAttribArrayEnabled[CVertexBuffer::NumValue];
+	// Scissor test
+	bool m_CurScissorTest;
 
-	uint m_CurrARBVertexBuffer;
-
+	// Depth range
 	float m_DepthRangeNear;
 	float m_DepthRangeFar;
-	float m_ZBias; // NB : zbias is in window coordinates
+	float m_ZBias;
 
-	TCullMode m_CullMode;
-
-private:
 	void updateDepthRange();
+
+	// Clip planes
+	enum { MaxClipDistances = 6 };
+	bool m_CurClipDistance[MaxClipDistances];
+
+	// =========================================================================
+	// Geometry state (NOT reset by forceDefaults)
+	// =========================================================================
+
+	// Viewport and scissor rect
+	sint m_CurViewportX, m_CurViewportY, m_CurViewportWidth, m_CurViewportHeight;
+	sint m_CurScissorX, m_CurScissorY, m_CurScissorWidth, m_CurScissorHeight;
+
+	// =========================================================================
+	// Binding state (NOT reset by forceDefaults)
+	// =========================================================================
+
+	// Vertex input
+	GLuint m_DefaultVAO;
+	GLuint m_CurVAO;
+	bool m_VertexAttribArrayEnabled[CVertexBuffer::NumValue];
+	uint m_CurrArrayBuffer;
+
+	// Texture state
+	uint m_CurrentActiveTexture;
+	enum { MaxTextureUnits = 8 };
+	GLenum m_CurTextureTarget[MaxTextureUnits];
+	GLuint m_CurTexture[MaxTextureUnits];
+
+	// Framebuffer
+	GLuint m_CurFramebuffer;
+
+	// Shader programs
+	GLuint m_CurProgram;
+	GLuint m_CurProgramPipeline;
+
+	// Buffer objects
+	GLuint m_CurUniformBuffer;
+	enum { MaxUBOBindings = 8 };
+	GLuint m_CurUniformBufferBase[MaxUBOBindings];
+	GLuint m_CurPixelUnpackBuffer;
 };
 
 } // NLDRIVERGL3
@@ -153,4 +374,4 @@ private:
 
 #endif // NL_DRIVER_OPENGL3_STATES_H
 
-/* End of driver_opengl_states.h */
+/* end of file */

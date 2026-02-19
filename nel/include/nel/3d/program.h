@@ -36,7 +36,10 @@
 
 namespace NL3D {
 
-static const uint32 IDRV_PROGRAM_MAXSAMPLERS = 32;
+// Max sampler/constant stages for the GL3 driver.
+// Raising this increases megashader code size (unrolled per-stage) and material UBO size.
+// GL 3.3 guarantees 16 fragment texture units; some hardware supports 32.
+static const uint32 IDRV_PROGRAM_MAXSAMPLERS = 8;
 
 // List typedef.
 class	IDriver;
@@ -75,7 +78,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), OutputsWorldSpacePosition(false), InputsWorldSpaceNormal(false), InputsWorldSpacePosition(false), SupportPPL(false), NoUniforms(false), NoBuiltinUniforms(false), OnlyUBOs(false), PipelineStage(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), OutputsWorldSpacePosition(false), InputsWorldSpaceNormal(false), InputsWorldSpacePosition(false), SupportPPL(false), NoUniforms(false), NoBuiltinUniforms(false), OnlyUBOs(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -147,13 +150,6 @@ struct CProgramFeatures
 	/// The driver skips the per-draw getUniformIndex/glProgramUniform calls
 	/// for this program stage but still uploads UBOs.
 	bool OnlyUBOs;
-
-	/// When set, the program is compiled as a pipeline stage (non-SSO):
-	/// glCreateShader + glCompileShader + glCreateProgram + glAttachShader + glLinkProgram,
-	/// keeping the shader object attached for later extraction and linking into
-	/// a combined VP+PP program. When false (default), uses nglCreateShaderProgramv
-	/// for separable SSO programs.
-	bool PipelineStage;
 
 	// UBO flags
 	/// Whether this VP reads lights from a UBO light table + per-object indices/factors.

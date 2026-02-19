@@ -68,7 +68,7 @@ namespace NLDRIVERGL3 {
 
 namespace /* anonymous */ {
 
-#define MEGA_PP_MAX_SAMPLERS 8
+#define MEGA_PP_MAX_SAMPLERS IDRV_PROGRAM_MAXSAMPLERS
 
 // Packed accessors for light indices/factors in object UBO (used by PPL path)
 static const char *s_LightIdxAccess[8] = {
@@ -111,24 +111,37 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	ss << std::endl;
 
 	// Varying inputs (all declared unconditionally)
+	// layout(location) qualifiers required for SSO (glsl330f), not allowed for linked (glsl300esf)
 	for (int i = Weight; i < NumOffsets; ++i)
 	{
 		if (i == PrimaryColor || i == SecondaryColor)
 			continue;
 		if (fogOrPpl && i == VaryingLocationVertexColor)
 			continue; // Slot used by vertexColor
-		ss << "layout(location = " << i << ") smooth in vec4 " << g_AttribNames[i] << ";" << std::endl;
+		if (!linked)
+			ss << "layout(location = " << i << ") ";
+		ss << "smooth in vec4 " << g_AttribNames[i] << ";" << std::endl;
 	}
 	ss << std::endl;
 
 	if (fogOrPpl)
 	{
-		ss << "layout(location = " << VaryingLocationEcPos << ") smooth in vec4 ecPos;" << std::endl;
-		ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
+		if (!linked)
+			ss << "layout(location = " << VaryingLocationEcPos << ") ";
+		ss << "smooth in vec4 ecPos;" << std::endl;
+		if (!linked)
+			ss << "layout(location = " << VaryingLocationVertexColor << ") ";
+		ss << "smooth in vec4 vertexColor;" << std::endl;
 	}
-	ss << "layout(location = " << VaryingLocationDiffuseColor << ") smooth in vec4 diffuseColor;" << std::endl;
+	if (!linked)
+		ss << "layout(location = " << VaryingLocationDiffuseColor << ") ";
+	ss << "smooth in vec4 diffuseColor;" << std::endl;
 	if (specular)
-		ss << "layout(location = " << VaryingLocationSpecularColor << ") smooth in vec4 specularColor;" << std::endl;
+	{
+		if (!linked)
+			ss << "layout(location = " << VaryingLocationSpecularColor << ") ";
+		ss << "smooth in vec4 specularColor;" << std::endl;
+	}
 	ss << std::endl;
 
 	// Samplers
@@ -165,10 +178,9 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	}
 	else
 	{
-		// constant0-3 and embmMatrix0-3 are in the material UBO.
-		// constant4-7 remain as individual uniforms for lightmap factors.
-		for (int i = IDRV_MAT_MAXTEXTURES; i < MEGA_PP_MAX_SAMPLERS; ++i)
-			ss << "uniform vec4 constant" << i << ";" << std::endl;
+		// constant0-3: TexEnv constant colors (Normal/UserColor) in material UBO
+		// constant4-7: EMBM matrices (Normal/UserColor) or lightmap factors (LightMap) in material UBO
+		// — mutually exclusive by shader type, so they share the same UBO slots
 	}
 	ss << std::endl;
 
@@ -523,7 +535,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		// UserColor: texel1 = texel0 (same texture sampled once)
 		if (i == 1)
 		{
-			ss << "    if (nlShader == 1) { texel1 = texel0; } else {" << std::endl;
+			ss << "    if (nlShader == " << (int)CMaterial::UserColor << ") { texel1 = texel0; } else {" << std::endl;
 		}
 
 		// Determine texcoord
@@ -534,7 +546,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 			if (i == 0)
 			{
 				// Stage 0: LightMap checks if more stages follow
-				ss << "    if (nlShader == 3 && (nlTextureActive & " << (1 << (i + 1)) << ") != 0)" << std::endl;
+				ss << "    if (nlShader == " << (int)CMaterial::LightMap << " && (nlTextureActive & " << (1 << (i + 1)) << ") != 0)" << std::endl;
 				ss << "      tc = texCoord1.st;" << std::endl;
 				ss << "    else" << std::endl;
 				ss << "      tc = texCoord0.st;" << std::endl;
@@ -542,7 +554,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 			else
 			{
 				// Stage N: LightMap uses texCoord1 if more stages follow, else texCoord0
-				ss << "    if (nlShader == 3) {" << std::endl;
+				ss << "    if (nlShader == " << (int)CMaterial::LightMap << ") {" << std::endl;
 				if (i < MEGA_PP_MAX_SAMPLERS - 1)
 					ss << "      tc = ((nlTextureActive & " << (1 << (i + 1)) << ") != 0) ? texCoord1.st : texCoord0.st;" << std::endl;
 				else
@@ -577,8 +589,8 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	ss << std::endl;
 
 	// --- Shader switch ---
-	// Normal (0) / UserColor (1): TexEnv interpreter
-	ss << "  if (nlShader == 0 || nlShader == 1) {" << std::endl;
+	// Normal / UserColor: TexEnv interpreter
+	ss << "  if (nlShader == " << (int)CMaterial::Normal << " || nlShader == " << (int)CMaterial::UserColor << ") {" << std::endl;
 	ss << "    vec4 texEnvResult = fragColor;" << std::endl;
 	ss << "    vec2 embmOfs = vec2(0.0);" << std::endl;
 	ss << "    bool prevEMBM = false;" << std::endl;
@@ -587,7 +599,11 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	// Unrolled 4 TexEnv stages
 	const char *envNames[] = { "nlTexEnvMode0", "nlTexEnvMode1", "nlTexEnvMode2", "nlTexEnvMode3" };
 	const char *cnstNames[] = { "constant0", "constant1", "constant2", "constant3" };
-	const char *embmNames[] = { "embmMatrix0", "embmMatrix1", "embmMatrix2", "embmMatrix3" };
+	// EMBM matrices: individual uniforms (embmMatrix0-3) or folded into material UBO (constant4-7)
+	// EMBM (Normal/UserColor) and lightmap factors (LightMap) are mutually exclusive by shader type
+	const char *embmNamesUBO[] = { "constant4", "constant5", "constant6", "constant7" };
+	const char *embmNamesUniform[] = { "embmMatrix0", "embmMatrix1", "embmMatrix2", "embmMatrix3" };
+	const char **embmNames = materialUBO ? embmNamesUBO : embmNamesUniform;
 
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 	{
@@ -628,8 +644,8 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	ss << "    fragColor = texEnvResult;" << std::endl;
 	ss << std::endl;
 
-	// Specular (2)
-	ss << "  } else if (nlShader == 2) {" << std::endl;
+	// Specular
+	ss << "  } else if (nlShader == " << (int)CMaterial::Specular << ") {" << std::endl;
 	ss << "    if ((nlTextureActive & 1) != 0) {" << std::endl;
 	ss << "      vec3 specop0 = texel0.rgb * fragColor.rgb;" << std::endl;
 	ss << "      if ((nlTextureActive & 2) != 0)" << std::endl;
@@ -641,8 +657,8 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	ss << "    }" << std::endl;
 	ss << std::endl;
 
-	// LightMap (3)
-	ss << "  } else if (nlShader == 3) {" << std::endl;
+	// LightMap
+	ss << "  } else if (nlShader == " << (int)CMaterial::LightMap << ") {" << std::endl;
 	// Find last active stage and accumulate lightmaps
 	ss << "    int lastStage = -1;" << std::endl;
 	for (int i = MEGA_PP_MAX_SAMPLERS - 1; i >= 0; --i)
@@ -725,11 +741,11 @@ bool CDriverGL3::initMegaPixelPrograms()
 							if (tableUBO && !fogOrPpl)
 								continue;
 
-							for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
+							for (int cameraUBO = linked; cameraUBO < 2; ++cameraUBO)
 							{
-								for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
+								for (int objectUBO = linked; objectUBO < 2; ++objectUBO)
 								{
-									for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
+									for (int materialUBO = linked; materialUBO < 2; ++materialUBO)
 									{
 										// objectUBO implies cameraUBO
 										if (objectUBO && !cameraUBO)
@@ -774,7 +790,6 @@ bool CDriverGL3::initMegaPixelPrograms()
 										src->Features.UsesCameraUBO = (cameraUBO != 0);
 										src->Features.UsesObjectUBO = (objectUBO != 0);
 										src->Features.UsesMaterialUBO = (materialUBO != 0);
-										src->Features.PipelineStage = (linked != 0);
 										src->setSource(result);
 										pp->addSource(src);
 
@@ -809,19 +824,10 @@ bool CDriverGL3::setupMegaPixelProgram()
 	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
 	nlassert(matDrv);
 
-	// Update PPBuiltin cached state. In the mega path, Touched is not consumed
-	// (no per-material PP compilation), but the check functions update PPBuiltin
-	// fields that uploadMaterialUBO() reads (Shader, TextureActive, TexEnvMode, Flags).
+	// Update PPBuiltin driver state (fog, vertex format, specular, clip plane).
+	// Material-derived PPBuiltin state (Shader, Flags, TextureActive, TexEnvMode)
+	// is now pushed from setupMaterial. LightMap texture state from setupLightmapPass.
 	matDrv->PPBuiltin.checkDriverStateTouched(this);
-	matDrv->PPBuiltin.checkDriverMaterialStateTouched(this, mat);
-	matDrv->PPBuiltin.checkMaterialStateTouched(mat);
-
-	// Propagate material-UBO-relevant changes only (not fog/vertexFormat/specular changes).
-	if (matDrv->PPBuiltin.MaterialUBOTouched)
-	{
-		matDrv->MaterialUBODirty = true;
-		matDrv->PPBuiltin.MaterialUBOTouched = false;
-	}
 
 	// Activate PPL only if the paired VP supports it
 	bool pplActive = false;
