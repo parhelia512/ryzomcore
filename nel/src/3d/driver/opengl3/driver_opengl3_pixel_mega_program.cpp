@@ -733,10 +733,19 @@ bool CDriverGL3::initMegaPixelPrograms()
 										{
 											// ppClip=1 is never selected when m_PPClipPlanes is off
 											if (ppClip && !m_PPClipPlanes) continue;
-											if (tableUBO != activeTableUBO) continue;
-											if (cameraUBO != activeCameraUBO) continue;
-											if (objectUBO != activeObjectUBO) continue;
-											if (materialUBO != activeMaterialUBO) continue;
+											if (linked)
+											{
+												// Linked programs are always fully UBO-backed;
+												// ensure the all-UBO variant is built
+												if (!tableUBO || !cameraUBO || !objectUBO || !materialUBO) continue;
+											}
+											else
+											{
+												if (tableUBO != activeTableUBO) continue;
+												if (cameraUBO != activeCameraUBO) continue;
+												if (objectUBO != activeObjectUBO) continue;
+												if (materialUBO != activeMaterialUBO) continue;
+											}
 										}
 
 										std::string result;
@@ -837,10 +846,6 @@ bool CDriverGL3::setupMegaPixelProgram()
 	m_ProgramUsesCameraUBO[PixelProgram] = cameraUBO;
 	m_ProgramUsesObjectUBO[PixelProgram] = objectUBO;
 	m_ProgramUsesMaterialUBO[PixelProgram] = materialUBO;
-
-	// When using linked mega shaders, delegate to the linked activation path
-	if (m_LinkedMegaShaders)
-		return setupMegaLinkedPrograms();
 
 	CPixelProgram *pp = m_MegaPP[0][fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(pp);

@@ -562,10 +562,19 @@ bool CDriverGL3::initMegaVertexPrograms()
 								{
 									// m_PPClipPlanes zeroes ClipPlaneMask on VP, so hwClip=1 is never selected
 									if (hwClip && m_PPClipPlanes) continue;
-									if (tableUBO != activeTableUBO) continue;
-									if (cameraUBO != activeCameraUBO) continue;
-									if (objectUBO != activeObjectUBO) continue;
-									if (materialUBO != activeMaterialUBO) continue;
+									if (linked)
+									{
+										// Linked programs are always fully UBO-backed;
+										// ensure the all-UBO variant is built
+										if (!tableUBO || !cameraUBO || !objectUBO || !materialUBO) continue;
+									}
+									else
+									{
+										if (tableUBO != activeTableUBO) continue;
+										if (cameraUBO != activeCameraUBO) continue;
+										if (objectUBO != activeObjectUBO) continue;
+										if (materialUBO != activeMaterialUBO) continue;
+									}
 								}
 
 								std::string result;
@@ -662,10 +671,6 @@ bool CDriverGL3::setupMegaVertexProgram()
 	m_ProgramUsesCameraUBO[VertexProgram] = cameraUBO;
 	m_ProgramUsesObjectUBO[VertexProgram] = objectUBO;
 	m_ProgramUsesMaterialUBO[VertexProgram] = materialUBO;
-
-	// When using linked mega shaders, skip SSO VP activation (defer to linked path in setupMegaPixelProgram)
-	if (m_LinkedMegaShaders)
-		return true;
 
 	CVertexProgram *vp = m_MegaVP[0][fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(vp);

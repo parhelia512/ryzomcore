@@ -1412,9 +1412,9 @@ private:
 	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2][2][2][2];
 	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2][2][2][2];
 
-	// Linked mega shader programs (combined VP+PP linked programs)
-	// m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO]
-	NLMISC::CSmartPtr<CShaderProgram> m_MegaLinked[2][2][2][2][2][2][2][2][2];
+	// Linked mega shader programs (combined VP+PP, always UBO-backed)
+	// m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip]
+	NLMISC::CSmartPtr<CShaderProgram> m_MegaLinked[2][2][2][2][2];
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;

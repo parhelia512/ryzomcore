@@ -952,6 +952,11 @@ void CDriverGL3::generateShaderDesc(CShaderDesc &desc, CMaterial &mat)
 
 bool CDriverGL3::setupBuiltinPrograms()
 {
+	// Linked mega shader path: bypass separate VP/PP setup entirely
+	if (m_LinkedMegaShaders && m_UseMegaShaders && !m_UserVertexProgram && !m_UserPixelProgram)
+		return setupMegaLinkedPrograms()
+			&& setupUniforms();
+
 	return setupBuiltinVertexProgram()
 		&& setupBuiltinPixelProgram()
 		&& setupUniforms();
@@ -1815,16 +1820,19 @@ void CDriverGL3::setupInitialUniforms(IProgram *program)
 
 bool CDriverGL3::initMegaLinkedPrograms()
 {
-	// Determine which UBO splits are active at init time
-	int activeTableUBO = (m_UseMegaLightTableUBO || m_UseMegaObjectUBO) ? 1 : 0;
-	int activeCameraUBO = (m_UseMegaCameraUBO || m_UseMegaObjectUBO) ? 1 : 0;
-	int activeObjectUBO = m_UseMegaObjectUBO ? 1 : 0;
-	int activeMaterialUBO = m_UseMegaMaterialUBO ? 1 : 0;
+	// Linked shader programs are always fully UBO-backed.
+	int tableUBO = 1;
+	int cameraUBO = 1;
+	int objectUBO = 1;
+	int materialUBO = 1;
 
 	for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
 	{
 		for (int hwClip = 0; hwClip < 2; ++hwClip)
 		{
+			// m_PPClipPlanes zeroes ClipPlaneMask on VP, so hwClip=1 is never selected
+			if (hwClip && m_PPClipPlanes) continue;
+
 			for (int cube = 0; cube < 2; ++cube)
 			{
 				for (int specular = 0; specular < 2; ++specular)
@@ -1834,114 +1842,80 @@ bool CDriverGL3::initMegaLinkedPrograms()
 						// ppClip only valid when fogOrPpl (needs ecPos varying)
 						if (ppClip && !fogOrPpl)
 							continue;
+						if (ppClip && !m_PPClipPlanes) continue;
 
-						for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
+						// Get linked=1 VP and PP single-stage programs
+						CVertexProgram *vpProg = m_MegaVP[1][fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO];
+						CPixelProgram *ppProg = m_MegaPP[1][fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
+
+						if (!vpProg || !ppProg)
+							continue;
+						if (!vpProg->m_DrvInfo || !ppProg->m_DrvInfo)
+							continue;
+
+						CProgramDrvInfosGL3 *vpDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)vpProg->m_DrvInfo);
+						CProgramDrvInfosGL3 *ppDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)ppProg->m_DrvInfo);
+
+						// Extract attached shaders from single-stage programs
+						GLuint vpShader = 0, ppShader = 0;
+						GLsizei count = 0;
+						nglGetAttachedShaders(vpDrvInfo->getProgramId(), 1, &count, &vpShader);
+						if (count == 0 || vpShader == 0)
 						{
-							// tableUBO only valid when fogOrPpl (PPL needs ecPos)
-							if (tableUBO && !fogOrPpl)
-								continue;
-
-							for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
-							{
-								for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
-								{
-									for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
-									{
-										// objectUBO implies tableUBO and cameraUBO
-										if (objectUBO && (!tableUBO || !cameraUBO))
-											continue;
-
-										// objectUBO implies lightTableUBO when PPL code is active
-										if (objectUBO && !tableUBO && fogOrPpl)
-											continue;
-
-										// Skip variants that won't be selected at runtime
-										if (!m_BuildUnusedPrograms)
-										{
-											if (hwClip && m_PPClipPlanes) continue;
-											if (ppClip && !m_PPClipPlanes) continue;
-											if (tableUBO != activeTableUBO) continue;
-											if (cameraUBO != activeCameraUBO) continue;
-											if (objectUBO != activeObjectUBO) continue;
-											if (materialUBO != activeMaterialUBO) continue;
-										}
-
-										// Get linked=1 VP and PP single-stage programs
-										CVertexProgram *vpProg = m_MegaVP[1][fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO];
-										CPixelProgram *ppProg = m_MegaPP[1][fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
-
-										if (!vpProg || !ppProg)
-											continue;
-										if (!vpProg->m_DrvInfo || !ppProg->m_DrvInfo)
-											continue;
-
-										CProgramDrvInfosGL3 *vpDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)vpProg->m_DrvInfo);
-										CProgramDrvInfosGL3 *ppDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)ppProg->m_DrvInfo);
-
-										// Extract attached shaders from single-stage programs
-										GLuint vpShader = 0, ppShader = 0;
-										GLsizei count = 0;
-										nglGetAttachedShaders(vpDrvInfo->getProgramId(), 1, &count, &vpShader);
-										if (count == 0 || vpShader == 0)
-										{
-											nlwarning("GL3: Failed to extract VP shader for linked mega program");
-											return false;
-										}
-										count = 0;
-										nglGetAttachedShaders(ppDrvInfo->getProgramId(), 1, &count, &ppShader);
-										if (count == 0 || ppShader == 0)
-										{
-											nlwarning("GL3: Failed to extract PP shader for linked mega program");
-											return false;
-										}
-
-										// Create combined linked program
-										GLuint linkedProg = nglCreateProgram();
-										nglAttachShader(linkedProg, vpShader);
-										nglAttachShader(linkedProg, ppShader);
-										nglLinkProgram(linkedProg);
-
-										GLint linkOk;
-										nglGetProgramiv(linkedProg, GL_LINK_STATUS, &linkOk);
-										if (linkOk == 0)
-										{
-											char errorLog[1024];
-											nglGetProgramInfoLog(linkedProg, 1024, NULL, errorLog);
-											nlwarning("GL3: Mega linked program link failed (fogOrPpl=%d, hwClip=%d, cube=%d, spec=%d, ppClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d): %s",
-												fogOrPpl, hwClip, cube, specular, ppClip, tableUBO, cameraUBO, objectUBO, materialUBO, errorLog);
-											nglDeleteProgram(linkedProg);
-											return false;
-										}
-
-										nldebug("GL3: Linked mega program (fogOrPpl=%d, hwClip=%d, cube=%d, spec=%d, ppClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d) id=%u",
-											fogOrPpl, hwClip, cube, specular, ppClip, tableUBO, cameraUBO, objectUBO, materialUBO, linkedProg);
-
-										// Create CShaderProgram wrapping the combined linked program.
-										// A single buildInfo() resolves all uniforms from both VP and PP stages.
-										CShaderProgram *sp = new CShaderProgram();
-										{
-											IProgram::CSource *src = new IProgram::CSource();
-											src->Profile = IProgram::glsl330v;
-											src->DisplayName = vpProg->source()->DisplayName + "+" + ppProg->source()->DisplayName + " [linked]";
-											sp->VPFeatures = vpProg->source()->Features;
-											sp->PPFeatures = ppProg->source()->Features;
-											src->Features = vpProg->source()->Features;
-											sp->addSource(src);
-
-											ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(), (NL3D::IProgramDrvInfos*)NULL);
-											CProgramDrvInfosGL3 *drv = new CProgramDrvInfosGL3(this, it);
-											*it = drv;
-											drv->setProgramId(linkedProg);
-											sp->m_DrvInfo = drv;
-											sp->buildInfo(src);
-											setupInitialUniforms(sp);
-										}
-
-										m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO] = sp;
-									}
-								}
-							}
+							nlwarning("GL3: Failed to extract VP shader for linked mega program");
+							return false;
 						}
+						count = 0;
+						nglGetAttachedShaders(ppDrvInfo->getProgramId(), 1, &count, &ppShader);
+						if (count == 0 || ppShader == 0)
+						{
+							nlwarning("GL3: Failed to extract PP shader for linked mega program");
+							return false;
+						}
+
+						// Create combined linked program
+						GLuint linkedProg = nglCreateProgram();
+						nglAttachShader(linkedProg, vpShader);
+						nglAttachShader(linkedProg, ppShader);
+						nglLinkProgram(linkedProg);
+
+						GLint linkOk;
+						nglGetProgramiv(linkedProg, GL_LINK_STATUS, &linkOk);
+						if (linkOk == 0)
+						{
+							char errorLog[1024];
+							nglGetProgramInfoLog(linkedProg, 1024, NULL, errorLog);
+							nlwarning("GL3: Mega linked program link failed (fogOrPpl=%d, hwClip=%d, cube=%d, spec=%d, ppClip=%d): %s",
+								fogOrPpl, hwClip, cube, specular, ppClip, errorLog);
+							nglDeleteProgram(linkedProg);
+							return false;
+						}
+
+						nldebug("GL3: Linked mega program (fogOrPpl=%d, hwClip=%d, cube=%d, spec=%d, ppClip=%d) id=%u",
+							fogOrPpl, hwClip, cube, specular, ppClip, linkedProg);
+
+						// Create CShaderProgram wrapping the combined linked program.
+						// A single buildInfo() resolves all uniforms from both VP and PP stages.
+						CShaderProgram *sp = new CShaderProgram();
+						{
+							IProgram::CSource *src = new IProgram::CSource();
+							src->Profile = IProgram::glsl330v;
+							src->DisplayName = vpProg->source()->DisplayName + "+" + ppProg->source()->DisplayName + " [linked]";
+							sp->VPFeatures = vpProg->source()->Features;
+							sp->PPFeatures = ppProg->source()->Features;
+							src->Features = vpProg->source()->Features;
+							sp->addSource(src);
+
+							ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(), (NL3D::IProgramDrvInfos*)NULL);
+							CProgramDrvInfosGL3 *drv = new CProgramDrvInfosGL3(this, it);
+							*it = drv;
+							drv->setProgramId(linkedProg);
+							sp->m_DrvInfo = drv;
+							sp->buildInfo(src);
+							setupInitialUniforms(sp);
+						}
+
+						m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip] = sp;
 					}
 				}
 			}
@@ -1961,31 +1935,50 @@ bool CDriverGL3::setupMegaLinkedPrograms()
 	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
 	nlassert(matDrv);
 
-	// Compute VP indices (same logic as setupMegaVertexProgram)
-	bool pplActive = false;
-	if (m_VPBuiltinCurrent.NumPerPixelLights > 0)
-		pplActive = true; // Mega VP+PP always support PPL
+	// --- VP-side state (replaces setupBuiltinVertexProgram + setupMegaVertexProgram) ---
+	touchVertexFormatVP();
+
+	// PPL support: mega VP+PP always supports PPL, no user programs to check
+	m_ProgramSupportsPPL = true;
+	{
+		uint8 numPpl = (uint8)_NumPerPixelLights;
+		if (m_VPBuiltinCurrent.NumPerPixelLights != numPpl)
+		{
+			m_VPBuiltinCurrent.NumPerPixelLights = numPpl;
+			if (m_VPBuiltinCurrent.Lighting)
+				m_VPBuiltinTouched = true;
+		}
+	}
+
+	m_VPSpecularOutput = true; // Mega VP always outputs specularColor
+	m_VPNormalOutput = false;
+	m_VPWorldSpacePositionOutput = false;
+
+	bool pplActive = m_VPBuiltinCurrent.NumPerPixelLights > 0;
 	if (pplActive)
 	{
 		m_VPWorldSpacePositionOutput = true;
 		m_VPNormalOutput = true;
 	}
 
+	// --- PP-side state (replaces setupBuiltinPixelProgram + setupMegaPixelProgram) ---
+	matDrv->PPBuiltin.checkDriverStateTouched(this);
+	matDrv->PPBuiltin.checkDriverMaterialStateTouched(this, mat);
+	matDrv->PPBuiltin.checkMaterialStateTouched(mat);
+	if (matDrv->PPBuiltin.MaterialUBOTouched)
+	{
+		matDrv->MaterialUBODirty = true;
+		matDrv->PPBuiltin.MaterialUBOTouched = false;
+	}
+
+	// --- Compute dimension indices ---
 	int fogOrPpl = (m_VPBuiltinCurrent.Fog || pplActive || m_VPBuiltinCurrent.PPClipPlane) ? 1 : 0;
 	int hwClip = (m_VPBuiltinCurrent.ClipPlaneMask != 0) ? 1 : 0;
-	int tableUBO = (m_UseMegaLightTableUBO || m_UseMegaObjectUBO) ? 1 : 0;
-	int cameraUBO = (m_UseMegaCameraUBO || m_UseMegaObjectUBO) ? 1 : 0;
-	int objectUBO = m_UseMegaObjectUBO ? 1 : 0;
-	int materialUBO = m_UseMegaMaterialUBO ? 1 : 0;
-
-	// Compute PP indices (same logic as setupMegaPixelProgram)
 	int ppClip = m_VPBuiltinCurrent.PPClipPlane ? 1 : 0;
 	int cube = (matDrv->PPBuiltin.TexSamplerMode != 0) ? 1 : 0;
 	int specular = m_VPSpecularOutput ? 1 : 0;
-	// fogOrPpl=0 + tableUBO=1 variant doesn't exist
-	if (!fogOrPpl) tableUBO = 0;
 
-	CShaderProgram *sp = m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
+	CShaderProgram *sp = m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip];
 	nlassert(sp);
 	nlassert(sp->m_DrvInfo);
 
@@ -2006,10 +1999,10 @@ bool CDriverGL3::setupMegaLinkedPrograms()
 	m_DriverVertexProgram = NULL;
 	m_DriverPixelProgram = NULL;
 
-	// Set per-program UBO flags (identical for both stages in linked path)
+	// Linked shader programs are UBO-only
 	m_ProgramNoUniforms[VertexProgram] = false;
 	m_ProgramNoBuiltinUniforms[VertexProgram] = false;
-	m_ProgramOnlyUBOs[VertexProgram] = false;
+	m_ProgramOnlyUBOs[VertexProgram] = true;
 	m_ProgramUsesLightTableUBO[VertexProgram] = sp->VPFeatures.UsesLightTableUBO;
 	m_ProgramUsesCameraUBO[VertexProgram] = sp->VPFeatures.UsesCameraUBO;
 	m_ProgramUsesObjectUBO[VertexProgram] = sp->VPFeatures.UsesObjectUBO;
@@ -2017,7 +2010,7 @@ bool CDriverGL3::setupMegaLinkedPrograms()
 
 	m_ProgramNoUniforms[PixelProgram] = false;
 	m_ProgramNoBuiltinUniforms[PixelProgram] = false;
-	m_ProgramOnlyUBOs[PixelProgram] = false;
+	m_ProgramOnlyUBOs[PixelProgram] = true;
 	m_ProgramUsesLightTableUBO[PixelProgram] = sp->PPFeatures.UsesLightTableUBO;
 	m_ProgramUsesCameraUBO[PixelProgram] = sp->PPFeatures.UsesCameraUBO;
 	m_ProgramUsesObjectUBO[PixelProgram] = sp->PPFeatures.UsesObjectUBO;
