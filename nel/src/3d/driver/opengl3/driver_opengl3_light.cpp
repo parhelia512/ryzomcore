@@ -818,8 +818,11 @@ struct CMaterialUBOData
 	uint32 nlTexEnvMode[4];        // 16 (4 separate uint in GLSL, not an array — avoids std140 vec4 padding)
 	float nlLightMapScale;         // 4
 	sint32 _pad[2];               // 8
-};                                 // 96
-static_assert(sizeof(CMaterialUBOData) == 96, "Material UBO layout mismatch");
+	float constant[4][4];          // 64 (TexEnv constant colors, PP)
+	float embmMatrix[4][4];        // 64 (EMBM matrices, PP)
+	float texMatrix[4][16];        // 256 (texture matrices, VP — mat4 stored column-major)
+};                                 // 480
+static_assert(sizeof(CMaterialUBOData) == 480, "Material UBO layout mismatch");
 
 void CDriverGL3::uploadMaterialUBO()
 {
@@ -867,6 +870,14 @@ void CDriverGL3::uploadMaterialUBO()
 			data.nlTexEnvMode[i] = matDrv->PPBuiltin.TexEnvMode[i];
 		data.nlLightMapScale = _LightMapUBOOverride.LightMapScale;
 		data._pad[0] = 0; data._pad[1] = 0;
+
+		// Lightmap factor constants (staged in _LightMapUBOOverride.Constants)
+		memcpy(data.constant, _LightMapUBOOverride.Constants, sizeof(data.constant));
+		// EMBM not used in lightmap pass
+		memset(data.embmMatrix, 0, sizeof(data.embmMatrix));
+		// TexMatrix (lightmap doesn't use user tex mat, but pack current state anyway)
+		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+			memcpy(data.texMatrix[i], _UserTexMat[i].get(), 16 * sizeof(float));
 
 		const GLsizeiptr dataSize = sizeof(CMaterialUBOData);
 		nglBindBuffer(GL_UNIFORM_BUFFER, _OverrideMaterialUBOId);
@@ -947,6 +958,24 @@ void CDriverGL3::uploadMaterialUBO()
 	// Padding
 	data._pad[0] = 0;
 	data._pad[1] = 0;
+
+	// TexEnv constant colors (PP)
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+	{
+		CRGBA cc = mat._TexEnvs[i].ConstantColor;
+		data.constant[i][0] = cc.R / 255.0f;
+		data.constant[i][1] = cc.G / 255.0f;
+		data.constant[i][2] = cc.B / 255.0f;
+		data.constant[i][3] = cc.A / 255.0f;
+	}
+
+	// EMBM matrices (PP)
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		memcpy(data.embmMatrix[i], _EMBMMatrix[i], 4 * sizeof(float));
+
+	// Texture matrices (VP, column-major mat4)
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		memcpy(data.texMatrix[i], _UserTexMat[i].get(), 16 * sizeof(float));
 
 	// Upload
 	const GLsizeiptr dataSize = sizeof(CMaterialUBOData);

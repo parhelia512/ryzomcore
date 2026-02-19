@@ -360,6 +360,7 @@ CDriverGL3::CDriverGL3()
 	
 	// for GL ES 3.0 compatibility
 	m_PPClipPlanes = false;
+	m_LinkedMegaShaders = true; // also useful under GL 3.3
 
 #if !FINAL_VERSION && defined(NL_DEBUG)
 	m_BuildUnusedPrograms = true;
@@ -367,7 +368,6 @@ CDriverGL3::CDriverGL3()
 	m_BuildUnusedPrograms = false;
 #endif
 	m_UseMegaShaders = true;
-	m_LinkedMegaShaders = false;
 	m_UseMegaLightTableUBO = true;  // implied by m_UseMegaObjectUBO
 	m_UseMegaCameraUBO = true;      // implied by m_UseMegaObjectUBO
 	m_UseMegaObjectUBO = true;
@@ -532,13 +532,23 @@ bool CDriverGL3::setupDisplay()
 	if (m_UseMegaShaders)
 	{
 		if (!initMegaVertexPrograms())
+		{
 			nlwarning("GL3: Failed to init mega vertex programs, falling back to per-material shaders");
+#ifdef NL_DEBUG
+			nlerror("GL3: Mega vertex program init failed");
+#endif
+			m_UseMegaShaders = false;
+		}
 		else if (!initMegaPixelPrograms())
+		{
 			nlwarning("GL3: Failed to init mega pixel programs, falling back to per-material shaders");
+#ifdef NL_DEBUG
+			nlerror("GL3: Mega pixel program init failed");
+#endif
+			m_UseMegaShaders = false;
+		}
 		else
 			nlinfo("GL3: Mega shaders initialized");
-		if (!m_MegaVP[0][0][0][0][0][0][0] || !m_MegaPP[0][0][0][0][0][0][0][0][0])
-			m_UseMegaShaders = false; // Fallback
 	}
 
 	if (m_LinkedMegaShaders && m_UseMegaShaders)
@@ -546,6 +556,9 @@ bool CDriverGL3::setupDisplay()
 		if (!initMegaLinkedPrograms())
 		{
 			nlwarning("GL3: Failed to link mega programs, falling back to SSO");
+#ifdef NL_DEBUG
+			nlerror("GL3: Mega linked program init failed");
+#endif
 			m_LinkedMegaShaders = false;
 		}
 		else

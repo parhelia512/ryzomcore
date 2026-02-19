@@ -365,6 +365,11 @@ bool CDriverGL3::setupMaterial(CMaterial& mat)
 		// in setupBuiltinPixelProgram/setupMegaPixelProgram.
 		if (touched & (IDRV_TOUCHED_COLOR | IDRV_TOUCHED_LIGHTING | IDRV_TOUCHED_DEFMAT | IDRV_TOUCHED_ALPHA_TEST_THRE | IDRV_TOUCHED_TEXENV))
 			pShader->MaterialUBODirty = true;
+		// TexMatrix and EMBM are driver state packed into the material UBO.
+		// Always dirty when user tex mat flags are present (different materials
+		// have different matrices, but the UBO cache is per-material).
+		if (mat.getFlags() & IDRV_MAT_USER_TEX_MAT_ALL)
+			pShader->MaterialUBODirty = true;
 	}
 
 	// 2b. User supplied pixel shader overrides material
@@ -607,7 +612,10 @@ bool CDriverGL3::setupPass(uint pass)
 		break;
 	}
 
-	return true;
+	// Upload per-pass uniforms and flush dirty UBOs.
+	// Individual uniforms (TexEnv constants, EMBM, TexMatrix) are set here for non-UBO paths.
+	// For UBO paths, the data was staged in setupMaterial/pass and now gets flushed to GPU.
+	return flushPassUniforms();
 }
 
 // ***************************************************************************
@@ -638,35 +646,48 @@ void			CDriverGL3::endMultiPass()
 
 void CDriverGL3::setupNormalPass()
 {
-	nlassert(m_DriverPixelProgram);
+	// In UBO mode, TexEnv constants, EMBM, and TexMatrix are in the material UBO.
+	// Data is already staged; flushPassUniforms() at end of setupPass() will flush.
+	if (m_ProgramOnlyUBOs[PixelProgram] && m_ProgramOnlyUBOs[VertexProgram])
+		return;
+
+	IProgram *pp = getProgram(PixelProgram);
+	IProgram *vp = getProgram(VertexProgram);
+	nlassert(pp);
 
 	const CMaterial &mat = *_CurrentMaterial;
-	
+
 	for (uint stage = 0; stage < IDRV_MAT_MAXTEXTURES; ++stage)
 	{
 		// Set pixel program constants for TexEnv
-		uint constantIdx = m_DriverPixelProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::Constant0 + stage));
-		if (constantIdx != ~0)
+		if (!m_ProgramOnlyUBOs[PixelProgram])
 		{
-			GLfloat glCol[4];
-			convColor(mat._TexEnvs[stage].ConstantColor, glCol);
-			setUniform4f(IDriver::PixelProgram, constantIdx, glCol[0], glCol[1], glCol[2], glCol[3]);
-		}
+			uint constantIdx = pp->getUniformIndex(CProgramIndex::TName(CProgramIndex::Constant0 + stage));
+			if (constantIdx != ~0)
+			{
+				GLfloat glCol[4];
+				convColor(mat._TexEnvs[stage].ConstantColor, glCol);
+				setUniform4f(IDriver::PixelProgram, constantIdx, glCol[0], glCol[1], glCol[2], glCol[3]);
+			}
 
-		// Set pixel program EMBM matrix
-		uint embmIdx = m_DriverPixelProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::EmbmMatrix0 + stage));
-		if (embmIdx != ~0u)
-		{
-			setUniform4f(IDriver::PixelProgram, embmIdx,
-				_EMBMMatrix[stage][0], _EMBMMatrix[stage][1],
-				_EMBMMatrix[stage][2], _EMBMMatrix[stage][3]);
+			// Set pixel program EMBM matrix
+			uint embmIdx = pp->getUniformIndex(CProgramIndex::TName(CProgramIndex::EmbmMatrix0 + stage));
+			if (embmIdx != ~0u)
+			{
+				setUniform4f(IDriver::PixelProgram, embmIdx,
+					_EMBMMatrix[stage][0], _EMBMMatrix[stage][1],
+					_EMBMMatrix[stage][2], _EMBMMatrix[stage][3]);
+			}
 		}
 
 		// Set vertex program constants for TexMatrix
-		uint texMatrixIdx = m_DriverVertexProgram->getUniformIndex((CProgramIndex::TName)(CProgramIndex::TexMatrix0 + stage));
-		if (texMatrixIdx != ~0)
+		if (!m_ProgramOnlyUBOs[VertexProgram] && vp)
 		{
-			setUniform4x4f(IDriver::VertexProgram, texMatrixIdx, _UserTexMat[stage]);
+			uint texMatrixIdx = vp->getUniformIndex((CProgramIndex::TName)(CProgramIndex::TexMatrix0 + stage));
+			if (texMatrixIdx != ~0)
+			{
+				setUniform4x4f(IDriver::VertexProgram, texMatrixIdx, _UserTexMat[stage]);
+			}
 		}
 	}
 }
@@ -733,7 +754,7 @@ sint CDriverGL3::beginLightMapMultiPass()
 // ***************************************************************************
 void CDriverGL3::setupLightMapPass(uint pass)
 {
-	nlassert(m_DriverPixelProgram);
+	nlassert(getProgram(PixelProgram));
 	nlassert(!m_UserPixelProgram);
 
 	H_AUTO_OGL(CDriverGL3_setupLightMapPass)
@@ -774,6 +795,8 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
 		// No x2 scale when no lightmaps
 		_LightMapUBOOverride.LightMapScale = 1.0f;
+		// Zero constants (no lightmap factors)
+		memset(_LightMapUBOOverride.Constants, 0, sizeof(_LightMapUBOOverride.Constants));
 
 		if (matDrv && matDrv->PPBuiltin.LightMapScale)
 		{
@@ -787,32 +810,35 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		_LightMapUBOOverride.Active = false;
 
 		// Override selfIllumination to black and zero specular (no LMC ambient for empty lightmap)
-		if (m_DriverVertexProgram)
 		{
-			if (!m_ProgramUsesObjectUBO[VertexProgram])
+			IProgram *vp = getProgram(VertexProgram);
+			if (vp)
 			{
-				int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
-				if (siIdx != -1)
-					setUniform4f(IDriver::VertexProgram, siIdx, 0.0f, 0.0f, 0.0f, 0.0f);
-			}
-			if (!m_ProgramUsesLightTableUBO[VertexProgram])
-			{
-				// Non-table path: zero individual light specular uniforms
-				for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+				if (!m_ProgramUsesObjectUBO[VertexProgram])
 				{
-					if (!_LightEnable[i]) continue;
-					uint lsc = m_DriverVertexProgram->getUniformIndex(
-						CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
-					if (lsc != ~0u)
-						setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
+					int siIdx = vp->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
+					if (siIdx != -1)
+						setUniform4f(IDriver::VertexProgram, siIdx, 0.0f, 0.0f, 0.0f, 0.0f);
 				}
-			}
-			else if (!m_ProgramUsesMaterialUBO[VertexProgram])
-			{
-				// Table path without material UBO: override individual material uniforms
-				int msIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialSpecular));
-				if (msIdx != -1)
-					setUniform4f(IDriver::VertexProgram, msIdx, 0.0f, 0.0f, 0.0f, 0.0f);
+				if (!m_ProgramUsesLightTableUBO[VertexProgram])
+				{
+					// Non-table path: zero individual light specular uniforms
+					for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+					{
+						if (!_LightEnable[i]) continue;
+						uint lsc = vp->getUniformIndex(
+							CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
+						if (lsc != ~0u)
+							setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
+					}
+				}
+				else if (!m_ProgramUsesMaterialUBO[VertexProgram])
+				{
+					// Table path without material UBO: override individual material uniforms
+					int msIdx = vp->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialSpecular));
+					if (msIdx != -1)
+						setUniform4f(IDriver::VertexProgram, msIdx, 0.0f, 0.0f, 0.0f, 0.0f);
+				}
 			}
 		}
 
@@ -1038,6 +1064,14 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	memset(_LightMapUBOOverride.MaterialSpecular, 0, sizeof(_LightMapUBOOverride.MaterialSpecular));
 	// Lightmap scale factor (x2 mode: 2.0, normal: 1.0)
 	_LightMapUBOOverride.LightMapScale = lightMapScale;
+	// Stage lightmap factor constants 0-3 for the material UBO
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+	{
+		_LightMapUBOOverride.Constants[i][0] = constant[i].R;
+		_LightMapUBOOverride.Constants[i][1] = constant[i].G;
+		_LightMapUBOOverride.Constants[i][2] = constant[i].B;
+		_LightMapUBOOverride.Constants[i][3] = constant[i].A;
+	}
 
 	// Setup the programs now
 	setupBuiltinPrograms();
@@ -1048,95 +1082,105 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	if (pass > 0 && _FogEnabled)
 		memcpy(_CurrentFogColor, savedFogColor, sizeof(savedFogColor));
 
-	// Set PP constants (lightmap factors)
-	for (uint stage = 0; stage < std::min(_Extensions.MaxFragmentTextureImageUnits, (GLint)IDRV_PROGRAM_MAXSAMPLERS); ++stage)
+	// Set PP constants (lightmap factors) as individual uniforms.
+	// constant0-3 are in the material UBO when materialUBO is active (staged above).
+	// constant4-7 are always individual uniforms.
 	{
-		uint constantIdx = m_DriverPixelProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::Constant0 + stage));
-		if (constantIdx != ~0)
+		IProgram *pp = getProgram(PixelProgram);
+		uint startStage = m_ProgramUsesMaterialUBO[PixelProgram] ? IDRV_MAT_MAXTEXTURES : 0;
+		for (uint stage = startStage; stage < std::min(_Extensions.MaxFragmentTextureImageUnits, (GLint)IDRV_PROGRAM_MAXSAMPLERS); ++stage)
 		{
-			setUniform4f(IDriver::PixelProgram, constantIdx, constant[stage].R, constant[stage].G, constant[stage].B, constant[stage].A);
+			uint constantIdx = pp->getUniformIndex(CProgramIndex::TName(CProgramIndex::Constant0 + stage));
+			if (constantIdx != ~0)
+			{
+				setUniform4f(IDriver::PixelProgram, constantIdx, constant[stage].R, constant[stage].G, constant[stage].B, constant[stage].A);
+			}
 		}
 	}
 
-	// Override VP uniforms for per-pass lightmap rendering (non-UBO paths)
-	if (m_DriverVertexProgram)
+	// Override VP uniforms for per-pass lightmap rendering (non-UBO paths).
+	// When objectUBO/tableUBO are active, these are handled via _LightMapUBOOverride staging above.
 	{
-		// Override selfIllumination with per-pass LMC ambient
-		if (!m_ProgramUsesObjectUBO[VertexProgram])
+		IProgram *vp = getProgram(VertexProgram);
+		if (vp)
 		{
-			int siIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
-			if (siIdx != -1)
-				setUniform4f(IDriver::VertexProgram, siIdx,
-					selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
-		}
-
-		if (!m_ProgramUsesLightTableUBO[VertexProgram])
-		{
-			// Non-table path: override individual light color uniforms
-			// setupUniforms() pre-multiplied Light0ColDiff by mat.getDiffuse(), but for
-			// lightmap materials the legacy GL driver uses material diffuse white (or halved
-			// for x2 mode). We override here: pass 0 gets the actual light diffuse (scaled
-			// by 1/lightMapScale), pass 1+ gets zero (light added only once).
-			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			// Override selfIllumination with per-pass LMC ambient
+			if (!m_ProgramUsesObjectUBO[VertexProgram])
 			{
-				if (!_LightEnable[i]) continue;
-				uint ldc = m_DriverVertexProgram->getUniformIndex(
-					CProgramIndex::TName(CProgramIndex::Light0ColDiff + i));
-				if (ldc != ~0u)
-				{
-					if (pass == 0)
-					{
-						NLMISC::CRGBAF diffuse = NLMISC::CRGBAF(_UserLight[i].getDiffuse());
-						diffuse.R *= lmDiffuse;
-						diffuse.G *= lmDiffuse;
-						diffuse.B *= lmDiffuse;
-						setUniform4f(IDriver::VertexProgram, ldc, diffuse.R, diffuse.G, diffuse.B, 0.0f);
-					}
-					else
-					{
-						setUniform4f(IDriver::VertexProgram, ldc, 0.0f, 0.0f, 0.0f, 0.0f);
-					}
-				}
+				int siIdx = vp->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
+				if (siIdx != -1)
+					setUniform4f(IDriver::VertexProgram, siIdx,
+						selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
 			}
 
-			// Zero light specular — lightmap materials get no specular contribution
-			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			if (!m_ProgramUsesLightTableUBO[VertexProgram])
 			{
-				if (!_LightEnable[i]) continue;
-				uint lsc = m_DriverVertexProgram->getUniformIndex(
-					CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
-				if (lsc != ~0u)
-					setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
-			}
-		}
-		else if (!m_ProgramUsesObjectUBO[VertexProgram])
-		{
-			// Table path without object UBO: light factors are individual uniforms
-			if (!m_ProgramUsesMaterialUBO[VertexProgram])
-			{
-				// Override individual material uniforms: diffuse halved for x2, zero specular
-				int mdIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialDiffuse));
-				if (mdIdx != -1)
-					setUniform4f(IDriver::VertexProgram, mdIdx, lmDiffuse, lmDiffuse, lmDiffuse, 1.0f);
-				int msIdx = m_DriverVertexProgram->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialSpecular));
-				if (msIdx != -1)
-					setUniform4f(IDriver::VertexProgram, msIdx, 0.0f, 0.0f, 0.0f, 0.0f);
-			}
-			// else: materialUBO → diffuse/specular overridden via UBO pre-override above
-
-			// For pass > 0, zero all light factors (light added only once)
-			if (pass > 0)
-			{
+				// Non-table path: override individual light color uniforms
+				// setupUniforms() pre-multiplied Light0ColDiff by mat.getDiffuse(), but for
+				// lightmap materials the legacy GL driver uses material diffuse white (or halved
+				// for x2 mode). We override here: pass 0 gets the actual light diffuse (scaled
+				// by 1/lightMapScale), pass 1+ gets zero (light added only once).
 				for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 				{
-					uint lfIdx = m_DriverVertexProgram->getUniformIndex(
-						CProgramIndex::TName(CProgramIndex::NlLightFactor0 + i));
-					if (lfIdx != ~0u)
-						setUniform1f(IDriver::VertexProgram, lfIdx, 0.0f);
+					if (!_LightEnable[i]) continue;
+					uint ldc = vp->getUniformIndex(
+						CProgramIndex::TName(CProgramIndex::Light0ColDiff + i));
+					if (ldc != ~0u)
+					{
+						if (pass == 0)
+						{
+							NLMISC::CRGBAF diffuse = NLMISC::CRGBAF(_UserLight[i].getDiffuse());
+							diffuse.R *= lmDiffuse;
+							diffuse.G *= lmDiffuse;
+							diffuse.B *= lmDiffuse;
+							setUniform4f(IDriver::VertexProgram, ldc, diffuse.R, diffuse.G, diffuse.B, 0.0f);
+						}
+						else
+						{
+							setUniform4f(IDriver::VertexProgram, ldc, 0.0f, 0.0f, 0.0f, 0.0f);
+						}
+					}
+				}
+
+				// Zero light specular — lightmap materials get no specular contribution
+				for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+				{
+					if (!_LightEnable[i]) continue;
+					uint lsc = vp->getUniformIndex(
+						CProgramIndex::TName(CProgramIndex::Light0ColSpec + i));
+					if (lsc != ~0u)
+						setUniform4f(IDriver::VertexProgram, lsc, 0.0f, 0.0f, 0.0f, 0.0f);
 				}
 			}
+			else if (!m_ProgramUsesObjectUBO[VertexProgram])
+			{
+				// Table path without object UBO: light factors are individual uniforms
+				if (!m_ProgramUsesMaterialUBO[VertexProgram])
+				{
+					// Override individual material uniforms: diffuse halved for x2, zero specular
+					int mdIdx = vp->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialDiffuse));
+					if (mdIdx != -1)
+						setUniform4f(IDriver::VertexProgram, mdIdx, lmDiffuse, lmDiffuse, lmDiffuse, 1.0f);
+					int msIdx = vp->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlMaterialSpecular));
+					if (msIdx != -1)
+						setUniform4f(IDriver::VertexProgram, msIdx, 0.0f, 0.0f, 0.0f, 0.0f);
+				}
+				// else: materialUBO → diffuse/specular overridden via UBO pre-override above
+
+				// For pass > 0, zero all light factors (light added only once)
+				if (pass > 0)
+				{
+					for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+					{
+						uint lfIdx = vp->getUniformIndex(
+							CProgramIndex::TName(CProgramIndex::NlLightFactor0 + i));
+						if (lfIdx != ~0u)
+							setUniform1f(IDriver::VertexProgram, lfIdx, 0.0f);
+					}
+				}
+			}
+			// else: table + objectUBO — all overrides handled via UBO pre-override above
 		}
-		// else: table + objectUBO — all overrides handled via UBO pre-override above
 	}
 }
 
@@ -1178,6 +1222,13 @@ void			CDriverGL3::setupSpecularBegin()
 	// setup the good matrix for stage 1.
 	// NB: Cannot set uniforms here directly, because the program does not exist yet
 	_UserTexMat[1] = _SpecularTexMtx;
+
+	// Mark material UBO dirty so flushPassUniforms picks up the new texMatrix1
+	CMaterialDrvInfosGL3 *matDrv = _CurrentMaterial
+		? static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(_CurrentMaterial->_MatDrvInfo))
+		: NULL;
+	if (matDrv)
+		matDrv->MaterialUBODirty = true;
 }
 
 // ***************************************************************************
@@ -1190,6 +1241,13 @@ void			CDriverGL3::setupSpecularEnd()
 
 	// Happiness !!! we have already enabled the stage 1 - lolwhat
 	_UserTexMat[1].identity();
+
+	// Mark material UBO dirty so the identity gets packed on next flush
+	CMaterialDrvInfosGL3 *matDrv = _CurrentMaterial
+		? static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(_CurrentMaterial->_MatDrvInfo))
+		: NULL;
+	if (matDrv)
+		matDrv->MaterialUBODirty = true;
 }
 
 // ***************************************************************************
@@ -1202,11 +1260,15 @@ sint			CDriverGL3::beginSpecularMultiPass()
 	if (!_SpecularBatchOn)
 		setupSpecularBegin();
 
-	// Set shader values
-	// OPTIMIZE GL3: Only need to do this when program changed since it was last set
-	uint idx = m_DriverVertexProgram->getUniformIndex((CProgramIndex::TName)(CProgramIndex::TexMatrix1));
-	if (idx != ~0)
-		setUniform4x4f(IDriver::VertexProgram, idx, _UserTexMat[1]);
+	// Set shader values (TexMatrix1 for specular cubemap tex coords).
+	// In UBO mode, texMatrix1 is in the material UBO — already staged.
+	IProgram *vp = getProgram(VertexProgram);
+	if (!m_ProgramOnlyUBOs[VertexProgram] && vp)
+	{
+		uint idx = vp->getUniformIndex((CProgramIndex::TName)(CProgramIndex::TexMatrix1));
+		if (idx != ~0)
+			setUniform4x4f(IDriver::VertexProgram, idx, _UserTexMat[1]);
+	}
 
 	// Only need one pass for specular
 	return 1;
@@ -1215,8 +1277,8 @@ sint			CDriverGL3::beginSpecularMultiPass()
 // ***************************************************************************
 void			CDriverGL3::setupSpecularPass(uint pass)
 {
-	nlassert(m_DriverPixelProgram);
-	nlassert(m_DriverVertexProgram);
+	nlassert(getProgram(PixelProgram));
+	nlassert(getProgram(VertexProgram));
 
 	H_AUTO_OGL(CDriverGL3_setupSpecularPass)
 }
@@ -1236,7 +1298,7 @@ sint			CDriverGL3::beginPPLMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_beginPPLMultiPass)
 
-	//setupBuiltinPrograms(); // FIXME GL3
+	// Deprecated
 
 	#ifdef NL_DEBUG
 		nlassert(supportPerPixelLighting(true)); // make sure the hardware can do that

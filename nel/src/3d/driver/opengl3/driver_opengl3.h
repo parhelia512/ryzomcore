@@ -399,6 +399,7 @@ public:
 	bool					setupBuiltinVertexProgram();
 	bool					setupBuiltinPixelProgram();
 	bool					setupUniforms();
+	bool					flushPassUniforms();
 	void					setupUniforms(TProgram program);
 	void					setupInitialUniforms(IProgram *program);
 
@@ -1459,6 +1460,7 @@ private:
 		float MaterialDiffuse[4];
 		float MaterialSpecular[4];
 		float LightMapScale;          // x2 mode scale factor (1.0 or 2.0)
+		float Constants[IDRV_MAT_MAXTEXTURES][4]; // Lightmap factors for constant0-3 (material UBO)
 	} _LightMapUBOOverride;
 
 	// EMBM support

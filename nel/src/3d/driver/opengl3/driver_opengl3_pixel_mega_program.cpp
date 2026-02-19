@@ -153,13 +153,23 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	}
 	ss << std::endl;
 
-	// Per-stage constants and EMBM matrices (always individual uniforms)
-	for (int i = 0; i < MEGA_PP_MAX_SAMPLERS; ++i)
-		ss << "uniform vec4 constant" << i << ";" << std::endl;
-	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-		ss << "uniform vec4 embmMatrix" << i << ";" << std::endl;
+	// Per-stage constants and EMBM matrices
 	if (!materialUBO)
+	{
+		// All constants as individual uniforms (0-3 for TexEnv, 4-7 for lightmap factors)
+		for (int i = 0; i < MEGA_PP_MAX_SAMPLERS; ++i)
+			ss << "uniform vec4 constant" << i << ";" << std::endl;
+		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+			ss << "uniform vec4 embmMatrix" << i << ";" << std::endl;
 		ss << "uniform float nlLightMapScale;" << std::endl;
+	}
+	else
+	{
+		// constant0-3 and embmMatrix0-3 are in the material UBO.
+		// constant4-7 remain as individual uniforms for lightmap factors.
+		for (int i = IDRV_MAT_MAXTEXTURES; i < MEGA_PP_MAX_SAMPLERS; ++i)
+			ss << "uniform vec4 constant" << i << ";" << std::endl;
+	}
 	ss << std::endl;
 
 	// Fog uniforms (individual uniforms only when no camera UBO)
@@ -709,7 +719,7 @@ bool CDriverGL3::initMegaPixelPrograms()
 
 						for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
 						{
-							// tableUBO only valid when fogOrPpl (PPL needs ecPos)
+							// tableUBO folds when !fogOrPpl (no lighting code in PP)
 							if (tableUBO && !fogOrPpl)
 								continue;
 
@@ -841,7 +851,7 @@ bool CDriverGL3::setupMegaPixelProgram()
 
 	m_ProgramNoUniforms[PixelProgram] = false; // Mega PP always has uniforms
 	m_ProgramNoBuiltinUniforms[PixelProgram] = false;
-	m_ProgramOnlyUBOs[PixelProgram] = false;
+	m_ProgramOnlyUBOs[PixelProgram] = objectUBO && materialUBO;
 	m_ProgramUsesLightTableUBO[PixelProgram] = tableUBO;
 	m_ProgramUsesCameraUBO[PixelProgram] = cameraUBO;
 	m_ProgramUsesObjectUBO[PixelProgram] = objectUBO;

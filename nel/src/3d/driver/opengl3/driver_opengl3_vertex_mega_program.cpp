@@ -91,6 +91,8 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 	if (linked)
 	{
 		ss << "#version 300 es" << std::endl;
+		if (hwClip)
+			ss << "#extension GL_EXT_clip_cull_distance : enable" << std::endl;
 		ss << "precision highp float;" << std::endl;
 		ss << "precision highp int;" << std::endl;
 	}
@@ -177,9 +179,12 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 		ss << "uniform vec4 materialColor;" << std::endl;
 	ss << std::endl;
 
-	// TexGen uniforms (texMatrix always individual — not in UBOs)
-	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
-		ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
+	// TexGen uniforms (individual when no material UBO, otherwise in NlMaterial block)
+	if (!materialUBO)
+	{
+		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+			ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
+	}
 	ss << std::endl;
 
 	// Clip plane uniforms (individual uniforms only when no camera UBO)
@@ -666,7 +671,7 @@ bool CDriverGL3::setupMegaVertexProgram()
 
 	m_ProgramNoUniforms[VertexProgram] = false; // Mega VP always has uniforms
 	m_ProgramNoBuiltinUniforms[VertexProgram] = false;
-	m_ProgramOnlyUBOs[VertexProgram] = false;
+	m_ProgramOnlyUBOs[VertexProgram] = objectUBO && materialUBO;
 	m_ProgramUsesLightTableUBO[VertexProgram] = tableUBO;
 	m_ProgramUsesCameraUBO[VertexProgram] = cameraUBO;
 	m_ProgramUsesObjectUBO[VertexProgram] = objectUBO;

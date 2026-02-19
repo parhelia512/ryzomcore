@@ -581,6 +581,8 @@ public:
 		glsl330v = 0x65010330, // GLSL vertex program version 330
 		glsl330f = 0x65020330, // GLSL fragment program version 330
 		glsl330g = 0x65030330, // GLSL geometry program version 330
+		glsl300esv = 0x65010300, // GLSL ES 300 vertex program (pipeline stage, for linking)
+		glsl300esf = 0x65020300, // GLSL ES 300 fragment program (pipeline stage, for linking)
 	};
 
 	struct CSource : public NLMISC::CRefCount

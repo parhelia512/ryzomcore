@@ -25,26 +25,25 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
-// Insert builtin UBO headers after leading # preprocessor lines (#version, #extension, etc.)
+// Insert builtin UBO headers after leading preprocessor and precision lines
 static std::string insertBuiltinHeaders(const char *source, bool lightTable, bool camera, bool object, bool material,
 	const std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> > &userUBOs)
 {
 	const char *p = source;
 
-	// If source starts with # or //, scan past all # and // lines
-	if (*p == '#' || *p == '/' || *p == '\n')
+	// Scan past #preprocessor, //-comment, precision, and blank lines
+	for (;;)
 	{
-		for (;;)
+		if (*p == '#' || *p == '/' || *p == '\n'
+			|| strncmp(p, "precision", 9) == 0)
 		{
-			// Find end of current line
 			while (*p && *p != '\n')
 				++p;
 			if (*p == '\n')
 				++p;
-			// Stop if next line doesn't start with # or is empty
-			if (*p != '#' && *p != '/' && *p != '\n')
-				break;
 		}
+		else
+			break;
 	}
 
 	std::string result;
@@ -270,6 +269,9 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 				nldebug("GL3: %i: %s", (int)i, lines[i].c_str());
 			nglDeleteShader(shader);
 			program->m_CompileFailed = true;
+#ifdef NL_DEBUG
+			nlerror("GL3: Vertex program compilation failed (pipeline stage)");
+#endif
 			return false;
 		}
 
@@ -287,6 +289,9 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 			nglDeleteShader(shader);
 			nglDeleteProgram(id);
 			program->m_CompileFailed = true;
+#ifdef NL_DEBUG
+			nlerror("GL3: Vertex program link failed (pipeline stage)");
+#endif
 			return false;
 		}
 		// NOTE: do NOT detach/delete the shader — keep it attached for later extraction
@@ -316,7 +321,7 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 				nldebug("GL3: %i: %s", (int)i, lines[i].c_str());
 			}
 			program->m_CompileFailed = true;
-#if !FINAL_VERSION
+#ifdef NL_DEBUG
 			nlerror("GL3: Vertex program compilation failed");
 #endif
 			return false;
@@ -469,6 +474,9 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 				nldebug("GL3: %i: %s", (int)i, lines[i].c_str());
 			nglDeleteShader(shader);
 			program->m_CompileFailed = true;
+#ifdef NL_DEBUG
+			nlerror("GL3: Pixel program compilation failed (pipeline stage)");
+#endif
 			return false;
 		}
 
@@ -486,6 +494,9 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 			nglDeleteShader(shader);
 			nglDeleteProgram(id);
 			program->m_CompileFailed = true;
+#ifdef NL_DEBUG
+			nlerror("GL3: Pixel program link failed (pipeline stage)");
+#endif
 			return false;
 		}
 		// NOTE: do NOT detach/delete the shader — keep it attached for later extraction
@@ -514,7 +525,7 @@ bool CDriverGL3::compilePixelProgram(CPixelProgram *program)
 				nldebug("GL3: %i: %s", (int)i, lines[i].c_str());
 			}
 			program->m_CompileFailed = true;
-#if !FINAL_VERSION
+#ifdef NL_DEBUG
 			nlerror("GL3: Pixel program compilation failed");
 #endif
 			return false;
@@ -1162,6 +1173,21 @@ bool CDriverGL3::setupUniforms()
 		setupUniforms(IDriver::VertexProgram);
 	if (!ppSkipBuiltin && !m_ProgramOnlyUBOs[PixelProgram])
 		setupUniforms(IDriver::PixelProgram);
+	return true;
+}
+
+bool CDriverGL3::flushPassUniforms()
+{
+	// Re-flush dirty material UBO after per-pass staging.
+	// TexEnv constants, EMBM matrices, and TexMatrix are staged in setupMaterial
+	// and packed by uploadMaterialUBO. This catches any per-pass changes.
+	// Skip for lightmap: setupLightMapPass already handles its own UBO via
+	// setupBuiltinPrograms() with the override path.
+	if (_CurrentMaterialSupportedShader != CMaterial::LightMap)
+	{
+		if (m_ProgramUsesMaterialUBO[VertexProgram] || m_ProgramUsesMaterialUBO[PixelProgram])
+			uploadMaterialUBO();
+	}
 	return true;
 }
 
@@ -1844,9 +1870,11 @@ bool CDriverGL3::initMegaLinkedPrograms()
 							continue;
 						if (ppClip && !m_PPClipPlanes) continue;
 
-						// Get linked=1 VP and PP single-stage programs
+						// Get linked=1 VP and PP single-stage programs.
+						// PP tableUBO folds to 0 when !fogOrPpl (no lighting code).
+						int ppTableUBO = fogOrPpl ? tableUBO : 0;
 						CVertexProgram *vpProg = m_MegaVP[1][fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO];
-						CPixelProgram *ppProg = m_MegaPP[1][fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
+						CPixelProgram *ppProg = m_MegaPP[1][fogOrPpl][cube][specular][ppClip][ppTableUBO][cameraUBO][objectUBO][materialUBO];
 
 						if (!vpProg || !ppProg)
 							continue;

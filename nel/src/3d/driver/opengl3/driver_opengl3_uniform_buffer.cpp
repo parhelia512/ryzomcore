@@ -91,7 +91,8 @@ const char *GLSLObjectHeader =
 	"};\n";
 
 const char *GLSLMaterialHeader =
-	// Per-material UBO: material colors, alpha test, shader type, texenv modes.
+	// Per-material UBO: material colors, alpha test, shader type, texenv modes,
+	// TexEnv constants, EMBM matrices, and texture matrices.
 	// Uploaded when material changes. Binding point set via glUniformBlockBinding in setupInitialUniforms.
 	"layout(std140) uniform NlMaterial {\n"
 	"    vec4  materialColor;\n"
@@ -109,6 +110,18 @@ const char *GLSLMaterialHeader =
 	"    float nlLightMapScale;\n"
 	"    int   _matPad0;\n"
 	"    int   _matPad1;\n"
+	"    vec4  constant0;\n"
+	"    vec4  constant1;\n"
+	"    vec4  constant2;\n"
+	"    vec4  constant3;\n"
+	"    vec4  embmMatrix0;\n"
+	"    vec4  embmMatrix1;\n"
+	"    vec4  embmMatrix2;\n"
+	"    vec4  embmMatrix3;\n"
+	"    mat4  texMatrix0;\n"
+	"    mat4  texMatrix1;\n"
+	"    mat4  texMatrix2;\n"
+	"    mat4  texMatrix3;\n"
 	"};\n";
 
 static const char *s_TypeKeyword[] = {
