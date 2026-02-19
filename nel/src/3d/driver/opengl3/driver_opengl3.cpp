@@ -363,7 +363,7 @@ CDriverGL3::CDriverGL3()
 	m_LinkedMegaShaders = true; // also useful under GL 3.3
 
 #if !FINAL_VERSION && defined(NL_DEBUG)
-	m_BuildUnusedPrograms = true;
+	m_BuildUnusedPrograms = false;
 #else
 	m_BuildUnusedPrograms = false;
 #endif

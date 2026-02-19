@@ -746,12 +746,15 @@ bool CDriverGL3::initMegaPixelPrograms()
 											if (linked)
 											{
 												// Linked programs are always fully UBO-backed;
-												// ensure the all-UBO variant is built
-												if (!tableUBO || !cameraUBO || !objectUBO || !materialUBO) continue;
+												// ensure the all-UBO variant is built.
+												// tableUBO folds to 0 when !fogOrPpl (no lighting code).
+												if (tableUBO != (fogOrPpl ? 1 : 0)) continue;
+												if (!cameraUBO || !objectUBO || !materialUBO) continue;
 											}
 											else
 											{
-												if (tableUBO != activeTableUBO) continue;
+												// tableUBO folds to 0 when !fogOrPpl (no lighting code).
+												if (tableUBO != (fogOrPpl ? activeTableUBO : 0)) continue;
 												if (cameraUBO != activeCameraUBO) continue;
 												if (objectUBO != activeObjectUBO) continue;
 												if (materialUBO != activeMaterialUBO) continue;

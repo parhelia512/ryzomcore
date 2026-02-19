@@ -1877,9 +1877,15 @@ bool CDriverGL3::initMegaLinkedPrograms()
 						CPixelProgram *ppProg = m_MegaPP[1][fogOrPpl][cube][specular][ppClip][ppTableUBO][cameraUBO][objectUBO][materialUBO];
 
 						if (!vpProg || !ppProg)
-							continue;
+						{
+							nlwarning("GL3: Missing mega program (vpProg=%p, ppProg=%p) for linked pipeline (fogOrPpl=%d, hwClip=%d, cube=%d, specular=%d, ppClip=%d)", (void *)vpProg, (void *)ppProg, fogOrPpl, hwClip, cube, specular, ppClip);
+							return false;
+						}
 						if (!vpProg->m_DrvInfo || !ppProg->m_DrvInfo)
-							continue;
+						{
+							nlwarning("GL3: Missing driver info for mega program in linked pipeline (fogOrPpl=%d, hwClip=%d, cube=%d, specular=%d, ppClip=%d)", fogOrPpl, hwClip, cube, specular, ppClip);
+							return false;
+						}
 
 						CProgramDrvInfosGL3 *vpDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)vpProg->m_DrvInfo);
 						CProgramDrvInfosGL3 *ppDrvInfo = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)ppProg->m_DrvInfo);
