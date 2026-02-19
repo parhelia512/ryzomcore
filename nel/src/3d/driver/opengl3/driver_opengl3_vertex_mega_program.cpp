@@ -77,7 +77,7 @@ static const char *s_TexGenAccess[4] = {
 	"nlTexGenMode.x", "nlTexGenMode.y", "nlTexGenMode.z", "nlTexGenMode.w"
 };
 
-void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableUBO, bool cameraUBO, bool objectUBO, bool materialUBO)
+void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableUBO, bool cameraUBO, bool objectUBO, bool materialUBO, bool linked = false)
 {
 	// Object UBO implies tableUBO and camera UBO
 	if (objectUBO) { tableUBO = true; cameraUBO = true; }
@@ -86,20 +86,32 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 	ss << "// Megashader Vertex Program";
 	ss << " (fogOrPpl=" << (int)fogOrPpl << ", hwClip=" << (int)hwClip << ", tableUBO=" << (int)tableUBO
 	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
-	   << ", materialUBO=" << (int)materialUBO << ")" << std::endl;
+	   << ", materialUBO=" << (int)materialUBO << ", linked=" << (int)linked << ")" << std::endl;
 	ss << std::endl;
-	ss << "#version 330" << std::endl;
-	ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
+	if (linked)
+	{
+		ss << "#version 300 es" << std::endl;
+		ss << "precision highp float;" << std::endl;
+		ss << "precision highp int;" << std::endl;
+	}
+	else
+	{
+		ss << "#version 330" << std::endl;
+		ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
+	}
 	ss << std::endl;
 
-	// gl_PerVertex output block
-	ss << "out gl_PerVertex" << std::endl;
-	ss << "{" << std::endl;
-	ss << "  vec4 gl_Position;" << std::endl;
-	if (hwClip)
-		ss << "  float gl_ClipDistance[6];" << std::endl;
-	ss << "};" << std::endl;
-	ss << std::endl;
+	// gl_PerVertex output block (SSO-specific; 300 es has implicit gl_Position)
+	if (!linked)
+	{
+		ss << "out gl_PerVertex" << std::endl;
+		ss << "{" << std::endl;
+		ss << "  vec4 gl_Position;" << std::endl;
+		if (hwClip)
+			ss << "  float gl_ClipDistance[6];" << std::endl;
+		ss << "};" << std::endl;
+		ss << std::endl;
+	}
 
 	// NlCamera UBO block is provided by GLSLCameraHeader
 	// NlModel UBO block is provided by GLSLObjectHeader
@@ -524,57 +536,64 @@ bool CDriverGL3::initMegaVertexPrograms()
 	int activeObjectUBO = m_UseMegaObjectUBO ? 1 : 0;
 	int activeMaterialUBO = m_UseMegaMaterialUBO ? 1 : 0;
 
-	for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
+	for (int linked = 0; linked < 2; ++linked)
 	{
-		for (int hwClip = 0; hwClip < 2; ++hwClip)
+		// Skip linked variants if linked mega shaders are not enabled
+		if (linked && !m_LinkedMegaShaders) continue;
+
+		for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
 		{
-			for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
+			for (int hwClip = 0; hwClip < 2; ++hwClip)
 			{
-				for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
+				for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
 				{
-					for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
+					for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
 					{
-						for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
+						for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
 						{
-							// objectUBO implies tableUBO and cameraUBO
-							if (objectUBO && (!tableUBO || !cameraUBO))
-								continue;
-
-							// Skip variants that won't be selected at runtime
-							if (!m_BuildUnusedPrograms)
+							for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
 							{
-								// m_PPClipPlanes zeroes ClipPlaneMask on VP, so hwClip=1 is never selected
-								if (hwClip && m_PPClipPlanes) continue;
-								if (tableUBO != activeTableUBO) continue;
-								if (cameraUBO != activeCameraUBO) continue;
-								if (objectUBO != activeObjectUBO) continue;
-								if (materialUBO != activeMaterialUBO) continue;
+								// objectUBO implies tableUBO and cameraUBO
+								if (objectUBO && (!tableUBO || !cameraUBO))
+									continue;
+
+								// Skip variants that won't be selected at runtime
+								if (!m_BuildUnusedPrograms)
+								{
+									// m_PPClipPlanes zeroes ClipPlaneMask on VP, so hwClip=1 is never selected
+									if (hwClip && m_PPClipPlanes) continue;
+									if (tableUBO != activeTableUBO) continue;
+									if (cameraUBO != activeCameraUBO) continue;
+									if (objectUBO != activeObjectUBO) continue;
+									if (materialUBO != activeMaterialUBO) continue;
+								}
+
+								std::string result;
+								megaVPGenerate(result, fogOrPpl != 0, hwClip != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0, linked != 0);
+
+								CVertexProgram *vp = new CVertexProgram();
+								IProgram::CSource *src = new IProgram::CSource();
+								src->Profile = IProgram::glsl330v;
+								src->DisplayName = NLMISC::toString("Mega VP (linked=%d, fogOrPpl=%d, hwClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", linked, fogOrPpl, hwClip, tableUBO, cameraUBO, objectUBO, materialUBO);
+								src->Features.UsesLightTableUBO = (tableUBO != 0);
+								src->Features.UsesCameraUBO = (cameraUBO != 0);
+								src->Features.UsesObjectUBO = (objectUBO != 0);
+								src->Features.UsesMaterialUBO = (materialUBO != 0);
+								src->Features.PipelineStage = (linked != 0);
+								src->setSource(result);
+								vp->addSource(src);
+
+								nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+								if (!compileVertexProgram(vp))
+								{
+									nlwarning("GL3: Mega VP compilation failed (%s)", src->DisplayName.c_str());
+									delete vp;
+									return false;
+								}
+
+								m_MegaVP[linked][fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO] = vp;
 							}
-
-							std::string result;
-							megaVPGenerate(result, fogOrPpl != 0, hwClip != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
-
-							CVertexProgram *vp = new CVertexProgram();
-							IProgram::CSource *src = new IProgram::CSource();
-							src->Profile = IProgram::glsl330v;
-							src->DisplayName = NLMISC::toString("Mega VP (fogOrPpl=%d, hwClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", fogOrPpl, hwClip, tableUBO, cameraUBO, objectUBO, materialUBO);
-							src->Features.UsesLightTableUBO = (tableUBO != 0);
-							src->Features.UsesCameraUBO = (cameraUBO != 0);
-							src->Features.UsesObjectUBO = (objectUBO != 0);
-							src->Features.UsesMaterialUBO = (materialUBO != 0);
-							src->setSource(result);
-							vp->addSource(src);
-
-							nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
-
-							if (!compileVertexProgram(vp))
-							{
-								nlwarning("GL3: Mega VP compilation failed (%s)", src->DisplayName.c_str());
-								delete vp;
-								return false;
-							}
-
-							m_MegaVP[fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO] = vp;
 						}
 					}
 				}
@@ -644,7 +663,11 @@ bool CDriverGL3::setupMegaVertexProgram()
 	m_ProgramUsesObjectUBO[VertexProgram] = objectUBO;
 	m_ProgramUsesMaterialUBO[VertexProgram] = materialUBO;
 
-	CVertexProgram *vp = m_MegaVP[fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO];
+	// When using linked mega shaders, skip SSO VP activation (defer to linked path in setupMegaPixelProgram)
+	if (m_LinkedMegaShaders)
+		return true;
+
+	CVertexProgram *vp = m_MegaVP[0][fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(vp);
 
 	if (!activeVertexProgram(vp, true))

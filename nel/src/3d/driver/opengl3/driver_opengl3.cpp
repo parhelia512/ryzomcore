@@ -367,10 +367,12 @@ CDriverGL3::CDriverGL3()
 	m_BuildUnusedPrograms = false;
 #endif
 	m_UseMegaShaders = true;
+	m_LinkedMegaShaders = false;
 	m_UseMegaLightTableUBO = true;  // implied by m_UseMegaObjectUBO
 	m_UseMegaCameraUBO = true;      // implied by m_UseMegaObjectUBO
 	m_UseMegaObjectUBO = true;
 	m_UseMegaMaterialUBO = true;
+	m_PPOBound = true; // PPO is bound after initProgramPipeline()
 	m_VPSpecularOutput = true;
 	m_VPNormalOutput = false;
 	m_VPWorldSpacePositionOutput = false;
@@ -535,8 +537,19 @@ bool CDriverGL3::setupDisplay()
 			nlwarning("GL3: Failed to init mega pixel programs, falling back to per-material shaders");
 		else
 			nlinfo("GL3: Mega shaders initialized");
-		if (!m_MegaVP[0][0][0][0][0][0] || !m_MegaPP[0][0][0][0][0][0][0][0])
+		if (!m_MegaVP[0][0][0][0][0][0][0] || !m_MegaPP[0][0][0][0][0][0][0][0][0])
 			m_UseMegaShaders = false; // Fallback
+	}
+
+	if (m_LinkedMegaShaders && m_UseMegaShaders)
+	{
+		if (!initMegaLinkedPrograms())
+		{
+			nlwarning("GL3: Failed to link mega programs, falling back to SSO");
+			m_LinkedMegaShaders = false;
+		}
+		else
+			nlinfo("GL3: Linked mega shaders initialized");
 	}
 
 	_PPLExponent = 1.f;

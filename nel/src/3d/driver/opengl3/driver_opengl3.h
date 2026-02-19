@@ -418,8 +418,10 @@ public:
 	// Megashader support
 	bool					initMegaVertexPrograms();
 	bool					initMegaPixelPrograms();
+	bool					initMegaLinkedPrograms();
 	bool					setupMegaVertexProgram();
 	bool					setupMegaPixelProgram();
+	bool					setupMegaLinkedPrograms();
 	void					setupMegaVPUniforms();
 	void					setupMegaPPUniforms();
 
@@ -1391,20 +1393,34 @@ private:
 	bool m_VPBuiltinTouched;
 
 	// Megashader support:
-	// m_MegaVP[fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO]
-	// m_MegaPP[fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO]
+	// m_MegaVP[linked][fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO]
+	// m_MegaPP[linked][fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO]
+	//   linked: 0=separable SSO programs; 1=single-stage linked programs (for combining into VP+PP pairs)
 	//   fogOrPpl: 0=no ecPos/fog/PPL (UI/sky); 1=has ecPos, fog+PPL runtime-gated
 	//   ppClip: 0=no PP clip; 1=PP-based clip plane discard (implies fogOrPpl=1)
 	//   tableUBO: 0=non-table lights; 1=light table UBO
 	bool m_BuildUnusedPrograms;
 	bool m_PPClipPlanes;            // Use PP-based clip plane discard instead of native gl_ClipDistance
 	bool m_UseMegaShaders;          // Select mega VP/PP variants (false = per-material compiled shaders)
+	bool m_LinkedMegaShaders;       // Use linked VP+PP programs instead of SSO for mega path
 	bool m_UseMegaLightTableUBO;    // Select mega VP/PP variants with light table UBO
 	bool m_UseMegaCameraUBO;        // Select mega VP/PP variants with camera state UBO
 	bool m_UseMegaObjectUBO;        // Select mega VP/PP variants with per-object UBO (implies table+camera)
 	bool m_UseMegaMaterialUBO;      // Select mega VP/PP variants with per-material UBO
-	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2][2][2];
-	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2][2][2];
+	bool m_PPOBound;                // Track whether PPO is currently bound (vs linked program via glUseProgram)
+	NLMISC::CRefPtr<CVertexProgram> m_MegaVP[2][2][2][2][2][2][2];
+	NLMISC::CRefPtr<CPixelProgram> m_MegaPP[2][2][2][2][2][2][2][2][2];
+
+	// Linked mega shader programs (combined VP+PP linked programs)
+	struct CMegaLinkedProgram
+	{
+		GLuint progId;                              // Combined linked GL program (0 = not built)
+		NLMISC::CSmartPtr<CVertexProgram> vpProxy;  // Proxy for VP-side uniform queries
+		NLMISC::CSmartPtr<CPixelProgram>  ppProxy;  // Proxy for PP-side uniform queries
+		CMegaLinkedProgram() : progId(0) { }
+	};
+	// m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO]
+	CMegaLinkedProgram m_MegaLinked[2][2][2][2][2][2][2][2][2];
 
 	// Whether the currently active VP outputs specularColor at VaryingLocationSpecularColor
 	bool m_VPSpecularOutput;

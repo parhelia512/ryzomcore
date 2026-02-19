@@ -80,7 +80,7 @@ static const char *s_LightFacAccess[8] = {
 	"nlLightFactors45.x", "nlLightFactors45.y", "nlLightFactors45.z", "nlLightFactors45.w"
 };
 
-void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular, bool ppClip, bool tableUBO, bool cameraUBO, bool objectUBO, bool materialUBO)
+void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular, bool ppClip, bool tableUBO, bool cameraUBO, bool objectUBO, bool materialUBO, bool linked = false)
 {
 	// Object UBO implies camera UBO
 	if (objectUBO) { cameraUBO = true; }
@@ -92,10 +92,19 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	ss << " (fogOrPpl=" << (int)fogOrPpl << ", cube=" << (int)cube << ", specular=" << (int)specular
 	   << ", ppClip=" << (int)ppClip << ", tableUBO=" << (int)tableUBO
 	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
-	   << ", materialUBO=" << (int)materialUBO << ")" << std::endl;
+	   << ", materialUBO=" << (int)materialUBO << ", linked=" << (int)linked << ")" << std::endl;
 	ss << std::endl;
-	ss << "#version 330" << std::endl;
-	ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
+	if (linked)
+	{
+		ss << "#version 300 es" << std::endl;
+		ss << "precision highp float;" << std::endl;
+		ss << "precision highp int;" << std::endl;
+	}
+	else
+	{
+		ss << "#version 330" << std::endl;
+		ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
+	}
 	ss << std::endl;
 
 	ss << "out vec4 fragColor;" << std::endl;
@@ -681,74 +690,81 @@ bool CDriverGL3::initMegaPixelPrograms()
 	int activeMaterialUBO = m_UseMegaMaterialUBO ? 1 : 0;
 	int activePPClip = m_PPClipPlanes ? 1 : 0;
 
-	for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
+	for (int linked = 0; linked < 2; ++linked)
 	{
-		for (int cube = 0; cube < 2; ++cube)
-		{
-			for (int specular = 0; specular < 2; ++specular)
-			{
-				for (int ppClip = 0; ppClip < 2; ++ppClip)
-				{
-					// ppClip only valid when fogOrPpl (needs ecPos varying)
-					if (ppClip && !fogOrPpl)
-						continue;
+		// Skip linked variants if linked mega shaders are not enabled
+		if (linked && !m_LinkedMegaShaders) continue;
 
-					for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
+		for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
+		{
+			for (int cube = 0; cube < 2; ++cube)
+			{
+				for (int specular = 0; specular < 2; ++specular)
+				{
+					for (int ppClip = 0; ppClip < 2; ++ppClip)
 					{
-						// tableUBO only valid when fogOrPpl (PPL needs ecPos)
-						if (tableUBO && !fogOrPpl)
+						// ppClip only valid when fogOrPpl (needs ecPos varying)
+						if (ppClip && !fogOrPpl)
 							continue;
 
-						for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
+						for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
 						{
-							for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
+							// tableUBO only valid when fogOrPpl (PPL needs ecPos)
+							if (tableUBO && !fogOrPpl)
+								continue;
+
+							for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
 							{
-								for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
+								for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
 								{
-									// objectUBO implies cameraUBO
-									if (objectUBO && !cameraUBO)
-										continue;
-
-									// objectUBO implies lightTableUBO when PPL code is active
-									// (non-table PPL references nlPpLightMode which isn't in NlModel UBO)
-									if (objectUBO && !tableUBO && fogOrPpl)
-										continue;
-
-									// Skip variants that won't be selected at runtime
-									if (!m_BuildUnusedPrograms)
+									for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
 									{
-										// ppClip=1 is never selected when m_PPClipPlanes is off
-										if (ppClip && !m_PPClipPlanes) continue;
-										if (tableUBO != activeTableUBO) continue;
-										if (cameraUBO != activeCameraUBO) continue;
-										if (objectUBO != activeObjectUBO) continue;
-										if (materialUBO != activeMaterialUBO) continue;
+										// objectUBO implies cameraUBO
+										if (objectUBO && !cameraUBO)
+											continue;
+
+										// objectUBO implies lightTableUBO when PPL code is active
+										// (non-table PPL references nlPpLightMode which isn't in NlModel UBO)
+										if (objectUBO && !tableUBO && fogOrPpl)
+											continue;
+
+										// Skip variants that won't be selected at runtime
+										if (!m_BuildUnusedPrograms)
+										{
+											// ppClip=1 is never selected when m_PPClipPlanes is off
+											if (ppClip && !m_PPClipPlanes) continue;
+											if (tableUBO != activeTableUBO) continue;
+											if (cameraUBO != activeCameraUBO) continue;
+											if (objectUBO != activeObjectUBO) continue;
+											if (materialUBO != activeMaterialUBO) continue;
+										}
+
+										std::string result;
+										megaPPGenerate(result, fogOrPpl != 0, cube != 0, specular != 0, ppClip != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0, linked != 0);
+
+										CPixelProgram *pp = new CPixelProgram();
+										IProgram::CSource *src = new IProgram::CSource();
+										src->Profile = IProgram::glsl330f;
+										src->DisplayName = NLMISC::toString("Mega PP (linked=%d, fogOrPpl=%d, cube=%d, spec=%d, ppClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", linked, fogOrPpl, cube, specular, ppClip, tableUBO, cameraUBO, objectUBO, materialUBO);
+										src->Features.UsesLightTableUBO = (tableUBO != 0);
+										src->Features.UsesCameraUBO = (cameraUBO != 0);
+										src->Features.UsesObjectUBO = (objectUBO != 0);
+										src->Features.UsesMaterialUBO = (materialUBO != 0);
+										src->Features.PipelineStage = (linked != 0);
+										src->setSource(result);
+										pp->addSource(src);
+
+										nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
+
+										if (!compilePixelProgram(pp))
+										{
+											nlwarning("GL3: Mega PP compilation failed (%s)", src->DisplayName.c_str());
+											delete pp;
+											return false;
+										}
+
+										m_MegaPP[linked][fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO] = pp;
 									}
-
-									std::string result;
-									megaPPGenerate(result, fogOrPpl != 0, cube != 0, specular != 0, ppClip != 0, tableUBO != 0, cameraUBO != 0, objectUBO != 0, materialUBO != 0);
-
-									CPixelProgram *pp = new CPixelProgram();
-									IProgram::CSource *src = new IProgram::CSource();
-									src->Profile = IProgram::glsl330f;
-									src->DisplayName = NLMISC::toString("Mega PP (fogOrPpl=%d, cube=%d, spec=%d, ppClip=%d, tableUBO=%d, cam=%d, obj=%d, mat=%d)", fogOrPpl, cube, specular, ppClip, tableUBO, cameraUBO, objectUBO, materialUBO);
-									src->Features.UsesLightTableUBO = (tableUBO != 0);
-									src->Features.UsesCameraUBO = (cameraUBO != 0);
-									src->Features.UsesObjectUBO = (objectUBO != 0);
-									src->Features.UsesMaterialUBO = (materialUBO != 0);
-									src->setSource(result);
-									pp->addSource(src);
-
-									nldebug("GL3: Compile '%s'", src->DisplayName.c_str());
-
-									if (!compilePixelProgram(pp))
-									{
-										nlwarning("GL3: Mega PP compilation failed (%s)", src->DisplayName.c_str());
-										delete pp;
-										return false;
-									}
-
-									m_MegaPP[fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO] = pp;
 								}
 							}
 						}
@@ -822,7 +838,11 @@ bool CDriverGL3::setupMegaPixelProgram()
 	m_ProgramUsesObjectUBO[PixelProgram] = objectUBO;
 	m_ProgramUsesMaterialUBO[PixelProgram] = materialUBO;
 
-	CPixelProgram *pp = m_MegaPP[fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
+	// When using linked mega shaders, delegate to the linked activation path
+	if (m_LinkedMegaShaders)
+		return setupMegaLinkedPrograms();
+
+	CPixelProgram *pp = m_MegaPP[0][fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO];
 	nlassert(pp);
 
 	if (!activePixelProgram(pp, true))
