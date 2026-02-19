@@ -359,14 +359,14 @@ CDriverGL3::CDriverGL3()
 	m_VPBuiltinTouched = true;
 	
 	// for GL ES 3.0 compatibility
-	m_PPClipPlanes = false; // false for GL 3.3, true for GL ES 3.0, switches to using PP for clip plane discard
-	m_LinkedMegaShaders = true; // also useful under GL 3.3
-	m_SupportSSO = false; // true for GL 3.3, false for GL ES 3.0
+	m_PPClipPlanes = false; // false for GL 3.3, true for GL ES 3.0, switches to using PP for clip plane discard, since no driver support
+	m_LinkedMegaShaders = true; // not required but also useful under GL 3.3, set true for both
+	m_SupportSSO = false; // true for GL 3.3, false for GL ES 3.0, false if we want to be strict :)
 	// set sso and linked shaders opposite to each other to test exclusive modes
 	// m_SupportNonUBOs = false; // testing strict mode, linked-only always implies ubo-only // TODO
 
 #if !FINAL_VERSION && defined(NL_DEBUG)
-	m_BuildUnusedPrograms = false;
+	m_BuildUnusedPrograms = false; // set to test compilation of all possible mega shader variants
 #else
 	m_BuildUnusedPrograms = false;
 #endif
