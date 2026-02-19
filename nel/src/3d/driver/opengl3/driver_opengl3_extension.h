@@ -18,14 +18,14 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef NL_OPENGL_EXTENSION_H
-#define NL_OPENGL_EXTENSION_H
+#ifndef NL_OPENGL3_EXTENSION_H
+#define NL_OPENGL3_EXTENSION_H
 
 
 #include "nel/misc/types_nl.h"
 #include "nel/misc/string_common.h"
 
-#include "driver_opengl_extension_def.h"
+#include "driver_opengl3_extension_def.h"
 
 namespace	NL3D {
 namespace NLDRIVERGL3 {
@@ -401,5 +401,5 @@ extern NEL_PFNGLXGETSWAPINTERVALMESAPROC		nglXGetSwapIntervalMESA;
 
 
 
-#endif // NL_OPENGL_EXTENSION_H
+#endif // NL_OPENGL3_EXTENSION_H
 

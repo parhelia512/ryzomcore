@@ -17,8 +17,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef NL_OPENGL_EXTENSION_DEF_H
-#define NL_OPENGL_EXTENSION_DEF_H
+#ifndef NL_OPENGL3_EXTENSION_DEF_H
+#define NL_OPENGL3_EXTENSION_DEF_H
 
 
 #include "nel/misc/types_nl.h"
@@ -77,5 +77,5 @@ typedef void (APIENTRY * NEL_PFNGLXFREEMEMORYNVPROC) (void *pointer);
 }
 #endif
 
-#endif // NL_OPENGL_EXTENSION_DEF_H
+#endif // NL_OPENGL3_EXTENSION_DEF_H
 

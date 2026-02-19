@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef NL_DRIVER_OPENGL_PROGRAM_H
-#define NL_DRIVER_OPENGL_PROGRAM_H
+#ifndef NL_DRIVER_OPENGL3_PROGRAM_H
+#define NL_DRIVER_OPENGL3_PROGRAM_H
 
 #include "nel/misc/types_nl.h"
 
@@ -170,6 +170,6 @@ struct hash<NL3D::NLDRIVERGL3::CPPBuiltin>
 
 }
 
-#endif // NL_DRIVER_OPENGL_PROGRAM_H
+#endif // NL_DRIVER_OPENGL3_PROGRAM_H
 
 /* end of file */

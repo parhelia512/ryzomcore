@@ -19,44 +19,44 @@ ENDIF()
 FILE(GLOB SRC *.cpp *.h *.def)
 
 SOURCE_GROUP("" FILES
-		driver_opengl.cpp
-		driver_opengl.h
-		driver_opengl.def
-		stdopengl.cpp
-		stdopengl.h)
+		driver_opengl3.cpp
+		driver_opengl3.h
+		driver_opengl3.def
+		stdopengl3.cpp
+		stdopengl3.h)
 
 SOURCE_GROUP(rendering FILES
-		driver_opengl_rendering.cpp
-		driver_opengl_material.cpp
-		driver_opengl_texture.cpp
-		driver_opengl_light.cpp
-		driver_opengl_matrix.cpp
-		driver_opengl_states.cpp
-		driver_opengl_states.h)
+		driver_opengl3_rendering.cpp
+		driver_opengl3_material.cpp
+		driver_opengl3_texture.cpp
+		driver_opengl3_light.cpp
+		driver_opengl3_matrix.cpp
+		driver_opengl3_states.cpp
+		driver_opengl3_states.h)
 
 SOURCE_GROUP(program FILES
-		driver_opengl_program.cpp
-		driver_opengl_program.h
-		driver_opengl_vertex_program.cpp
-		driver_opengl_pixel_program.cpp
-		driver_opengl_vertex_mega_program.cpp
-		driver_opengl_pixel_mega_program.cpp)
+		driver_opengl3_program.cpp
+		driver_opengl3_program.h
+		driver_opengl3_vertex_program.cpp
+		driver_opengl3_pixel_program.cpp
+		driver_opengl3_vertex_mega_program.cpp
+		driver_opengl3_pixel_mega_program.cpp)
 
 SOURCE_GROUP(vertex FILES
-		driver_opengl_vertex.cpp
-		driver_opengl_vertex_buffer.cpp
-		driver_opengl_vertex_buffer.h
-		driver_opengl_uniform_buffer.cpp
-		driver_opengl_uniform_buffer.h)
+		driver_opengl3_vertex.cpp
+		driver_opengl3_vertex_buffer.cpp
+		driver_opengl3_vertex_buffer.h
+		driver_opengl3_uniform_buffer.cpp
+		driver_opengl3_uniform_buffer.h)
 
 SOURCE_GROUP(extension FILES
-		driver_opengl_extension.cpp
-		driver_opengl_extension.h
-		driver_opengl_extension_def.h)
+		driver_opengl3_extension.cpp
+		driver_opengl3_extension.h
+		driver_opengl3_extension_def.h)
 
 SOURCE_GROUP(window FILES
-		driver_opengl_window.cpp
-		driver_opengl_inputs.cpp
+		driver_opengl3_window.cpp
+		driver_opengl3_inputs.cpp
 		unix_event_emitter.cpp
 		unix_event_emitter.h)
 
@@ -83,7 +83,7 @@ NL_ADD_LIB_SUFFIX(${NLDRV_OGL_LIB})
 NL_ADD_RUNTIME_FLAGS(${NLDRV_OGL_LIB})
 
 IF(WIN32)
-  TARGET_COMPILE_DEFINITIONS(${NLDRV_OGL_LIB} PRIVATE DRIVER_OPENGL_EXPORTS)
+  TARGET_COMPILE_DEFINITIONS(${NLDRV_OGL_LIB} PRIVATE DRIVER_OPENGL3_EXPORTS)
 ENDIF()
 
 IF(APPLE)
@@ -116,7 +116,7 @@ IF(UNIX AND NOT APPLE)
 ENDIF()
 
 IF(WITH_PCH)
-  target_precompile_headers(${NLDRV_OGL_LIB} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/stdopengl.h)
+  target_precompile_headers(${NLDRV_OGL_LIB} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/stdopengl3.h)
 ENDIF()
 
 IF(WITH_INSTALL_LIBRARIES OR NOT WITH_STATIC_DRIVERS)

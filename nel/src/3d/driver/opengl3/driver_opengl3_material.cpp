@@ -18,13 +18,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "stdopengl.h"
-#include "driver_opengl.h"
+#include "stdopengl3.h"
+#include "driver_opengl3.h"
 #include "nel/3d/cube_map_builder.h"
 #include "nel/3d/texture_mem.h"
 #include "nel/3d/texture_bump.h"
 #include "nel/3d/material.h"
-#include "driver_opengl_vertex_buffer.h"
+#include "driver_opengl3_vertex_buffer.h"
 
 namespace NL3D {
 namespace NLDRIVERGL3 {

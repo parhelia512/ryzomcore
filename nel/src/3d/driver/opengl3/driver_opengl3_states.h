@@ -18,8 +18,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef NL_DRIVER_OPENGL_STATES_H
-#define NL_DRIVER_OPENGL_STATES_H
+#ifndef NL_DRIVER_OPENGL3_STATES_H
+#define NL_DRIVER_OPENGL3_STATES_H
 
 #include "nel/misc/types_nl.h"
 #include "nel/3d/vertex_buffer.h"
@@ -175,6 +175,6 @@ private:
 } // NL3D
 
 
-#endif // NL_DRIVER_OPENGL_STATES_H
+#endif // NL_DRIVER_OPENGL3_STATES_H
 
 /* End of driver_opengl_states.h */

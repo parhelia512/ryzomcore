@@ -17,10 +17,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "driver_opengl.h"
-#include "driver_opengl_program.h"
-#include "driver_opengl_vertex_buffer.h"
-#include "driver_opengl_uniform_buffer.h"
+#include "driver_opengl3.h"
+#include "driver_opengl3_program.h"
+#include "driver_opengl3_vertex_buffer.h"
+#include "driver_opengl3_uniform_buffer.h"
 
 namespace NL3D {
 namespace NLDRIVERGL3 {

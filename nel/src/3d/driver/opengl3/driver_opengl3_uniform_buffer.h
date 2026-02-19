@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef NL_DRIVER_OPENGL_UNIFORM_BUFFER_H
-#define NL_DRIVER_OPENGL_UNIFORM_BUFFER_H
+#ifndef NL_DRIVER_OPENGL3_UNIFORM_BUFFER_H
+#define NL_DRIVER_OPENGL3_UNIFORM_BUFFER_H
 
 #include <nel/misc/types_nl.h>
 
@@ -64,6 +64,6 @@ private:
 } // NLDRIVERGL3
 } // NL3D
 
-#endif // NL_DRIVER_OPENGL_UNIFORM_BUFFER_H
+#endif // NL_DRIVER_OPENGL3_UNIFORM_BUFFER_H
 
 /* end of file */

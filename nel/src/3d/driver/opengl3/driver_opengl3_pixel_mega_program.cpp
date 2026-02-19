@@ -52,16 +52,16 @@
  *     EMBM handled via conditional re-sample.
  */
 
-#include "stdopengl.h"
+#include "stdopengl3.h"
 
 #include <sstream>
 
 #include "nel/3d/pixel_program.h"
 #include "nel/3d/light.h"
 
-#include "driver_opengl.h"
-#include "driver_opengl_program.h"
-#include "driver_opengl_vertex_buffer.h"
+#include "driver_opengl3.h"
+#include "driver_opengl3_program.h"
+#include "driver_opengl3_vertex_buffer.h"
 
 namespace NL3D {
 namespace NLDRIVERGL3 {

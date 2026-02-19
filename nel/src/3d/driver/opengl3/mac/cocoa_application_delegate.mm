@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "../stdopengl.h"
-#include "../driver_opengl.h"
+#include "../stdopengl3.h"
+#include "../driver_opengl3.h"
 
 #include "cocoa_application_delegate.h"
 #include "cocoa_event_emitter.h"

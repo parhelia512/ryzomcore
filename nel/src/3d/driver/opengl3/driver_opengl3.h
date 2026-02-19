@@ -18,8 +18,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef NL_DRIVER_OPENGL_H
-#define NL_DRIVER_OPENGL_H
+#ifndef NL_DRIVER_OPENGL3_H
+#define NL_DRIVER_OPENGL3_H
 
 #include "nel/misc/types_nl.h"
 
@@ -32,7 +32,7 @@
 
 #ifdef NL_OS_MAC
 #	import  <Cocoa/Cocoa.h>
-#	import  "mac/cocoa_opengl_view.h"
+#	import  "mac/cocoa_opengl3_view.h"
 #elif defined (NL_OS_UNIX)
 #	ifdef XF86VIDMODE
 #		include <X11/extensions/xf86vmode.h>
@@ -64,9 +64,9 @@
 #include "nel/3d/light.h"
 #include "nel/3d/occlusion_query.h"
 
-#include "driver_opengl_states.h"
-#include "driver_opengl_extension.h"
-#include "driver_opengl_program.h"
+#include "driver_opengl3_states.h"
+#include "driver_opengl3_extension.h"
+#include "driver_opengl3_program.h"
 
 
 #ifdef NL_OS_WINDOWS
@@ -1569,4 +1569,4 @@ private:
 } // NLDRIVERGL3
 } // NL3D
 
-#endif // NL_DRIVER_OPENGL_H
+#endif // NL_DRIVER_OPENGL3_H

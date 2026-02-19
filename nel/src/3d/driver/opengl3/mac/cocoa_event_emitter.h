@@ -25,7 +25,7 @@
 #include "nel/misc/events.h"
 #include "nel/misc/game_device_events.h"
 #include "nel/3d/driver.h"
-#import  "cocoa_opengl_view.h"
+#import  "cocoa_opengl3_view.h"
 
 #include <Carbon/Carbon.h>
 #import  <Cocoa/Cocoa.h>

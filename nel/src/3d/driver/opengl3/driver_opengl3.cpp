@@ -18,9 +18,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "stdopengl.h"
-#include "driver_opengl.h"
-#include "driver_opengl_extension.h"
+#include "stdopengl3.h"
+#include "driver_opengl3.h"
+#include "driver_opengl3_extension.h"
 
 // by default, we disable the windows menu keys (F10, ALT and ALT+SPACE key doesn't freeze or open the menu)
 #define NL_DISABLE_MENU
@@ -34,8 +34,8 @@
 #include "nel/misc/rect.h"
 #include "nel/misc/hierarchical_timer.h"
 #include "nel/misc/dynloadlib.h"
-#include "driver_opengl_vertex_buffer.h"
-#include "driver_opengl_uniform_buffer.h"
+#include "driver_opengl3_vertex_buffer.h"
+#include "driver_opengl3_uniform_buffer.h"
 
 
 using namespace std;

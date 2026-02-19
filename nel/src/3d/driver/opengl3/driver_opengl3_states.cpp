@@ -18,9 +18,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "stdopengl.h"
+#include "stdopengl3.h"
 
-#include "driver_opengl.h"
+#include "driver_opengl3.h"
 
 // ***************************************************************************
 // define it For Debug purpose only. Normal use is to hide this line
