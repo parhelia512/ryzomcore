@@ -609,7 +609,7 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 	// 4. Misc
 	//=====================================
 	// Texture matrices are read directly from the material in setupNormalPass.
-	// Specular handles its own matrix (_SpecularTexMtx) separately.
+	// Specular _SpecularTexMtx is in the camera UBO; staged into matUBO.texMatrix[1] by setupSpecularPass.
 
 	// Programs are set up per-pass in setupPass() after per-pass staging is complete.
 	return true;
@@ -1248,8 +1248,8 @@ void CDriverGL3::setupSpecularBegin()
 {
 	H_AUTO_OGL(CDriverGL3_setupSpecularBegin)
 
-	// Stage 1 texMatrix for specular cubemap tex coords is _SpecularTexMtx.
-	// Packed into material UBO texMatrix[1] by setupSpecularPass or uploadMaterialUBO.
+	// _SpecularTexMtx (inverse view rotation) lives in the camera UBO and as a dedicated
+	// individual uniform. Both paths are handled by setupUniforms() in setupBuiltinPrograms().
 }
 
 // ***************************************************************************
@@ -1271,16 +1271,6 @@ sint CDriverGL3::beginSpecularMultiPass()
 	if (!_SpecularBatchOn)
 		setupSpecularBegin();
 
-	// Set shader values (TexMatrix1 for specular cubemap tex coords).
-	// In UBO mode, texMatrix1 is in the material UBO — already staged.
-	IProgram *vp = getProgram(VertexProgram);
-	if (!m_ProgramOnlyUBOs[VertexProgram] && vp)
-	{
-		uint idx = vp->getUniformIndex((CProgramIndex::TName)(CProgramIndex::TexMatrix1));
-		if (idx != ~0)
-			setUniform4x4f(IDriver::VertexProgram, idx, _SpecularTexMtx);
-	}
-
 	// Only need one pass for specular
 	return 1;
 }
@@ -1288,10 +1278,11 @@ sint CDriverGL3::beginSpecularMultiPass()
 // ***************************************************************************
 void CDriverGL3::setupSpecularPass(uint pass)
 {
-	nlassert(getProgram(PixelProgram));
-	nlassert(getProgram(VertexProgram));
-
 	H_AUTO_OGL(CDriverGL3_setupSpecularPass)
+
+	// specularTexMtx (inverse view rotation) is in the camera UBO for UBO-backed VPs,
+	// and uploaded as a dedicated individual uniform for SSO VPs.
+	// Both paths are handled by setupUniforms() — no per-pass staging needed here.
 }
 
 // ***************************************************************************

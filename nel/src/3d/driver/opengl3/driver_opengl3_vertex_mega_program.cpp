@@ -185,6 +185,9 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 		for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 			ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
 	}
+	// Specular texture matrix: from camera UBO when available, otherwise individual uniform
+	if (!cameraUBO)
+		ss << "uniform mat4 specularTexMtx;" << std::endl;
 	ss << std::endl;
 
 	// Clip plane uniforms (individual uniforms only when no camera UBO)
@@ -513,7 +516,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 			ss << "  else if (" << tgmAccess << " == " << TexGenReflectionMap << ")" << std::endl;
 		else
 			ss << "  else if (nlTexGenMode" << i << " == " << TexGenReflectionMap << ")" << std::endl;
-		ss << "    texCoord" << i << " = texMatrix" << i << " * vec4(refl_r, 0.0);" << std::endl;
+		ss << "    texCoord" << i << " = specularTexMtx * vec4(refl_r, 0.0);" << std::endl;
 		if (objectUBO)
 			ss << "  else if (" << tgmAccess << " == " << TexGenSphereMap << ") {" << std::endl;
 		else

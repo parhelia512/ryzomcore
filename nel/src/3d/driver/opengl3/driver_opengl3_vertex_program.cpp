@@ -374,6 +374,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	bool needTexGen = false;
 	bool needEyeLinear = false;
 	bool needReflection = false;
+	bool needSpecularTexMtx = false;
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 	{
 		if (desc.TexGenMode[i] >= 0)
@@ -381,14 +382,18 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 			ss << "layout(location = " << (TexCoord0 + i) << ") smooth out vec4 texCoord" << i << "; // texgen" << std::endl;
 			needTexGen = true;
 			if (desc.TexGenMode[i] == TexGenObjectLinear || desc.TexGenMode[i] == TexGenEyeLinear
-				|| desc.TexGenMode[i] == TexGenReflectionMap || desc.TexGenMode[i] == TexGenSphereMap)
+				|| desc.TexGenMode[i] == TexGenSphereMap)
 				ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
 			if (desc.TexGenMode[i] == TexGenEyeLinear)
 				needEyeLinear = true;
+			if (desc.TexGenMode[i] == TexGenReflectionMap)
+				needSpecularTexMtx = true;
 			if (desc.TexGenMode[i] == TexGenReflectionMap || desc.TexGenMode[i] == TexGenSphereMap)
 				needReflection = true;
 		}
 	}
+	if (needSpecularTexMtx)
+		ss << "uniform mat4 specularTexMtx;" << std::endl;
 	ss << std::endl;
 
 	// Clip plane uniforms
@@ -581,8 +586,8 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		}
 		else if (desc.TexGenMode[i] == TexGenReflectionMap)
 		{
-			// Reflection map (cubemap): eye-space reflection vector, transformed by texMatrix
-			ss << "texCoord" << i << " = texMatrix" << i << " * vec4(refl_r, 0.0);" << std::endl;
+			// Reflection map (cubemap): eye-space reflection vector, transformed by specularTexMtx (inverse view rotation)
+			ss << "texCoord" << i << " = specularTexMtx * vec4(refl_r, 0.0);" << std::endl;
 		}
 		else if (desc.TexGenMode[i] == TexGenSphereMap)
 		{

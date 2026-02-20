@@ -560,6 +560,9 @@ void CDriverGL3::stageCameraUBO()
 		data._pad0 = 0.f;
 	}
 
+	// Specular texture matrix: inverse view rotation for eye-space reflection → world-space cubemap lookup
+	memcpy(data.specularTexMtx, _SpecularTexMtx.get(), 16 * sizeof(float));
+
 	_CameraUBODirty = false;
 	_CameraUBOUploadDirty = true;
 }

@@ -488,6 +488,7 @@ struct CProgramIndex
 		PzbCameraPos,
 		CameraWorldPos,
 		NlLightMapScale,
+		SpecularTexMtx,
 
 		// Per-pixel lighting uniforms for pixel programs (raw values, not pre-multiplied)
 		NlPpLightMode0, NlPpLightMode1, NlPpLightMode2, NlPpLightMode3,

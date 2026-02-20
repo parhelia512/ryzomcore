@@ -1177,6 +1177,11 @@ void CDriverGL3::setupUniforms(TProgram program)
 		uint vmIndex = p->getUniformIndex(CProgramIndex::ViewMatrix);
 		if (vmIndex != ~0)
 			setUniform4x4f(program, vmIndex, _ViewMtx);
+
+		// Specular texture matrix (inverse view rotation for cubemap reflection lookup)
+		uint stmIdx = p->getUniformIndex(CProgramIndex::SpecularTexMtx);
+		if (stmIdx != ~0)
+			nglProgramUniformMatrix4fv(progId, stmIdx, 1, false, _CameraUBOData.specularTexMtx);
 	}
 
 	if (!m_ProgramUsesCameraUBO[program])

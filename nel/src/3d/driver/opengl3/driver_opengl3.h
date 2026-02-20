@@ -222,7 +222,7 @@ public:
 };
 
 // ***************************************************************************
-// Camera UBO data layout (std140, 240 bytes, matches GLSL NlCamera block)
+// Camera UBO data layout (std140, 288 bytes, matches GLSL NlCamera block)
 struct CCameraUBOData
 {
 	float viewMatrix[16];    // 64
@@ -235,8 +235,9 @@ struct CCameraUBOData
 	float clipPlane[6][4];   // 96
 	float cameraWorldPos[3]; // 12  (inverse view translation: actual camera world position)
 	float _pad0;             //  4
-};                           // 224
-static_assert(sizeof(CCameraUBOData) == 224, "Camera UBO layout mismatch");
+	float specularTexMtx[16]; // 64  (inverse view rotation: eye-space reflection → world-space cubemap lookup)
+};                           // 288
+static_assert(sizeof(CCameraUBOData) == 288, "Camera UBO layout mismatch");
 
 // ***************************************************************************
 // CPU-side struct matching the std140 NlLightInfo layout (96 bytes)

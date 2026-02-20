@@ -66,6 +66,7 @@ const char *GLSLCameraHeader =
 	"    vec4  clipPlane5;\n"
 	"    vec3  cameraWorldPos;\n"
 	"    float _nlCamPad0;\n"
+	"    mat4  specularTexMtx;\n"
 	"};\n";
 
 const char *GLSLObjectHeader =

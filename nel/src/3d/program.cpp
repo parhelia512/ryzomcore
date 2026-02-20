@@ -391,6 +391,7 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"pzbCameraPos",
 	"cameraWorldPos",
 	"nlLightMapScale",
+	"specularTexMtx",
 
 	// Per-pixel lighting uniforms for pixel programs (raw values, not pre-multiplied)
 	"nlPpLightMode0", "nlPpLightMode1", "nlPpLightMode2", "nlPpLightMode3",
