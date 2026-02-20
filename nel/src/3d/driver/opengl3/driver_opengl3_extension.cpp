@@ -891,7 +891,7 @@ bool	registerGlExtensions(CGlExtensions &ext)
 	glext.resize(numExt);
 	for (GLint i = 0; i < numExt; ++i)
 	{
-		glext[i] = static_cast<const char *>(static_cast<const void *>(glGetStringi(GL_EXTENSIONS, i)));
+		glext[i] = reinterpret_cast<const char *>(glGetStringi(GL_EXTENSIONS, i));
 	}
 
 	nldebug("3D: Available OpenGL ES Extensions:");
