@@ -1702,6 +1702,7 @@ public:
 	// nelvp-converted program state
 	bool isNelvpConverted;                                // True if this VP was converted from nelvp
 	NLMISC::CSmartPtr<CUniformBuffer> NelvpConstantUB;   // UBO for nelvp constant registers (96 + 4 modelView)
+	std::map<std::string, uint> NelvpParamIndices;        // ParamIndices from nelvp source (name → register index)
 
 private:
 	GLuint programId;

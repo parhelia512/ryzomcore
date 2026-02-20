@@ -715,6 +715,9 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 	// Attach UBO format for the user VP binding
 	newSrc->UniformBufferFormats[UBBindingVertexProgram] = ubf;
 
+	// Carry over ParamIndices from nelvp source (maps friendly names to constant register indices)
+	newSrc->ParamIndices = nelvpSrc->ParamIndices;
+
 	// Add source to program
 	program->addSource(newSrc);
 

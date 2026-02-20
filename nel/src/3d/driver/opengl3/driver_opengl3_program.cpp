@@ -381,6 +381,7 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 		if (ubIt->second && ubIt->second->Name == "NlNelvpConstants")
 		{
 			drvInfo->isNelvpConverted = true;
+			drvInfo->NelvpParamIndices = src->ParamIndices;
 			break;
 		}
 	}
@@ -2586,17 +2587,23 @@ CProgramDrvInfosGL3::~CProgramDrvInfosGL3()
 
 uint CProgramDrvInfosGL3::getUniformIndex(const char *name) const
 {
-	// For nelvp-converted programs, constant register names ("constant0".."constant31")
-	// map directly to register indices (used as byte offset multipliers into the UBO).
-	// glGetUniformLocation would return -1 since they are UBO members, not uniforms.
-	if (isNelvpConverted && strncmp(name, "constant", 8) == 0)
+	if (isNelvpConverted)
 	{
-		const char *num = name + 8;
-		if (*num >= '0' && *num <= '9')
+		// Check ParamIndices first (maps friendly names like "viewCenter" to register indices)
+		std::map<std::string, uint>::const_iterator it = NelvpParamIndices.find(name);
+		if (it != NelvpParamIndices.end())
+			return it->second;
+
+		// Fall back to "constantN" pattern for generic constant register access
+		if (strncmp(name, "constant", 8) == 0)
 		{
-			int idx = atoi(num);
-			if (idx >= 0 && idx < 96)
-				return (uint)idx;
+			const char *num = name + 8;
+			if (*num >= '0' && *num <= '9')
+			{
+				int idx = atoi(num);
+				if (idx >= 0 && idx < 96)
+					return (uint)idx;
+			}
 		}
 	}
 
