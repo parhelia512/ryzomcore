@@ -362,6 +362,7 @@ const char *CProgramIndex::Names[NUM_UNIFORMS] =
 	"nlWorldSpacePosition",
 	"nlNumPerPixelLights",
 	"nlFogEnabled",
+	"nlUVRouting",
 	"cameraForward",
 	"samplerCube0",
 	"samplerCube1",

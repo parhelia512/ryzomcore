@@ -66,6 +66,9 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
 			return left.TexGenMode[i] < right.TexGenMode[i];
+	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		if (left.UVRouting[i] != right.UVRouting[i])
+			return left.UVRouting[i] < right.UVRouting[i];
 	if (left.Fog != right.Fog)
 		return right.Fog;
 	if (left.VertexColorLighted != right.VertexColorLighted)
@@ -103,6 +106,9 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
 			return false;
+	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		if (left.UVRouting[i] != right.UVRouting[i])
+			return false;
 	if (left.Fog != right.Fog)
 		return false;
 	if (left.VertexColorLighted != right.VertexColorLighted)
@@ -136,6 +142,8 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h = NLMISC::lowbias32(h ^ vpLightMode(v, i));
 	for (sint i = 0; i < NL3D::IDRV_MAT_MAXTEXTURES; ++i)
 		h = NLMISC::lowbias32(h ^ v.TexGenMode[i]);
+	for (sint i = 0; i < NL3D::IDRV_MAT_MAXTEXTURES; ++i)
+		h = NLMISC::lowbias32(h ^ v.UVRouting[i]);
 
 	nlctassert(sizeof(size_t) >= sizeof(uint32));
 	return (size_t)h;
@@ -557,7 +565,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 			else if (i == Normal && desc.Normalize)
 				ss << g_AttribNames[i] << " = vec4(normalize(v" << g_AttribNames[i] << ".xyz), 0.0);" << std::endl;
 			else if (i >= TexCoord0 && i <= TexCoord3)
-				ss << g_AttribNames[i] << " = texMatrix" << (i - TexCoord0) << " * v" << g_AttribNames[i] << ";" << std::endl;
+				ss << g_AttribNames[i] << " = texMatrix" << (i - TexCoord0) << " * v" << g_AttribNames[TexCoord0 + desc.UVRouting[i - TexCoord0]] << ";" << std::endl;
 			else
 				ss << g_AttribNames[i] << " = " << "v" << g_AttribNames[i] << ";" << std::endl;
 		}
@@ -707,6 +715,15 @@ void CDriverGL3::touchVertexFormatVP()
 	{
 		m_VPBuiltinCurrent.VertexFormat = format;
 		m_VPBuiltinTouched = true;
+	}
+	const uint8 *uvRouting = _CurrentVertexBufferGL->VB->getUVRouting();
+	for (uint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+	{
+		if (m_VPBuiltinCurrent.UVRouting[i] != uvRouting[i])
+		{
+			m_VPBuiltinCurrent.UVRouting[i] = uvRouting[i];
+			m_VPBuiltinTouched = true;
+		}
 	}
 }
 

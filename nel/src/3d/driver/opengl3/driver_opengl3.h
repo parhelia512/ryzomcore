@@ -269,6 +269,7 @@ struct CObjectUBOData
 	float lightFactors01[4];       // 16
 	float lightFactors45[4];       // 16
 	float selfIllumination[4];     // 16
+	sint32 uvRouting[4];           // 16 (VB texcoord routing per stage)
 	sint32 texGenMode[4];          // 16
 	sint32 lighting;               // 4
 	sint32 vertexColorLighted;     // 4
@@ -277,9 +278,9 @@ struct CObjectUBOData
 	sint32 worldSpacePosition;     // 4
 	sint32 numPerPixelLights;      // 4
 	sint32 fogEnabled;             // 4
-	sint32 _pad[1];                // 4 (pad to 16-byte std140 alignment)
-};                                 // 304
-static_assert(sizeof(CObjectUBOData) == 304, "Object UBO layout mismatch");
+	sint32 _pad[1];                // 4
+};                                 // 320
+static_assert(sizeof(CObjectUBOData) == 320, "Object UBO layout mismatch");
 
 // ***************************************************************************
 // Per-Material UBO data layout (std140, 96 bytes, matches GLSL NlMaterial block)

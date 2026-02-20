@@ -81,6 +81,7 @@ const char *GLSLObjectHeader =
 	"    vec4  nlLightFactors01;\n"
 	"    vec4  nlLightFactors45;\n"
 	"    vec4  selfIllumination;\n"
+	"    ivec4 nlUVRouting;\n"
 	"    ivec4 nlTexGenMode;\n"
 	"    int   nlLighting;\n"
 	"    int   nlVertexColorLighted;\n"
@@ -89,6 +90,7 @@ const char *GLSLObjectHeader =
 	"    int   nlWorldSpacePosition;\n"
 	"    int   nlNumPerPixelLights;\n"
 	"    int   nlFogEnabled;\n"
+	"    int   _nlObjPad0;\n"
 	"};\n";
 
 const char *GLSLMaterialHeader =

@@ -33,12 +33,13 @@ static sint TexGenEyeLinear = 3; // GL_EYE_LINEAR
 /// Builtin vertex program description
 struct CVPBuiltin
 {
-	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), WorldSpaceNormal(false), WorldSpacePosition(false), NumPerPixelLights(0), ClipPlaneMask(0), PPClipPlane(false) { }
+	CVPBuiltin() : VertexProgram(NULL), VertexColorLighted(false), Normalize(false), WorldSpaceNormal(false), WorldSpacePosition(false), NumPerPixelLights(0), ClipPlaneMask(0), PPClipPlane(false) { UVRouting[0] = 0; UVRouting[1] = 1; UVRouting[2] = 2; UVRouting[3] = 3; }
 
 	uint16 VertexFormat;
 	bool Lighting;
 	sint LightMode[NL_OPENGL3_MAX_LIGHT]; // -1 when disabled
 	sint TexGenMode[IDRV_MAT_MAXTEXTURES]; // -1 when disabled
+	uint8 UVRouting[IDRV_MAT_MAXTEXTURES]; // VB texcoord index per material stage
 	bool Fog;
 	bool VertexColorLighted;
 	bool Normalize; // Force-normalize normals (for MRM geomorphing, scaled models)

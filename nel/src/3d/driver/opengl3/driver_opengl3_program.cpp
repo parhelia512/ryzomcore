@@ -1427,6 +1427,23 @@ void CDriverGL3::setupUniforms(TProgram program)
 		uint fogEnIdx = p->getUniformIndex(CProgramIndex::NlFogEnabled);
 		if (fogEnIdx != ~0u)
 			nglProgramUniform1i(progId, fogEnIdx, m_VPBuiltinCurrent.Fog ? 1 : 0);
+
+		// UV routing (from vertex buffer)
+		uint uvrIdx = p->getUniformIndex(CProgramIndex::NlUVRouting);
+		if (uvrIdx != ~0u)
+		{
+			sint32 uvr[4];
+			if (_CurrentVertexBufferGL)
+			{
+				const uint8 *vbUvr = _CurrentVertexBufferGL->VB->getUVRouting();
+				for (uint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+					uvr[i] = (sint32)vbUvr[i];
+			}
+			else
+				for (uint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+					uvr[i] = (sint32)i;
+			nglProgramUniform4iv(progId, uvrIdx, 1, uvr);
+		}
 	}
 
 	if (m_ProgramUsesObjectUBO[program])

@@ -21,6 +21,7 @@
 #include "stdopengl3.h"
 
 #include "driver_opengl3.h"
+#include "driver_opengl3_vertex_buffer.h"
 #include "driver_opengl3_uniform_buffer.h"
 #include "nel/3d/light.h"
 
@@ -723,6 +724,19 @@ void CDriverGL3::uploadObjectUBO()
 		data.selfIllumination[1] = selfIllumination.G;
 		data.selfIllumination[2] = selfIllumination.B;
 		data.selfIllumination[3] = 0.0f;
+	}
+
+	// UV routing (from vertex buffer, only first 4 stages used by materials)
+	if (_CurrentVertexBufferGL)
+	{
+		const uint8 *uvr = _CurrentVertexBufferGL->VB->getUVRouting();
+		for (uint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+			data.uvRouting[i] = (sint32)uvr[i];
+	}
+	else
+	{
+		for (uint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+			data.uvRouting[i] = (sint32)i;
 	}
 
 	// TexGen modes

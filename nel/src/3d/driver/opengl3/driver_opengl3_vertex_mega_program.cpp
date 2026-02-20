@@ -224,6 +224,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 			// to decide whether to split vertexColor for PPL vertex color correctness
 			ss << "uniform int nlNumPerPixelLights;" << std::endl;
 		}
+		ss << "uniform ivec4 nlUVRouting;" << std::endl;
 	}
 	ss << std::endl;
 
@@ -328,6 +329,12 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 	}
 	ss << std::endl;
 
+	// UV routing: build local array of VB texcoord inputs for indexed access
+	ss << "  vec4 vtc[" << IDRV_MAT_MAXTEXTURES << "];" << std::endl;
+	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		ss << "  vtc[" << i << "] = v" << g_AttribNames[TexCoord0 + i] << ";" << std::endl;
+	ss << std::endl;
+
 	// Pass through all varyings (always normalize normals, output world-space normal)
 	for (int i = Weight; i < NumOffsets; ++i)
 	{
@@ -347,7 +354,7 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 			ss << "    " << g_AttribNames[i] << " = vec4(0.0, 0.0, 0.0, 0.0);" << std::endl;
 		}
 		else if (i >= TexCoord0 && i <= TexCoord3)
-			ss << "  " << g_AttribNames[i] << " = texMatrix" << (i - TexCoord0) << " * v" << g_AttribNames[i] << ";" << std::endl;
+			ss << "  " << g_AttribNames[i] << " = texMatrix" << (i - TexCoord0) << " * vtc[nlUVRouting[" << (i - TexCoord0) << "]];" << std::endl;
 		else
 			ss << "  " << g_AttribNames[i] << " = v" << g_AttribNames[i] << ";" << std::endl;
 	}
