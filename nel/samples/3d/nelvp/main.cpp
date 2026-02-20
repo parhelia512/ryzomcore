@@ -365,7 +365,7 @@ CNelvpDemo::CNelvpDemo()
 	, m_Frequency(3.f)
 	, m_VP(NULL)
 {
-	m_Driver = UDriver::createDriver(0, UDriver::OpenGl);
+	m_Driver = UDriver::createDriver(0, UDriver::OpenGl3);
 	if (!m_Driver)
 	{
 		nlerror("Failed to create driver");

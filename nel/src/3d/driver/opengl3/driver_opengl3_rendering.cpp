@@ -33,6 +33,8 @@ bool CDriverGL3::renderLines(CMaterial& mat, uint32 firstIndex, uint32 nlines)
 {
 	H_AUTO_OGL(CDriverGL3_renderLines)
 
+	flushNelvpUserVP();
+
 	// setup material
 	if (!setupMaterial(mat) || _LastIB._Values == NULL)
 		return false;
@@ -82,6 +84,8 @@ bool CDriverGL3::renderLines(CMaterial& mat, uint32 firstIndex, uint32 nlines)
 bool CDriverGL3::renderTriangles(CMaterial& mat, uint32 firstIndex, uint32 ntris)
 {
 	H_AUTO_OGL(CDriverGL3_renderTriangles);
+
+	flushNelvpUserVP();
 
 	// setup material
 	if (!setupMaterial(mat) || _LastIB._Values == NULL)
@@ -137,6 +141,8 @@ bool CDriverGL3::renderSimpleTriangles(uint32 firstTri, uint32 ntris)
 {
 	H_AUTO_OGL(CDriverGL3_renderSimpleTriangles);
 
+	flushNelvpUserVP();
+
 	nlassert(ntris>0);
 
 	if (_CurrentVertexBufferGL && _CurrentVertexBufferGL->isInvalid()) return true;
@@ -172,6 +178,8 @@ bool CDriverGL3::renderSimpleTriangles(uint32 firstTri, uint32 ntris)
 bool CDriverGL3::renderRawPoints(CMaterial& mat, uint32 startIndex, uint32 numPoints)
 {
 	H_AUTO_OGL(CDriverGL3_renderRawPoints)
+
+	flushNelvpUserVP();
 
 	// setup material
 	if (!setupMaterial(mat))
@@ -214,6 +222,8 @@ bool CDriverGL3::renderRawLines(CMaterial& mat, uint32 startIndex, uint32 numLin
 {
 	H_AUTO_OGL(CDriverGL3_renderRawLines)
 
+	flushNelvpUserVP();
+
 	// setup material
 	if (!setupMaterial(mat))
 		return false;
@@ -254,6 +264,8 @@ bool CDriverGL3::renderRawLines(CMaterial& mat, uint32 startIndex, uint32 numLin
 bool CDriverGL3::renderRawTriangles(CMaterial& mat, uint32 startIndex, uint32 numTris)
 {
 	H_AUTO_OGL(CDriverGL3_renderRawTriangles)
+
+	flushNelvpUserVP();
 
 	// setup material
 	if (!setupMaterial(mat))
@@ -298,6 +310,8 @@ bool CDriverGL3::renderRawQuads(CMaterial& mat, uint32 startIndex, uint32 numQua
 {
 	H_AUTO_OGL(CDriverGL3_renderRawQuads)
 	if (!numQuads) return true;
+
+	flushNelvpUserVP();
 
 	// setup material
 	if (!setupMaterial(mat))

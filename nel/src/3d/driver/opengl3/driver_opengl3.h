@@ -1409,6 +1409,9 @@ private:
 	bool			supportVertexProgram(CVertexProgram::TProfile profile) const;
 
 	bool			compileVertexProgram(CVertexProgram *program);
+	bool			convertNelvpToGLSL(CVertexProgram *program, bool linked);
+	CUniformBuffer	*getNelvpUB(TProgram program) const;
+	void			flushNelvpUserVP();
 
 	bool			activeVertexProgram(CVertexProgram *program);
 	bool			activeVertexProgram(CVertexProgram *program, bool driver);
@@ -1579,6 +1582,7 @@ private:
 	bool m_ProgramUsesCameraUBO[NumTProgram];     // Program reads camera/fog/clip from NlCamera UBO
 	bool m_ProgramUsesObjectUBO[NumTProgram];     // Program reads from NlModel UBO
 	bool m_ProgramUsesMaterialUBO[NumTProgram];   // Program reads from NlMaterial UBO
+	CUniformBuffer *m_NelvpActiveUB;              // Non-null when active VP is nelvp-converted
 
 	// Per-Object UBO (runtime state of currently bound program)
 	GLuint  _ObjectUBOId;           // Global GL buffer
@@ -1694,6 +1698,10 @@ public:
 	// Linked program cache for user VP + user PP combinations
 	// Keyed by the other program's drvinfo pointer
 	std::map<CProgramDrvInfosGL3*, NLMISC::CSmartPtr<CShaderProgram>> LinkedUserVPPP;
+
+	// nelvp-converted program state
+	bool isNelvpConverted;                                // True if this VP was converted from nelvp
+	NLMISC::CSmartPtr<CUniformBuffer> NelvpConstantUB;   // UBO for nelvp constant registers (96 + 4 modelView)
 
 private:
 	GLuint programId;

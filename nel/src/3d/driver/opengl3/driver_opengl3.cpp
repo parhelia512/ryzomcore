@@ -379,6 +379,7 @@ CDriverGL3::CDriverGL3()
 	memset(m_ProgramUsesCameraUBO, 0, sizeof(m_ProgramUsesCameraUBO));
 	memset(m_ProgramUsesObjectUBO, 0, sizeof(m_ProgramUsesObjectUBO));
 	memset(m_ProgramUsesMaterialUBO, 0, sizeof(m_ProgramUsesMaterialUBO));
+	m_NelvpActiveUB = NULL;
 	_ObjectUBOId = 0;
 	_ObjectUBOCapacity = 0;
 	// _OverrideMaterialUBOId = 0; // Replaced by per-material UBO slots
