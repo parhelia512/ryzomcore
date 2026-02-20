@@ -606,6 +606,11 @@ bool CDriverGL3::setDisplay(nlWindow wnd, const GfxMode &mode, bool show, bool r
 #if defined(__EMSCRIPTEN__)
 
 	// Emscripten / WebGL 2.0 context creation
+	// Uses the default canvas element "#canvas" as per Emscripten convention.
+	// Define NL_EMSCRIPTEN_CANVAS to override (e.g. "#myCanvas").
+#ifndef NL_EMSCRIPTEN_CANVAS
+#define NL_EMSCRIPTEN_CANVAS "#canvas"
+#endif
 	{
 		EmscriptenWebGLContextAttributes attrs;
 		emscripten_webgl_init_context_attributes(&attrs);
@@ -617,7 +622,7 @@ bool CDriverGL3::setDisplay(nlWindow wnd, const GfxMode &mode, bool show, bool r
 		attrs.antialias = true;
 		attrs.preserveDrawingBuffer = false;
 
-		_ctx = emscripten_webgl_create_context("#canvas", &attrs);
+		_ctx = emscripten_webgl_create_context(NL_EMSCRIPTEN_CANVAS, &attrs);
 		if (_ctx <= 0)
 		{
 			nlwarning("CDriverGL3::setDisplay: emscripten_webgl_create_context failed (%d)", _ctx);
@@ -632,7 +637,7 @@ bool CDriverGL3::setDisplay(nlWindow wnd, const GfxMode &mode, bool show, bool r
 		}
 
 		// Set canvas size
-		emscripten_set_canvas_element_size("#canvas", mode.Width, mode.Height);
+		emscripten_set_canvas_element_size(NL_EMSCRIPTEN_CANVAS, mode.Width, mode.Height);
 
 		// Mark window as valid so isActive() returns true
 		_win = 1;

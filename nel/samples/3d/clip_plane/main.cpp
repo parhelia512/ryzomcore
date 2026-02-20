@@ -245,10 +245,7 @@ void CClipPlaneDemo::renderOneFrame()
 
 void CClipPlaneDemo::run()
 {
-#ifdef __EMSCRIPTEN__
-	// Emscripten takes over the main loop
-	// The demo object must remain alive (caller responsibility)
-#else
+#ifndef __EMSCRIPTEN__
 	while (m_Driver->isActive() && !m_CloseWindow)
 	{
 		renderOneFrame();
@@ -274,12 +271,14 @@ sint main(int /* argc */, char ** /* argv */)
 {
 	CApplicationContext applicationContext;
 
-	CClipPlaneDemo demo;
-	demo.run();
-
 #ifdef __EMSCRIPTEN__
+	// Emscripten: demo must persist since emscripten_set_main_loop never returns
+	static CClipPlaneDemo demo;
 	s_Demo = &demo;
 	emscripten_set_main_loop(emscriptenMainLoop, 0, 1);
+#else
+	CClipPlaneDemo demo;
+	demo.run();
 #endif
 
 	return EXIT_SUCCESS;
