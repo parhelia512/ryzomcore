@@ -1312,9 +1312,10 @@ void CDriverGL3::setupUniforms(TProgram program)
 				if (_LightEnable[i])
 					selfIllumination += NLMISC::CRGBAF(_UserLight[i].getAmbiant());
 			}
-			selfIllumination *= NLMISC::CRGBAF(mat.getAmbient());
-			if (mat.getShader() != CMaterial::LightMap)
-				selfIllumination += NLMISC::CRGBAF(mat.getEmissive());
+			CMaterialDrvInfosGL3 *siMatDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+			selfIllumination *= siMatDrv->Ambient;
+			if (siMatDrv->PPBuiltin.Shader != CMaterial::LightMap)
+				selfIllumination += siMatDrv->Emissive;
 			si[0] = selfIllumination.R;
 			si[1] = selfIllumination.G;
 			si[2] = selfIllumination.B;

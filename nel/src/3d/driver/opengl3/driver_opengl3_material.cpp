@@ -411,8 +411,8 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 			}
 			if (touched & IDRV_TOUCHED_LIGHTING)
 			{
-				matDrv->Ambient = NLMISC::CRGBAF(mat.getEmissive()); // Object UBO
-				matDrv->Emissive = NLMISC::CRGBAF(mat.getAmbient()); // Object UBO
+				matDrv->Ambient = NLMISC::CRGBAF(mat.getAmbient()); // Object UBO
+				matDrv->Emissive = NLMISC::CRGBAF(mat.getEmissive()); // Object UBO
 				convColor(mat.getDiffuse(), matUBO.materialDiffuse);
 				convColor(mat.getSpecular(), matUBO.materialSpecular);
 				matUBO.materialShininess = mat.getShininess();
@@ -434,14 +434,6 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 			matDrv->MaterialUBOTouched[0] = true;
 		if (touched & touchedBuiltinPPState)
 			matDrv->PPBuiltin.Touched = true;
-
-		// Force GL state rebind if any flag that affects bind-time state changed.
-		// Covers blend, cull, depth, zbias, lighting, and the conversion cache.
-		// Also handles the delete/new pointer reuse problem (TOUCHED_ALL includes these).
-		static const uint32 touchedGLState = touchedConvState | IDRV_TOUCHED_BLEND
-		    | IDRV_TOUCHED_DOUBLE_SIDED | IDRV_TOUCHED_ZWRITE | IDRV_TOUCHED_ZBIAS | IDRV_TOUCHED_LIGHTING;
-		if (touched & touchedGLState)
-			_CurrentMaterial = NULL;
 
 		mat.clearTouched(IDRV_TOUCHED_ALL);
 	}
@@ -566,10 +558,12 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 			}
 		}
 	}
+	static const uint32 touchedGLState = IDRV_TOUCHED_BLENDFUNC | IDRV_TOUCHED_ZFUNC | IDRV_TOUCHED_BLEND
+		| IDRV_TOUCHED_DOUBLE_SIDED | IDRV_TOUCHED_ZWRITE | IDRV_TOUCHED_ZBIAS | IDRV_TOUCHED_LIGHTING;
 
 	// 3. Bind OpenGL States.
 	//=======================
-	if (_CurrentMaterial != &mat) // FIXME GL3: CMaterial may be touched...
+	if ((touched & touchedGLState) || (_CurrentMaterial != &mat))
 	{
 		// Bind Blend Part.
 		//=================

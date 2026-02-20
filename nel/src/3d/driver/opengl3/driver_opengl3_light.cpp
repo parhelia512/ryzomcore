@@ -653,6 +653,7 @@ void CDriverGL3::uploadObjectUBO()
 		return;
 
 	CMaterial &mat = *_CurrentMaterial;
+	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
 
 	CObjectUBOData data;
 
@@ -715,9 +716,9 @@ void CDriverGL3::uploadObjectUBO()
 			if (_LightEnable[i])
 				selfIllumination += NLMISC::CRGBAF(_UserLight[i].getAmbiant());
 		}
-		selfIllumination *= NLMISC::CRGBAF(mat.getAmbient());
-		if (mat.getShader() != CMaterial::LightMap)
-			selfIllumination += NLMISC::CRGBAF(mat.getEmissive());
+		selfIllumination *= matDrv->Ambient;
+		if (matDrv->PPBuiltin.Shader != CMaterial::LightMap)
+			selfIllumination += matDrv->Emissive;
 		data.selfIllumination[0] = selfIllumination.R;
 		data.selfIllumination[1] = selfIllumination.G;
 		data.selfIllumination[2] = selfIllumination.B;
