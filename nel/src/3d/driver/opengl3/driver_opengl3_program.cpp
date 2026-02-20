@@ -2325,6 +2325,35 @@ bool CDriverGL3::initProgramPipeline()
 	return true;
 }
 
+// ***************************************************************************
+// CProgramDrvInfosGL3
+// ***************************************************************************
+
+CProgramDrvInfosGL3::CProgramDrvInfosGL3(CDriverGL3 *drv, ItGPUPrgDrvInfoPtrList it) :
+IProgramDrvInfos(drv, it)
+{
+	programId = 0;
+	lightTableBlockIndex = GL_INVALID_INDEX;
+	cameraBlockIndex = GL_INVALID_INDEX;
+	objectBlockIndex = GL_INVALID_INDEX;
+	materialBlockIndex = GL_INVALID_INDEX;
+}
+
+CProgramDrvInfosGL3::~CProgramDrvInfosGL3()
+{
+	// FIXME GL3: Is this not released?!
+	programId = 0;
+}
+
+uint CProgramDrvInfosGL3::getUniformIndex(const char *name) const
+{
+	int idx = nglGetUniformLocation(programId, name);
+	if (idx == -1)
+		return ~0;
+	else
+		return idx;
+}
+
 } // NLDRIVERGL3
 } // NL3D
 

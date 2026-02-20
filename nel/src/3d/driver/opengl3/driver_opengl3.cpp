@@ -1212,105 +1212,6 @@ void CDriverGL3::copyFrameBufferToTexture(ITexture *tex,
 }
 
 // ***************************************************************************
-void CDriverGL3::setPolygonMode (TPolygonMode mode)
-{
-	H_AUTO_OGL(CDriverGL3_setPolygonMode)
-	IDriver::setPolygonMode (mode);
-
-	// Set the polygon mode
-	switch (_PolygonMode)
-	{
-	case Filled:
-		_DriverGLStates.polygonMode(GL_FILL);
-		break;
-	case Line:
-		_DriverGLStates.polygonMode(GL_LINE);
-		break;
-	case Point:
-		_DriverGLStates.polygonMode(GL_POINT);
-		break;
-	}
-}
-
-// ***************************************************************************
-bool CDriverGL3::fogEnabled()
-{
-	H_AUTO_OGL(CDriverGL3_fogEnabled)
-	return _FogEnabled;
-}
-
-// ***************************************************************************
-void CDriverGL3::enableFog(bool enable)
-{
-	H_AUTO_OGL(CDriverGL3_enableFog)
-	_FogEnabled = enable;
-	enableFogVP(enable);
-}
-
-// ***************************************************************************
-void CDriverGL3::setupFog(float start, float end, CRGBA color)
-{
-	H_AUTO_OGL(CDriverGL3_setupFog)
-
-	_CurrentFogColor[0]= color.R/255.0f;
-	_CurrentFogColor[1]= color.G/255.0f;
-	_CurrentFogColor[2]= color.B/255.0f;
-	_CurrentFogColor[3]= color.A/255.0f;
-
-	_FogStart = start;
-	_FogEnd = end;
-	_CameraUBODirty = true;
-}
-
-// ***************************************************************************
-float CDriverGL3::getFogStart() const
-{
-	H_AUTO_OGL(CDriverGL3_getFogStart)
-	return _FogStart;
-}
-
-// ***************************************************************************
-float CDriverGL3::getFogEnd() const
-{
-	H_AUTO_OGL(CDriverGL3_getFogEnd)
-	return _FogEnd;
-}
-
-// ***************************************************************************
-CRGBA CDriverGL3::getFogColor() const
-{
-	H_AUTO_OGL(CDriverGL3_getFogColor)
-	CRGBA	ret;
-	ret.R= (uint8)(_CurrentFogColor[0]*255);
-	ret.G= (uint8)(_CurrentFogColor[1]*255);
-	ret.B= (uint8)(_CurrentFogColor[2]*255);
-	ret.A= (uint8)(_CurrentFogColor[3]*255);
-	return ret;
-}
-
-// ***************************************************************************
-void CDriverGL3::setupFogMode(TFogMode mode, float density)
-{
-	H_AUTO_OGL(CDriverGL3_setupFogMode)
-	_FogMode = mode;
-	_FogDensity = density;
-	_CameraUBODirty = true;
-}
-
-// ***************************************************************************
-IDriver::TFogMode CDriverGL3::getFogMode() const
-{
-	return _FogMode;
-}
-
-// ***************************************************************************
-float CDriverGL3::getFogDensity() const
-{
-	return _FogDensity;
-}
-
-
-// ***************************************************************************
 void			CDriverGL3::profileRenderedPrimitives(CPrimitiveProfile &pIn, CPrimitiveProfile &pOut)
 {
 	H_AUTO_OGL(CDriverGL3_profileRenderedPrimitives)
@@ -1419,29 +1320,6 @@ void CDriverGL3::setPerPixelLightingLight(CRGBA diffuse, CRGBA specular, float s
 bool CDriverGL3::supportWorldSpacePPL() const
 {
 	return true;
-}
-
-// ***************************************************************************
-bool CDriverGL3::supportBlendConstantColor() const
-{
-	H_AUTO_OGL(CDriverGL3_supportBlendConstantColor)
-	return _Extensions.GLCore;
-}
-
-// ***************************************************************************
-void CDriverGL3::setBlendConstantColor(NLMISC::CRGBA col)
-{
-	H_AUTO_OGL(CDriverGL3_setBlendConstantColor)
-
-	_DriverGLStates.blendColor(col);
-}
-
-// ***************************************************************************
-NLMISC::CRGBA CDriverGL3::getBlendConstantColor() const
-{
-	H_AUTO_OGL(CDriverGL3_CDriverGL)
-
-	return	_DriverGLStates.getBlendColor();
 }
 
 // ***************************************************************************
@@ -1579,25 +1457,6 @@ uint	CDriverGL3::getSwapVBLInterval()
 #endif
 
 	return _Interval;
-}
-
-// ***************************************************************************
-// GL_POLYGON_SMOOTH is not available in GL 3.3 core profile.
-// Only caller is CShadowMapManager, which uses it to smooth shadow polygon edges.
-// Alternative: render shadow maps to an MSAA FBO and resolve, or apply a
-// post-process blur/edge-detection filter on the shadow map.
-void	CDriverGL3::enablePolygonSmoothing(bool smooth)
-{
-	H_AUTO_OGL(CDriverGL3_enablePolygonSmoothing);
-	_PolygonSmooth= smooth;
-}
-
-// ***************************************************************************
-bool	CDriverGL3::isPolygonSmoothingEnabled() const
-{
-	H_AUTO_OGL(CDriverGL3_isPolygonSmoothingEnabled)
-
-	return _PolygonSmooth;
 }
 
 // ***************************************************************************
@@ -1995,122 +1854,6 @@ uint COcclusionQueryGL3::getVisibleCount()
 }
 
 // ***************************************************************************
-void CDriverGL3::setDepthRange(float znear, float zfar)
-{
-	H_AUTO_OGL(CDriverGL3_setDepthRange)
-	_DriverGLStates.setDepthRange(znear, zfar);
-}
-
-// ***************************************************************************
-void CDriverGL3::getDepthRange(float &znear, float &zfar) const
-{
-	H_AUTO_OGL(CDriverGL3_getDepthRange)
-	_DriverGLStates.getDepthRange(znear, zfar);
-}
-
-// ***************************************************************************
-void CDriverGL3::setCullMode(TCullMode cullMode)
-{
-	H_AUTO_OGL(CDriverGL3_setCullMode)
-	_DriverGLStates.setCullMode((CDriverGLStates3::TCullMode) cullMode);
-}
-
-// ***************************************************************************
-CDriverGL3::TCullMode CDriverGL3::getCullMode() const
-{
-	H_AUTO_OGL(CDriverGL3_CDriverGL)
-	return (CDriverGL3::TCullMode) _DriverGLStates.getCullMode();
-}
-
-// ***************************************************************************
-void CDriverGL3::enableStencilTest(bool enable)
-{
-	H_AUTO_OGL(CDriverGL3_CDriverGL)
-	_DriverGLStates.enableStencilTest(enable);
-}
-
-// ***************************************************************************
-bool CDriverGL3::isStencilTestEnabled() const
-{
-	H_AUTO_OGL(CDriverGL3_CDriverGL)
-	return _DriverGLStates.isStencilTestEnabled();
-}
-
-// ***************************************************************************
-void CDriverGL3::stencilFunc(TStencilFunc stencilFunc, int ref, uint mask)
-{
-	H_AUTO_OGL(CDriverGL3_CDriverGL)
-
-	GLenum glstencilFunc = 0;
-
-	switch(stencilFunc)
-	{
-		case IDriver::never:		glstencilFunc=GL_NEVER; break;
-		case IDriver::less:			glstencilFunc=GL_LESS; break;
-		case IDriver::lessequal:	glstencilFunc=GL_LEQUAL; break;
-		case IDriver::equal:		glstencilFunc=GL_EQUAL; break;
-		case IDriver::notequal:		glstencilFunc=GL_NOTEQUAL; break;
-		case IDriver::greaterequal:	glstencilFunc=GL_GEQUAL; break;
-		case IDriver::greater:		glstencilFunc=GL_GREATER; break;
-		case IDriver::always:		glstencilFunc=GL_ALWAYS; break;
-		default: nlstop;
-	}
-
-	_DriverGLStates.stencilFunc(glstencilFunc, (GLint)ref, (GLuint)mask);
-}
-
-// ***************************************************************************
-void CDriverGL3::stencilOp(TStencilOp fail, TStencilOp zfail, TStencilOp zpass)
-{
-	H_AUTO_OGL(CDriverGL3_CDriverGL)
-
-	GLenum glFail = 0, glZFail = 0, glZPass = 0;
-
-	switch(fail)
-	{
-		case IDriver::keep:		glFail=GL_KEEP; break;
-		case IDriver::zero:		glFail=GL_ZERO; break;
-		case IDriver::replace:	glFail=GL_REPLACE; break;
-		case IDriver::incr:		glFail=GL_INCR; break;
-		case IDriver::decr:		glFail=GL_DECR; break;
-		case IDriver::invert:	glFail=GL_INVERT; break;
-		default: nlstop;
-	}
-
-	switch(zfail)
-	{
-		case IDriver::keep:		glZFail=GL_KEEP; break;
-		case IDriver::zero:		glZFail=GL_ZERO; break;
-		case IDriver::replace:	glZFail=GL_REPLACE; break;
-		case IDriver::incr:		glZFail=GL_INCR; break;
-		case IDriver::decr:		glZFail=GL_DECR; break;
-		case IDriver::invert:	glZFail=GL_INVERT; break;
-		default: nlstop;
-	}
-
-	switch(zpass)
-	{
-		case IDriver::keep:		glZPass=GL_KEEP; break;
-		case IDriver::zero:		glZPass=GL_ZERO; break;
-		case IDriver::replace:	glZPass=GL_REPLACE; break;
-		case IDriver::incr:		glZPass=GL_INCR; break;
-		case IDriver::decr:		glZPass=GL_DECR; break;
-		case IDriver::invert:	glZPass=GL_INVERT; break;
-		default: nlstop;
-	}
-
-	_DriverGLStates.stencilOp(glFail, glZFail, glZPass);
-}
-
-// ***************************************************************************
-void CDriverGL3::stencilMask(uint mask)
-{
-	H_AUTO_OGL(CDriverGL3_CDriverGL)
-
-	_DriverGLStates.stencilMask((GLuint)mask);
-}
-
-// ***************************************************************************
 void CDriverGL3::getNumPerStageConstant(uint &lightedMaterial, uint &unlightedMaterial) const
 {
 	lightedMaterial = IDRV_MAT_MAXTEXTURES;
@@ -2125,31 +1868,6 @@ void CDriverGL3::beginDialogMode()
 // ***************************************************************************
 void CDriverGL3::endDialogMode()
 {
-}
-
-CProgramDrvInfosGL3::CProgramDrvInfosGL3(CDriverGL3 *drv, ItGPUPrgDrvInfoPtrList it) :
-IProgramDrvInfos(drv, it)
-{
-	programId = 0;
-	lightTableBlockIndex = GL_INVALID_INDEX;
-	cameraBlockIndex = GL_INVALID_INDEX;
-	objectBlockIndex = GL_INVALID_INDEX;
-	materialBlockIndex = GL_INVALID_INDEX;
-}
-
-CProgramDrvInfosGL3::~CProgramDrvInfosGL3()
-{
-	// FIXME GL3: Is this not released?!
-	programId = 0;
-}
-
-uint CProgramDrvInfosGL3::getUniformIndex(const char *name) const
-{
-	int idx = nglGetUniformLocation(programId, name);
-	if (idx == -1)
-		return ~0;
-	else
-		return idx;
 }
 
 // ***************************************************************************
