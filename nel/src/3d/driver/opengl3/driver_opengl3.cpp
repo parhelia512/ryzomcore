@@ -320,7 +320,10 @@ CDriverGL3::CDriverGL3()
 
 	_LightMapDynamicLightEnabled = false;
 	_LightMapDynamicLightDirty= false;
-	_LightMapDynLightTableIndex = -1;
+	_LightMapDynUBOId = 0;
+	memset(&_LightMapDynUBOEntry, 0, sizeof(_LightMapDynUBOEntry));
+	_LightMapDynUBODirty = false;
+	_UseLightMapDynUBO = false;
 	_LightTableMode= false;
 	_LightTableUBOId = 0;
 	_LightTableDirty = false;
@@ -356,8 +359,8 @@ CDriverGL3::CDriverGL3()
 	
 	// for GL ES 3.0 compatibility
 	m_PPClipPlanes = false; // false for GL 3.3, true for GL ES 3.0, switches to using PP for clip plane discard, since no driver support
-	m_LinkedMegaShaders = true; // not required but also useful under GL 3.3, set true for both
-	m_SupportSSO = false; // true for GL 3.3, false for GL ES 3.0, false if we want to be strict :)
+	m_LinkedMegaShaders = false; // not required but also useful under GL 3.3, set true for both
+	m_SupportSSO = true; // true for GL 3.3, false for GL ES 3.0, false if we want to be strict :)
 	// set sso and linked shaders opposite to each other to test exclusive modes
 	// m_SupportNonUBOs = false; // testing strict mode, linked-only always implies ubo-only // TODO
 
@@ -528,6 +531,7 @@ bool CDriverGL3::setupDisplay()
 
 	// Create UBOs
 	nglGenBuffers(1, &_LightTableUBOId);
+	nglGenBuffers(1, &_LightMapDynUBOId);
 	nglGenBuffers(1, &_CameraUBOId);
 	nglGenBuffers(1, &_ObjectUBOId);
 	// nglGenBuffers(1, &_OverrideMaterialUBOId); // Replaced by per-material UBO slots
@@ -886,6 +890,11 @@ bool CDriverGL3::release()
 	{
 		nglDeleteBuffers(1, &_LightTableUBOId);
 		_LightTableUBOId = 0;
+	}
+	if (_LightMapDynUBOId)
+	{
+		nglDeleteBuffers(1, &_LightMapDynUBOId);
+		_LightMapDynUBOId = 0;
 	}
 	if (_CameraUBOId)
 	{

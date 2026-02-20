@@ -683,17 +683,6 @@ void CDriverGLStates3::forceBindUniformBuffer(GLuint id)
 	m_CurUniformBuffer = id;
 }
 
-void CDriverGLStates3::bindUniformBuffer(GLuint id)
-{
-	H_AUTO_OGL(CDriverGLStates3_bindUniformBuffer)
-#ifndef NL3D_GLSTATE_DISABLE_CACHE
-	if (id != m_CurUniformBuffer)
-#endif
-	{
-		forceBindUniformBuffer(id);
-	}
-}
-
 void CDriverGLStates3::forceBindUniformBufferBase(GLuint binding, GLuint bufferId)
 {
 	H_AUTO_OGL(CDriverGLStates3_forceBindUniformBufferBase)

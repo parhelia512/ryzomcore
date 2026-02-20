@@ -272,13 +272,13 @@ public:
 	/// @{
 
 	/// glBindBuffer(GL_UNIFORM_BUFFER). For data upload; not an indexed binding point.
-	void bindUniformBuffer(GLuint id);
-	void forceBindUniformBuffer(GLuint id);
+	void forceBindUniformBuffer(GLuint id); // TODO: Not needed here in state, see pixel and some other upload bindings
 	GLuint getCurrBoundUniformBuffer() const { return m_CurUniformBuffer; }
 
 	/// glBindBufferBase(GL_UNIFORM_BUFFER, binding, bufferId). Indexed binding points.
 	void bindUniformBufferBase(GLuint binding, GLuint bufferId);
 	void forceBindUniformBufferBase(GLuint binding, GLuint bufferId);
+	GLuint getCurrBoundUniformBufferBase(GLuint binding) const { nlassert(binding < MaxUBOBindings); return m_CurUniformBufferBase[binding]; }
 
 	/// glBindBuffer(GL_PIXEL_UNPACK_BUFFER). For texture upload via PBO.
 	void bindPixelUnpackBuffer(GLuint id);

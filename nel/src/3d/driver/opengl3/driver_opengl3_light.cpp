@@ -171,8 +171,6 @@ void	CDriverGL3::setLightTableSize(uint count)
 	H_AUTO_OGL(CDriverGL3_setLightTableSize)
 	_LightTable.resize(count);
 	_LightTableDirty = true;
-	// Invalidate cached lightmap dynamic light table index (may have been in the old table range)
-	_LightMapDynLightTableIndex = -1;
 }
 
 // ***************************************************************************
@@ -294,91 +292,6 @@ void	CDriverGL3::setAmbientColor (CRGBA color)
 }
 
 
-// ***************************************************************************
-void			CDriverGL3::setLightMapDynamicLight (bool enable, const CLight& light)
-{
-	H_AUTO_OGL(CDriverGL3_setLightMapDynamicLight)
-	// just store, for future setup in lightmap material rendering
-	_LightMapDynamicLightEnabled= enable;
-	_LightMapDynamicLight= light;
-	_LightMapDynamicLightDirty= true;
-}
-
-
-// ***************************************************************************
-void			CDriverGL3::setupLightMapDynamicLighting(bool enable)
-{
-	H_AUTO_OGL(CDriverGL3_setupLightMapDynamicLighting)
-
-	// start lightmap dynamic lighting
-	if (enable)
-	{
-		// disable all lights but the 0th.
-		for (uint i = 1; i < MaxLight; ++i)
-			enableLightInternal(i, false);
-
-		// if the dynamic light is really enabled
-		if (_LightMapDynamicLightEnabled)
-		{
-			// then setup and enable
-			setLightInternal(0, _LightMapDynamicLight);
-			enableLightInternal(0, true);
-		}
-		// else just disable also the light 0
-		else
-		{
-			enableLightInternal(0, false);
-		}
-
-		// In table mode, uploadObjectUBO() reads _LightTableObjIndices instead of
-		// _LightEnable/_UserLight. Register the dynamic light in the table so the
-		// UBO path can reference it.
-		if (_LightTableMode)
-		{
-			// Clear all per-object table slots
-			for (uint i = 0; i < MaxLight; ++i)
-			{
-				_LightTableObjIndices[i] = -1;
-				_LightTableObjFactors[i] = 0.0f;
-			}
-
-			if (_LightMapDynamicLightEnabled)
-			{
-				// Lazily register the dynamic light in the table (once per table batch)
-				if (_LightMapDynLightTableIndex < 0)
-				{
-					_LightMapDynLightTableIndex = (sint16)_LightTable.size();
-					_LightTable.push_back(_LightMapDynamicLight);
-					_LightTableDirty = true;
-				}
-				else
-				{
-					// Update the existing table entry (light may have changed)
-					_LightTable[_LightMapDynLightTableIndex] = _LightMapDynamicLight;
-					_LightTableDirty = true;
-				}
-
-				_LightTableObjIndices[0] = _LightMapDynLightTableIndex;
-				_LightTableObjFactors[0] = 1.0f;
-			}
-		}
-
-		// ok it has been setup
-		_LightMapDynamicLightDirty = false;
-	}
-	// restore old lighting
-	else
-	{
-		// restore the light 0
-		setLightInternal(0, _UserLight0);
-
-		// restore all standard light enable states from _UserLightEnable
-		// (which is never modified by enableLightInternal, only by the public enableLight API)
-		for (uint i = 0; i < MaxLight; ++i)
-			enableLightInternal(i, _UserLightEnable[i]);
-	}
-}
-
 static void packLightToEntry(CLightTableUBOEntry &e, const CLight &light)
 {
 	CLight::TLightMode lmode = light.getMode();
@@ -429,6 +342,86 @@ static void packLightToEntry(CLightTableUBOEntry &e, const CLight &light)
 	e.ambient[3] = amb.A;
 }
 
+// ***************************************************************************
+void			CDriverGL3::setLightMapDynamicLight (bool enable, const CLight& light)
+{
+	H_AUTO_OGL(CDriverGL3_setLightMapDynamicLight)
+	// just store, for future setup in lightmap material rendering
+	_LightMapDynamicLightEnabled= enable;
+	_LightMapDynamicLight= light;
+	_LightMapDynamicLightDirty= true;
+}
+
+
+// ***************************************************************************
+void			CDriverGL3::setupLightMapDynamicLighting(bool enable)
+{
+	H_AUTO_OGL(CDriverGL3_setupLightMapDynamicLighting)
+
+	// start lightmap dynamic lighting
+	if (enable)
+	{
+		// disable all lights but the 0th.
+		for (uint i = 1; i < MaxLight; ++i)
+			enableLightInternal(i, false);
+
+		// if the dynamic light is really enabled
+		if (_LightMapDynamicLightEnabled)
+		{
+			// then setup and enable
+			setLightInternal(0, _LightMapDynamicLight);
+			enableLightInternal(0, true);
+		}
+		// else just disable also the light 0
+		else
+		{
+			enableLightInternal(0, false);
+		}
+
+		// Stage the dynamic light into the dedicated 1-light UBO.
+		// During lightmap passes, uploadLightTableUBO() will bind this
+		// instead of the main light table, avoiding pollution of _LightTable.
+		// The per-object UBO references index 0 in this 1-entry table.
+		for (uint i = 0; i < MaxLight; ++i)
+		{
+			_LightTableObjIndices[i] = -1;
+			_LightTableObjFactors[i] = 0.0f;
+		}
+
+		if (_LightMapDynamicLightEnabled)
+		{
+			packLightToEntry(_LightMapDynUBOEntry, _LightMapDynamicLight);
+			_LightTableObjIndices[0] = 0; // Index 0 in the 1-entry table
+			_LightTableObjFactors[0] = 1.0f;
+		}
+
+		_LightMapDynUBODirty = true;
+		_UseLightMapDynUBO = true;
+
+		// ok it has been setup
+		_LightMapDynamicLightDirty = false;
+	}
+	// restore old lighting
+	else
+	{
+		// Stop using the dedicated lightmap UBO; force the main table to
+		// re-upload and rebind (the binding point was stolen by the lightmap UBO).
+		_UseLightMapDynUBO = false;
+		if (_LightTableMode)
+			_LightTableDirty = true;
+		else
+			_UserLightUBODirty = true;
+
+		// restore the light 0
+		setLightInternal(0, _UserLight0);
+
+		// restore all standard light enable states from _UserLightEnable
+		// (which is never modified by enableLightInternal, only by the public enableLight API)
+		for (uint i = 0; i < MaxLight; ++i)
+			enableLightInternal(i, _UserLightEnable[i]);
+	}
+}
+
 static void uploadLightUBOData(CDriverGLStates3 &glStates, const CLightTableUBOEntry *entries, sint count, GLuint uboId, sint &uboCapacity)
 {
 	GLsizeiptr dataSize = count * sizeof(CLightTableUBOEntry);
@@ -456,6 +449,23 @@ static void uploadLightUBOData(CDriverGLStates3 &glStates, const CLightTableUBOE
 void CDriverGL3::uploadLightTableUBO()
 {
 	H_AUTO_OGL(CDriverGL3_uploadLightTableUBO)
+
+	// During lightmap passes, bind the dedicated 1-light UBO instead of the main table.
+	// This avoids polluting _LightTable with duplicates and prevents overflow.
+	if (_UseLightMapDynUBO)
+	{
+		if (_LightMapDynUBODirty)
+		{
+			// Upload the single-entry light table
+			_DriverGLStates.forceBindUniformBuffer(_LightMapDynUBOId);
+			nglBufferData(GL_UNIFORM_BUFFER, sizeof(CLightTableUBOEntry),
+			    &_LightMapDynUBOEntry, GL_STREAM_DRAW);
+			_DriverGLStates.forceBindUniformBuffer(0);
+			_LightMapDynUBODirty = false;
+		}
+		_DriverGLStates.bindUniformBufferBase(NL_BUILTIN_LIGHT_TABLE_BINDING, _LightMapDynUBOId);
+		return;
+	}
 
 	if (!_LightTableUBOId)
 		return;

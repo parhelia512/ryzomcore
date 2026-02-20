@@ -884,6 +884,7 @@ public:
 private:
 	virtual class IVertexBufferGL3	*createVertexBufferGL(uint size, uint numVertices, CVertexBuffer::TPreferredMemory preferred, CVertexBuffer *vb);
 	friend class					CTextureDrvInfosGL3;
+	friend class					CMaterialDrvInfosGL3;
 	friend class					CVertexProgamDrvInfosGL3;
 	friend class					CDepthStencilFBO;
 
@@ -1086,7 +1087,13 @@ private:
 	CLight						_LightMapDynamicLight;
 	bool						_LightMapDynamicLightEnabled;
 	bool						_LightMapDynamicLightDirty;
-	sint16						_LightMapDynLightTableIndex; // Table-mode: cached index of dynamic light in _LightTable (-1 = not registered)
+	// Dedicated 1-light UBO for the lightmap dynamic light.
+	// During lightmap passes, this is bound to the light table binding point
+	// instead of the main _LightTableUBOId, avoiding pollution of _LightTable.
+	GLuint						_LightMapDynUBOId;
+	CLightTableUBOEntry			_LightMapDynUBOEntry;  // Packed light data (staging)
+	bool						_LightMapDynUBODirty;  // Needs re-upload
+	bool						_UseLightMapDynUBO;    // Bind this instead of main table
 	// this is the backup of standard lighting (cause GL states may be modified by Lightmap Dynamic Lighting)
 	CLight						_UserLight0;
 	CLight						_UserLight[MaxLight];

@@ -1296,20 +1296,33 @@ void CDriverGL3::setupUniforms(TProgram program)
 
 	if (!m_ProgramUsesObjectUBO[program])
 	{
-		// Compute selfIllumination (always needed, regardless of table mode)
-		NLMISC::CRGBAF selfIllumination = NLMISC::CRGBAF(_AmbientGlobal);
-		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+		// selfIllumination: when lightmap override is active, use the pre-computed
+		// LMC ambient from the staging area instead of computing from scratch.
+		float si[4];
+		if (_LightMapUBOOverride.Active)
 		{
-			if (_LightEnable[i])
-				selfIllumination += NLMISC::CRGBAF(_UserLight[i].getAmbiant());
+			memcpy(si, _LightMapUBOOverride.SelfIllumination, sizeof(si));
 		}
-		selfIllumination *= NLMISC::CRGBAF(mat.getAmbient());
-		if (mat.getShader() != CMaterial::LightMap) // Really?
-			selfIllumination += NLMISC::CRGBAF(mat.getEmissive());
+		else
+		{
+			NLMISC::CRGBAF selfIllumination = NLMISC::CRGBAF(_AmbientGlobal);
+			for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
+			{
+				if (_LightEnable[i])
+					selfIllumination += NLMISC::CRGBAF(_UserLight[i].getAmbiant());
+			}
+			selfIllumination *= NLMISC::CRGBAF(mat.getAmbient());
+			if (mat.getShader() != CMaterial::LightMap)
+				selfIllumination += NLMISC::CRGBAF(mat.getEmissive());
+			si[0] = selfIllumination.R;
+			si[1] = selfIllumination.G;
+			si[2] = selfIllumination.B;
+			si[3] = 0.0f;
+		}
 		int selfIlluminationId = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::SelfIllumination));
 		if (selfIlluminationId != -1)
 		{
-			nglProgramUniform4f(progId, selfIlluminationId, selfIllumination.R, selfIllumination.G, selfIllumination.B, 0.0f);
+			nglProgramUniform4fv(progId, selfIlluminationId, 1, si);
 		}
 
 		// World-space output flags
@@ -1430,13 +1443,18 @@ void CDriverGL3::setupUniforms(TProgram program)
 		// Object UBO handles selfIllumination, light indices/factors, matrices — skip individual uploads
 
 		// Material properties as individual uniforms when material UBO is not active
-		// (e.g. wind tree VP uses object UBO but not material UBO)
+		// (e.g. wind tree VP uses object UBO but not material UBO).
+		// Read from staged MaterialUBO so lightmap per-pass overrides apply automatically.
 		if (!m_ProgramUsesMaterialUBO[program])
 		{
+			CMaterialDrvInfosGL3 *matDrv2 = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+			const CMaterialUBOData &matUBO = matDrv2->MaterialUBO[matDrv2->MaterialUBOCurrent];
 			NLMISC::CRGBAF matDiffuse = mat.isLightedVertexColor()
 				? NLMISC::CRGBAF(1.0f, 1.0f, 1.0f, 1.0f)
-				: NLMISC::CRGBAF(mat.getDiffuse());
-			NLMISC::CRGBAF matSpecular = NLMISC::CRGBAF(mat.getSpecular());
+				: NLMISC::CRGBAF(matUBO.materialDiffuse[0], matUBO.materialDiffuse[1],
+				                  matUBO.materialDiffuse[2], matUBO.materialDiffuse[3]);
+			NLMISC::CRGBAF matSpecular(matUBO.materialSpecular[0], matUBO.materialSpecular[1],
+			                            matUBO.materialSpecular[2], matUBO.materialSpecular[3]);
 
 			uint mdIdx = p->getUniformIndex(CProgramIndex::NlMaterialDiffuse);
 			if (mdIdx != ~0u)
@@ -1482,6 +1500,10 @@ void CDriverGL3::setupUniforms(TProgram program)
 				lightFactor = 1.0f;
 			}
 
+			// Lightmap pass > 0: zero all light factors (light added only on pass 0)
+			if (_LightMapUBOOverride.Active && _LightMapUBOOverride.ZeroLightFactors)
+				lightFactor = 0.0f;
+
 			uint idxIdx = p->getUniformIndex(CProgramIndex::TName(CProgramIndex::NlLightIndex0 + i));
 			if (idxIdx != ~0u)
 				nglProgramUniform1i(progId, idxIdx, lightIdx);
@@ -1493,11 +1515,16 @@ void CDriverGL3::setupUniforms(TProgram program)
 
 		if (!m_ProgramUsesMaterialUBO[program])
 		{
-			// Material properties for GPU-side light×material multiply
+			// Material properties for GPU-side light×material multiply.
+			// Read from staged MaterialUBO so lightmap per-pass overrides apply automatically.
+			CMaterialDrvInfosGL3 *matDrv2 = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+			const CMaterialUBOData &matUBO = matDrv2->MaterialUBO[matDrv2->MaterialUBOCurrent];
 			NLMISC::CRGBAF matDiffuse = mat.isLightedVertexColor()
 				? NLMISC::CRGBAF(1.0f, 1.0f, 1.0f, 1.0f)
-				: NLMISC::CRGBAF(mat.getDiffuse());
-			NLMISC::CRGBAF matSpecular = NLMISC::CRGBAF(mat.getSpecular());
+				: NLMISC::CRGBAF(matUBO.materialDiffuse[0], matUBO.materialDiffuse[1],
+				                  matUBO.materialDiffuse[2], matUBO.materialDiffuse[3]);
+			NLMISC::CRGBAF matSpecular(matUBO.materialSpecular[0], matUBO.materialSpecular[1],
+			                            matUBO.materialSpecular[2], matUBO.materialSpecular[3]);
 
 			uint mdIdx = p->getUniformIndex(CProgramIndex::NlMaterialDiffuse);
 			if (mdIdx != ~0u)
@@ -1593,13 +1620,18 @@ void CDriverGL3::setupUniforms(TProgram program)
 			}
 		}
 
-		// Material properties (when !materialUBO)
+		// Material properties (when !materialUBO).
+		// Read from staged MaterialUBO so lightmap per-pass overrides apply automatically.
 		if (!m_ProgramUsesMaterialUBO[program])
 		{
+			CMaterialDrvInfosGL3 *matDrv2 = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+			const CMaterialUBOData &matUBO = matDrv2->MaterialUBO[matDrv2->MaterialUBOCurrent];
 			NLMISC::CRGBAF matDiffuse = mat.isLightedVertexColor()
 				? NLMISC::CRGBAF(1.0f, 1.0f, 1.0f, 1.0f)
-				: NLMISC::CRGBAF(mat.getDiffuse());
-			NLMISC::CRGBAF matSpecular = NLMISC::CRGBAF(mat.getSpecular());
+				: NLMISC::CRGBAF(matUBO.materialDiffuse[0], matUBO.materialDiffuse[1],
+				                  matUBO.materialDiffuse[2], matUBO.materialDiffuse[3]);
+			NLMISC::CRGBAF matSpecular(matUBO.materialSpecular[0], matUBO.materialSpecular[1],
+			                            matUBO.materialSpecular[2], matUBO.materialSpecular[3]);
 
 			uint mdIdx = p->getUniformIndex(CProgramIndex::NlMaterialDiffuse);
 			if (mdIdx != ~0u)
@@ -1635,10 +1667,15 @@ void CDriverGL3::setupUniforms(TProgram program)
 	{
 		// Legacy per-light uniform path (VP-only: pre-multiplied light×material)
 		// VP lights are shifted: driver slot [m_VPBuiltinCurrent.NumPerPixelLights..7] → VP slot [0..7-N]
+		// Read from staged MaterialUBO so lightmap per-pass overrides apply automatically.
+		CMaterialDrvInfosGL3 *matDrv2 = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
+		const CMaterialUBOData &matUBO = matDrv2->MaterialUBO[matDrv2->MaterialUBOCurrent];
 		NLMISC::CRGBAF matDiffuse = mat.isLightedVertexColor()
 			? NLMISC::CRGBAF(1.0f, 1.0f, 1.0f, 1.0f)
-			: NLMISC::CRGBAF(mat.getDiffuse());
-		NLMISC::CRGBAF matSpecular = NLMISC::CRGBAF(mat.getSpecular());
+			: NLMISC::CRGBAF(matUBO.materialDiffuse[0], matUBO.materialDiffuse[1],
+			                  matUBO.materialDiffuse[2], matUBO.materialDiffuse[3]);
+		NLMISC::CRGBAF matSpecular(matUBO.materialSpecular[0], matUBO.materialSpecular[1],
+		                            matUBO.materialSpecular[2], matUBO.materialSpecular[3]);
 
 		for (uint i = 0; i < NL_OPENGL3_MAX_LIGHT; ++i)
 		{
