@@ -21,7 +21,7 @@
 #include "stdopengl3.h"
 #include "driver_opengl3.h"
 
-#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN__)
+#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__)
 # include <X11/Xatom.h>
 # ifdef HAVE_XRENDER
 #  include <X11/extensions/Xrender.h>
@@ -479,7 +479,7 @@ void CDriverGL3::showCursor(bool b)
 	if (error != kCGErrorSuccess)
 		nlerror("cannot show / hide cursor");
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	if (!b)
 	{
@@ -544,7 +544,7 @@ void CDriverGL3::setMousePos(float x, float y)
 	if (error != kCGErrorSuccess)
 		nlerror("cannot set mouse position");
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	XWarpPointer (_dpy, None, _win, None, None, None, None, x1, y1);
 
@@ -579,7 +579,7 @@ void CDriverGL3::setCapture (bool b)
 	// no need to capture
 	_MouseCaptured = b;
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	if (b /* && isSystemCursorInClientArea() && !isSystemCursorCaptured()*/) // capture the cursor.
 	{
@@ -690,7 +690,7 @@ bool CDriverGL3::convertBitmapToCursor(const NLMISC::CBitmap &bitmap, nlCursor &
 
 	return convertBitmapToIcon(bitmap, cursor, iconWidth, iconHeight, iconDepth, col, hotSpotX, hotSpotY, true);
 
-#elif defined(NL_OS_UNIX) && !defined(NL_OS_MAC)
+#elif defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__)
 
 	CBitmap src = bitmap;
 

@@ -96,6 +96,83 @@
 #ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
 #endif
+#ifndef GL_CONSTANT_COLOR_EXT
+#define GL_CONSTANT_COLOR_EXT GL_CONSTANT_COLOR
+#define GL_ONE_MINUS_CONSTANT_COLOR_EXT GL_ONE_MINUS_CONSTANT_COLOR
+#define GL_CONSTANT_ALPHA_EXT GL_CONSTANT_ALPHA
+#define GL_ONE_MINUS_CONSTANT_ALPHA_EXT GL_ONE_MINUS_CONSTANT_ALPHA
+#endif
+
+// Desktop GL constants not present in GLES3 used by the driver code
+#ifndef GL_RGB5
+#define GL_RGB5 0x8050
+#endif
+#ifndef GL_MODULATE
+#define GL_MODULATE 0x2100
+#endif
+#ifndef GL_ADD
+#define GL_ADD 0x0104
+#endif
+#ifndef GL_ADD_SIGNED_EXT
+#define GL_ADD_SIGNED_EXT 0x8574
+#endif
+#ifndef GL_INTERPOLATE_EXT
+#define GL_INTERPOLATE_EXT 0x8575
+#endif
+#ifndef GL_CONSTANT_EXT
+#define GL_CONSTANT_EXT 0x8576
+#endif
+#ifndef GL_PREVIOUS_EXT
+#define GL_PREVIOUS_EXT 0x8578
+#endif
+#ifndef GL_PRIMARY_COLOR_EXT
+#define GL_PRIMARY_COLOR_EXT 0x8577
+#endif
+#ifndef GL_BUMP_ENVMAP_ATI
+#define GL_BUMP_ENVMAP_ATI 0x877B
+#endif
+#ifndef GL_COMPRESSED_RGB_S3TC_DXT1_EXT
+#define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 0x83F0
+#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
+#endif
+#ifndef GL_TEXTURE_RECTANGLE
+#define GL_TEXTURE_RECTANGLE 0x84F5
+#endif
+#ifndef GL_TEXTURE_SWIZZLE_RGBA
+#define GL_TEXTURE_SWIZZLE_RGBA 0x8E46
+#endif
+#ifndef GL_CLIP_DISTANCE0
+#define GL_CLIP_DISTANCE0 0x3000
+#endif
+// Desktop GL sampler types not in GLES3
+#ifndef GL_SAMPLER_1D
+#define GL_SAMPLER_1D 0x8B5D
+#define GL_SAMPLER_1D_SHADOW 0x8B61
+#define GL_SAMPLER_1D_ARRAY 0x8DC0
+#define GL_SAMPLER_1D_ARRAY_SHADOW 0x8DC3
+#define GL_SAMPLER_2D_RECT 0x8B63
+#define GL_SAMPLER_2D_RECT_SHADOW 0x8B64
+#define GL_SAMPLER_BUFFER 0x8DC2
+#define GL_INT_SAMPLER_1D 0x8DC9
+#define GL_INT_SAMPLER_1D_ARRAY 0x8DCE
+#define GL_INT_SAMPLER_2D_RECT 0x8DCD
+#define GL_INT_SAMPLER_BUFFER 0x8DD0
+#define GL_UNSIGNED_INT_SAMPLER_1D 0x8DD1
+#define GL_UNSIGNED_INT_SAMPLER_1D_ARRAY 0x8DD6
+#define GL_UNSIGNED_INT_SAMPLER_2D_RECT 0x8DD5
+#endif
+// Separate shader objects bits
+#ifndef GL_VERTEX_SHADER_BIT
+#define GL_VERTEX_SHADER_BIT 0x00000001
+#define GL_FRAGMENT_SHADER_BIT 0x00000002
+#endif
+// Desktop-only GL functions - provide no-op stubs for GLES3
+#ifndef glPolygonMode
+inline void glPolygonMode(GLenum, GLenum) { }
+#endif
+#ifndef glDepthRange
+#define glDepthRange glDepthRangef
+#endif
 
 #else
 #ifdef NL_OS_WINDOWS

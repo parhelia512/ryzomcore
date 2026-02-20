@@ -17,6 +17,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+#include "stdopengl3.h"
 #include "driver_opengl3.h"
 #include "driver_opengl3_program.h"
 #include "driver_opengl3_vertex_buffer.h"

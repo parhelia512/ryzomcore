@@ -277,6 +277,39 @@ namespace NLDRIVERGL3 {
 #define nglGetSynciv glGetSynciv
 
 // GL_ARB_separate_shader_objects not available in GLES 3.0 core
+// Provide no-op stubs so code compiles; runtime checks disable SSO usage
+inline void _nglUseProgramStages(GLuint, GLbitfield, GLuint) { }
+inline void _nglActiveShaderProgram(GLuint, GLuint) { }
+inline GLuint _nglCreateShaderProgramv(GLenum, GLsizei, const GLchar *const*) { return 0; }
+inline void _nglProgramParameteri(GLuint, GLenum, GLint) { }
+inline void _nglBindProgramPipeline(GLuint) { }
+inline void _nglDeleteProgramPipelines(GLsizei, const GLuint *) { }
+inline void _nglGenProgramPipelines(GLsizei, GLuint *) { }
+inline GLboolean _nglIsProgramPipeline(GLuint) { return GL_FALSE; }
+inline void _nglGetProgramPipelineiv(GLuint, GLenum, GLint *) { }
+inline void _nglProgramUniform1i(GLuint, GLint, GLint) { }
+inline void _nglProgramUniform1iv(GLuint, GLint, GLsizei, const GLint *) { }
+inline void _nglProgramUniform1f(GLuint, GLint, GLfloat) { }
+inline void _nglProgramUniform1fv(GLuint, GLint, GLsizei, const GLfloat *) { }
+inline void _nglProgramUniform4f(GLuint, GLint, GLfloat, GLfloat, GLfloat, GLfloat) { }
+inline void _nglProgramUniform4fv(GLuint, GLint, GLsizei, const GLfloat *) { }
+inline void _nglProgramUniformMatrix4fv(GLuint, GLint, GLsizei, GLboolean, const GLfloat *) { }
+#define nglUseProgramStages _nglUseProgramStages
+#define nglActiveShaderProgram _nglActiveShaderProgram
+#define nglCreateShaderProgramv _nglCreateShaderProgramv
+#define nglProgramParameteri _nglProgramParameteri
+#define nglBindProgramPipeline _nglBindProgramPipeline
+#define nglDeleteProgramPipelines _nglDeleteProgramPipelines
+#define nglGenProgramPipelines _nglGenProgramPipelines
+#define nglIsProgramPipeline _nglIsProgramPipeline
+#define nglGetProgramPipelineiv _nglGetProgramPipelineiv
+#define nglProgramUniform1i _nglProgramUniform1i
+#define nglProgramUniform1iv _nglProgramUniform1iv
+#define nglProgramUniform1f _nglProgramUniform1f
+#define nglProgramUniform1fv _nglProgramUniform1fv
+#define nglProgramUniform4f _nglProgramUniform4f
+#define nglProgramUniform4fv _nglProgramUniform4fv
+#define nglProgramUniformMatrix4fv _nglProgramUniformMatrix4fv
 
 #else // !USE_OPENGLES3
 
