@@ -1112,6 +1112,7 @@ private:
 	bool						_LightTableDirty; // Light table entries changed
 	bool						_UserLightUBODirty; // _UserLight[] changed (for non-table UBO mode)
 	sint						_LightTableUBOCapacity; // Current GPU buffer capacity (entries)
+	CLightTableUBOEntry			_LightTableUBOStaging[128]; // Persistent staging buffer (avoids per-frame heap alloc)
 	void						uploadLightTableUBO();
 
 	// Per-object light table selection (set by setLights, used by setupUniforms)
