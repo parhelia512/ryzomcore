@@ -35,8 +35,8 @@ namespace NLDRIVERGL3 {
 
 // Number of nelvp constant registers
 static const int NELVP_NUM_CONSTANTS = 96;
-// Extra UBO slots for modelView matrix (4 vec4 columns)
-static const int NELVP_MODELVIEW_BASE = 96;
+// Extra UBO slots for inverse projection matrix (4 vec4 columns) used by ecPos epilogue
+static const int NELVP_INV_PROJ_BASE = 96;
 static const int NELVP_UBO_VEC4_COUNT = 100;
 
 // Output register enum values from CVPOperand::EOutputRegister
@@ -362,9 +362,6 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 		}
 	}
 
-	// Always need v0 (position) for ecPos synthesis
-	inputUsed[0] = true;
-
 	// Build GLSL
 	std::stringstream ss;
 
@@ -680,10 +677,12 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 		}
 	}
 
-	// Epilogue: synthesize ecPos from modelView matrix stored in c[96..99]
+	// Epilogue: synthesize ecPos from gl_Position via inverse projection stored in c[96..99].
+	// Using gl_Position ensures ecPos reflects any VP modifications (geomorphing, wind, etc.).
+	// inv(P) * gl_Position = ChangeBasis * ModelView * adjustedPos = GL eye-space position.
 	ss << "\n// Synthesize eye-space position for fog\n";
-	ss << "ecPos = mat4(c[" << NELVP_MODELVIEW_BASE << "], c[" << (NELVP_MODELVIEW_BASE + 1)
-	   << "], c[" << (NELVP_MODELVIEW_BASE + 2) << "], c[" << (NELVP_MODELVIEW_BASE + 3) << "]) * v0;\n";
+	ss << "ecPos = mat4(c[" << NELVP_INV_PROJ_BASE << "], c[" << (NELVP_INV_PROJ_BASE + 1)
+	   << "], c[" << (NELVP_INV_PROJ_BASE + 2) << "], c[" << (NELVP_INV_PROJ_BASE + 3) << "]) * gl_Position;\n";
 
 	ss << "}\n";
 

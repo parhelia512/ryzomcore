@@ -25,9 +25,9 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
-// nelvp UBO layout: 96 constant registers + 4 vec4 for modelView matrix
+// nelvp UBO layout: 96 constant registers + 4 vec4 for inverse projection matrix
 static const int NELVP_UBO_VEC4_COUNT = 100;
-static const int NELVP_MODELVIEW_BASE = 96;
+static const int NELVP_INV_PROJ_BASE = 96;
 
 // Insert builtin UBO headers after leading preprocessor and precision lines
 static std::string insertBuiltinHeaders(const char *source, bool lightTable, bool camera, bool object, bool material,
@@ -659,11 +659,13 @@ void CDriverGL3::flushNelvpUserVP()
 
 	CUniformBuffer *ub = di->NelvpConstantUB;
 
-	// Update modelView matrix in UBO (may have changed since last setUniform).
-	// Apply basis change so ecPos is computed in GL eye space for fog.
-	CMatrix nelvpMV = _ChangeBasis * _ModelViewMatrix;
+	// Store inverse projection matrix for ecPos synthesis epilogue.
+	// ecPos = inv(P) * gl_Position = ChangeBasis * MV * adjustedPos (GL eye space).
+	// Using gl_Position ensures ecPos reflects any VP modifications (geomorphing, wind, etc.).
+	CMatrix invProj = _GLProjMat;
+	invProj.invert();
 	ub->lock();
-	ub->set(NELVP_MODELVIEW_BASE * 16, nelvpMV);
+	ub->set(NELVP_INV_PROJ_BASE * 16, invProj);
 	ub->unlock();
 
 	// Ensure UBO is bound to the VP slot (state manager deduplicates)
@@ -1283,14 +1285,6 @@ bool CDriverGL3::setupUniforms()
 	// Both UBO upload and SSO individual uniforms read from _CameraUBOData.
 	if (_CameraUBODirty)
 		stageCameraUBO();
-
-	// Update nelvp modelView matrix in UBO before flush (per-draw, both paths)
-	if (m_NelvpActiveUB)
-	{
-		m_NelvpActiveUB->lock();
-		m_NelvpActiveUB->set(NELVP_MODELVIEW_BASE * 16, _ModelViewMatrix);
-		m_NelvpActiveUB->unlock();
-	}
 
 	if (m_DriverShaderProgram)
 	{
