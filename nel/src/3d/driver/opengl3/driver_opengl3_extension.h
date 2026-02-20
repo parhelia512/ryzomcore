@@ -287,12 +287,25 @@ inline void _nglDeleteProgramPipelines(GLsizei, const GLuint *) { }
 inline void _nglGenProgramPipelines(GLsizei, GLuint *) { }
 inline GLboolean _nglIsProgramPipeline(GLuint) { return GL_FALSE; }
 inline void _nglGetProgramPipelineiv(GLuint, GLenum, GLint *) { }
-inline void _nglProgramUniform1i(GLuint, GLint, GLint) { }
-inline void _nglProgramUniform1iv(GLuint, GLint, GLsizei, const GLint *) { }
 inline void _nglProgramUniform1f(GLuint, GLint, GLfloat) { }
 inline void _nglProgramUniform1fv(GLuint, GLint, GLsizei, const GLfloat *) { }
+inline void _nglProgramUniform2f(GLuint, GLint, GLfloat, GLfloat) { }
+inline void _nglProgramUniform2fv(GLuint, GLint, GLsizei, const GLfloat *) { }
+inline void _nglProgramUniform3f(GLuint, GLint, GLfloat, GLfloat, GLfloat) { }
 inline void _nglProgramUniform4f(GLuint, GLint, GLfloat, GLfloat, GLfloat, GLfloat) { }
 inline void _nglProgramUniform4fv(GLuint, GLint, GLsizei, const GLfloat *) { }
+inline void _nglProgramUniform1i(GLuint, GLint, GLint) { }
+inline void _nglProgramUniform1iv(GLuint, GLint, GLsizei, const GLint *) { }
+inline void _nglProgramUniform2i(GLuint, GLint, GLint, GLint) { }
+inline void _nglProgramUniform3i(GLuint, GLint, GLint, GLint, GLint) { }
+inline void _nglProgramUniform4i(GLuint, GLint, GLint, GLint, GLint, GLint) { }
+inline void _nglProgramUniform4iv(GLuint, GLint, GLsizei, const GLint *) { }
+inline void _nglProgramUniform1ui(GLuint, GLint, GLuint) { }
+inline void _nglProgramUniform2ui(GLuint, GLint, GLuint, GLuint) { }
+inline void _nglProgramUniform3ui(GLuint, GLint, GLuint, GLuint, GLuint) { }
+inline void _nglProgramUniform4ui(GLuint, GLint, GLuint, GLuint, GLuint, GLuint) { }
+inline void _nglProgramUniform4uiv(GLuint, GLint, GLsizei, const GLuint *) { }
+inline void _nglProgramUniformMatrix3fv(GLuint, GLint, GLsizei, GLboolean, const GLfloat *) { }
 inline void _nglProgramUniformMatrix4fv(GLuint, GLint, GLsizei, GLboolean, const GLfloat *) { }
 #define nglUseProgramStages _nglUseProgramStages
 #define nglActiveShaderProgram _nglActiveShaderProgram
@@ -305,10 +318,23 @@ inline void _nglProgramUniformMatrix4fv(GLuint, GLint, GLsizei, GLboolean, const
 #define nglGetProgramPipelineiv _nglGetProgramPipelineiv
 #define nglProgramUniform1i _nglProgramUniform1i
 #define nglProgramUniform1iv _nglProgramUniform1iv
+#define nglProgramUniform2i _nglProgramUniform2i
+#define nglProgramUniform3i _nglProgramUniform3i
+#define nglProgramUniform4i _nglProgramUniform4i
+#define nglProgramUniform4iv _nglProgramUniform4iv
+#define nglProgramUniform1ui _nglProgramUniform1ui
+#define nglProgramUniform2ui _nglProgramUniform2ui
+#define nglProgramUniform3ui _nglProgramUniform3ui
+#define nglProgramUniform4ui _nglProgramUniform4ui
+#define nglProgramUniform4uiv _nglProgramUniform4uiv
 #define nglProgramUniform1f _nglProgramUniform1f
 #define nglProgramUniform1fv _nglProgramUniform1fv
+#define nglProgramUniform2f _nglProgramUniform2f
+#define nglProgramUniform2fv _nglProgramUniform2fv
+#define nglProgramUniform3f _nglProgramUniform3f
 #define nglProgramUniform4f _nglProgramUniform4f
 #define nglProgramUniform4fv _nglProgramUniform4fv
+#define nglProgramUniformMatrix3fv _nglProgramUniformMatrix3fv
 #define nglProgramUniformMatrix4fv _nglProgramUniformMatrix4fv
 
 #else // !USE_OPENGLES3

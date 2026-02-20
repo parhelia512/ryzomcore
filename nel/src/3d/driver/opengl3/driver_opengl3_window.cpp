@@ -33,7 +33,7 @@
 #elif defined(NL_OS_MAC)
 #	import "mac/cocoa_window_delegate.h"
 #	import "mac/cocoa_application_delegate.h"
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 #	ifdef HAVE_XRANDR
 #		include <X11/extensions/Xrandr.h>
 #	endif
@@ -49,7 +49,7 @@
 #	import "mac/cocoa_window_delegate.h"
 #	import "mac/cocoa_application_delegate.h"
 #	import <OpenGL/OpenGL.h>
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 #	ifdef HAVE_XRANDR
 #		include <X11/extensions/Xrandr.h>
 #	endif // HAVE_XRANDR
@@ -202,7 +202,7 @@ bool GlWndProc(CDriverGL3 *driver, const void* e)
 	return driver->_EventEmitter.processMessage(event);
 }
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 static Atom XA_WM_STATE = 0;
 static Atom XA_WM_STATE_FULLSCREEN = 0;
@@ -349,7 +349,7 @@ bool CDriverGL3::init(uintptr_t windowIcon, emptyProc exitFunc)
 	// nothing to do
 	nlunreferenced(windowIcon);
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	nlunreferenced(windowIcon);
 
@@ -474,7 +474,7 @@ bool CDriverGL3::unInit()
 
 	// nothing to do
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 #ifndef __EMSCRIPTEN__
 	// restore default X errors handler
@@ -560,7 +560,7 @@ void CDriverGL3::setWindowIcon(const std::vector<NLMISC::CBitmap> &bitmaps)
 
 	// nothing to do, on Mac OS X, only windows representing a file have icons
 
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	std::vector<long> icon_data;
 
@@ -1049,7 +1049,7 @@ bool CDriverGL3::setDisplay(nlWindow wnd, const GfxMode &mode, bool show, bool r
 
 	_EventEmitter.init(this, _glView, _DestroyWindow);
 
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	static int sAttribList16bpp[] =
 	{
@@ -1157,7 +1157,7 @@ bool CDriverGL3::saveScreenMode()
 
 	// no need to store because the screen mode is never really changed
 
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	int screen = DefaultScreen(_dpy);
 	res = false;
@@ -1218,7 +1218,7 @@ bool CDriverGL3::restoreScreenMode()
 	// no need to restore because the screen mode was never really changed
 	res = true;
 
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	int screen = DefaultScreen(_dpy);
 
@@ -1353,7 +1353,7 @@ bool CDriverGL3::setScreenMode(const GfxMode &mode)
 
 	// no need to do anything here, on mac os, the screen mode is never changed
 
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	bool found = false;
 
@@ -1539,7 +1539,7 @@ bool CDriverGL3::createWindow(const GfxMode &mode)
 		return false;
 	}
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	if (_visual_info == NULL)
 		return false;
@@ -1645,7 +1645,7 @@ bool CDriverGL3::destroyWindow()
 	}
 
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	if (_DestroyWindow && _ctx)
 		glXDestroyContext(_dpy, _ctx);
@@ -1671,7 +1671,7 @@ bool CDriverGL3::destroyWindow()
 
 	_ctx = nil;
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	_EventEmitter.closeIM();
 
@@ -1811,7 +1811,7 @@ bool CDriverGL3::setWindowStyle(EWindowStyle windowStyle)
 		[[containerView() window] makeFirstResponder:_glView];
 	}
 
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	XWindowAttributes attr;
 	XGetWindowAttributes(_dpy, _win, &attr);
@@ -2050,7 +2050,7 @@ bool CDriverGL3::getModes(std::vector<GfxMode> &modes)
 		}
 	}
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	bool found = false;
 	int screen = DefaultScreen(_dpy);
@@ -2184,7 +2184,7 @@ bool CDriverGL3::getCurrentScreenMode(GfxMode &mode)
 		mode.Height    = (uint16)[screen frame].size.height;
 	}
 
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	bool found = false;
 	int screen = DefaultScreen(_dpy);
@@ -2293,7 +2293,7 @@ void CDriverGL3::setWindowTitle(const ucstring &title)
 	[[containerView() window] setTitle:
 		[NSString stringWithUTF8String:title.toUtf8().c_str()]];
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 #ifdef X_HAVE_UTF8_STRING
 	// UTF8 properties
@@ -2354,7 +2354,7 @@ void CDriverGL3::setWindowPos(sint32 x, sint32 y)
 	// tell cocoa to move the window
 	[[containerView() window] setFrameTopLeftPoint:NSMakePoint(x, y)];
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	if (_CurrentMode.Windowed)
 	{
@@ -2390,7 +2390,7 @@ void CDriverGL3::showWindow(bool show)
 
 # warning "OpenGL Driver: Missing Mac Implementation for showWindow"
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	if (show)
 	{
@@ -2670,7 +2670,7 @@ void CDriverGL3::setWindowSize(uint32 width, uint32 height)
 		}
 	}
 
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	if (!_Resizable)
 	{
@@ -2910,7 +2910,7 @@ bool CDriverGL3::convertBitmapToIcon(const NLMISC::CBitmap &bitmap, HICON &icon,
 
 #elif defined(NL_OS_MAC)
 
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 bool CDriverGL3::convertBitmapToIcon(const NLMISC::CBitmap &bitmap, std::vector<long> &icon)
 {

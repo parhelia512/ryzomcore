@@ -1081,7 +1081,7 @@ MACRO(NL_SETUP_BUILD)
       ADD_PLATFORM_LINKFLAGS("-lc")
     ENDIF()
 
-    IF(NOT APPLE)
+    IF(NOT APPLE AND NOT EMSCRIPTEN)
       ADD_PLATFORM_LINKFLAGS("-Wl,--no-undefined -Wl,--as-needed")
 
       IF(WITH_STATIC_RUNTIMES)
@@ -1089,7 +1089,7 @@ MACRO(NL_SETUP_BUILD)
       ENDIF()
     ENDIF()
 
-    IF(NOT APPLE AND NOT MINGW)
+    IF(NOT APPLE AND NOT MINGW AND NOT EMSCRIPTEN)
       # hardening
       ADD_PLATFORM_LINKFLAGS("-Wl,-Bsymbolic-functions -Wl,-z,relro -Wl,-z,now")
     ENDIF()
@@ -1100,7 +1100,9 @@ MACRO(NL_SETUP_BUILD)
       IF(APPLE)
         SET(NL_RELEASE_LINKFLAGS "-Wl,-dead_strip ${NL_RELEASE_LINKFLAGS}")
       ELSE()
-        SET(NL_RELEASE_LINKFLAGS "-Wl,-s ${NL_RELEASE_LINKFLAGS}")
+        IF(NOT EMSCRIPTEN)
+          SET(NL_RELEASE_LINKFLAGS "-Wl,-s ${NL_RELEASE_LINKFLAGS}")
+        ENDIF()
       ENDIF()
     ENDIF()
 

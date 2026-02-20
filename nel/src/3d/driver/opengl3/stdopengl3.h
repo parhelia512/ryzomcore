@@ -166,6 +166,12 @@
 #define GL_VERTEX_SHADER_BIT 0x00000001
 #define GL_FRAGMENT_SHADER_BIT 0x00000002
 #endif
+#ifndef GL_DOUBLE
+#define GL_DOUBLE 0x140A
+#endif
+#ifndef GL_EXTERNAL_VIRTUAL_MEMORY_BUFFER_AMD
+#define GL_EXTERNAL_VIRTUAL_MEMORY_BUFFER_AMD 0x9160
+#endif
 // Desktop-only GL functions - provide no-op stubs for GLES3
 #ifndef glPolygonMode
 inline void glPolygonMode(GLenum, GLenum) { }
