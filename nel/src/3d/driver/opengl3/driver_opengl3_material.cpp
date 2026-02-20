@@ -873,7 +873,6 @@ void CDriverGL3::setupLightMapPass(uint pass)
 			uint64 texSamplerMode = 0;
 			for (uint stage = 0; stage < maxSam; ++stage)
 			{
-			{
 				ITexture *tex = _CurrentTexture[stage];
 				if (tex)
 				{
