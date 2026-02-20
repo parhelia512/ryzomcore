@@ -518,8 +518,8 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		}
 		else if (!lighting)
 		{
-			// Unlit: vertex color modulates materialColor
-			ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+			// Unlit: vertex color replaces materialColor (fixed-function GL behavior)
+			ss << "diffuseVertex = vprimaryColor;" << std::endl;
 		}
 		// When lighting && !VertexColorLighted: vprimaryColor is ignored (matDiffuse pre-multiplied on CPU)
 	}

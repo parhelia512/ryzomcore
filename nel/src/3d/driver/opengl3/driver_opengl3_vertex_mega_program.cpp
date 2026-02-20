@@ -473,10 +473,11 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 	// When lighting && !VertexColorLighted: vprimaryColor is ignored (matDiffuse pre-multiplied on CPU)
 
 	ss << "  } else {" << std::endl;
-	ss << "    // Unlit" << std::endl;
-	ss << "    diffuseVertex = materialColor;" << std::endl;
+	ss << "    // Unlit: vertex color replaces materialColor (fixed-function GL behavior)" << std::endl;
 	ss << "    if ((nlVertexFormat & NL_VP_PRIMARY_COLOR_FLAG) != 0)" << std::endl;
-	ss << "      diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+	ss << "      diffuseVertex = vprimaryColor;" << std::endl;
+	ss << "    else" << std::endl;
+	ss << "      diffuseVertex = materialColor;" << std::endl;
 	ss << "    if ((nlVertexFormat & NL_VP_SECONDARY_COLOR_FLAG) != 0)" << std::endl;
 	ss << "      specularVertex = vsecondaryColor;" << std::endl;
 	ss << "  }" << std::endl;
