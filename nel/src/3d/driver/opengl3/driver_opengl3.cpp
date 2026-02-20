@@ -197,7 +197,7 @@ CDriverGL3::CDriverGL3()
 	// finish the application launching
 	[NSApp finishLaunching];
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	_dpy = 0;
 	_visual_info = NULL;
@@ -1414,7 +1414,7 @@ void	CDriverGL3::setSwapVBLInterval(uint interval)
 		res = nwglSwapIntervalEXT(interval) == TRUE;
 	}
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 	if (_win && _Extensions.GLXEXTSwapControl)
 	{
 		res = nglXSwapIntervalEXT(_dpy, _win, interval) == 0;
@@ -1450,7 +1450,7 @@ uint	CDriverGL3::getSwapVBLInterval()
 		return nwglGetSwapIntervalEXT();
 	}
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 	if (_win && _Extensions.GLXEXTSwapControl)
 	{
 		uint swap, maxSwap;

@@ -976,7 +976,7 @@ private:
 		nlCursor		Cursor;
 		NLMISC::CRGBA	Col;
 		uint8			Rot;
-#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC)
+#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__)
 		Display			*Dpy;
 #endif
 	public:

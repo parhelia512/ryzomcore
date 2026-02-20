@@ -21,7 +21,7 @@
 #include "stdopengl3.h"
 #include "driver_opengl3.h"
 
-#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__)
+#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN__)
 # include <X11/Xatom.h>
 # ifdef HAVE_XRENDER
 #  include <X11/extensions/Xrender.h>
@@ -52,7 +52,7 @@ CDriverGL3::CCursor::CCursor() : ColorDepth(CDriverGL3::ColorDepth32),
 								Col(CRGBA::White),
 								Rot(0)
 {
-#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC)
+#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__)
 	Dpy = NULL;
 #endif
 }
@@ -71,7 +71,7 @@ void CDriverGL3::CCursor::reset()
 #ifdef NL_OS_WINDOWS
 		DestroyIcon(Cursor);
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 		XFreeCursor(Dpy, Cursor);
 		XSync(Dpy, False);
 #endif
@@ -93,7 +93,7 @@ CDriverGL3::CCursor& CDriverGL3::CCursor::operator= (const CDriverGL3::CCursor& 
 	Cursor = from.Cursor;
 	Col = from.Col;
 	Rot = from.Rot;
-#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC)
+#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__)
 	Dpy = from.Dpy;
 #endif
 	return *this;
@@ -117,7 +117,7 @@ bool CDriverGL3::isAlphaBlendedCursorSupported()
 			_AlphaBlendedCursorSupported = (osvi.dwMajorVersion	>= 5);
 		}
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 		_AlphaBlendedCursorSupported = false;
 
@@ -270,8 +270,7 @@ void CDriverGL3::createCursors()
 	_DefaultCursor = LoadCursor(NULL, IDC_ARROW);
 	_BlankCursor = NULL;
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
-#ifndef __EMSCRIPTEN__
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 	_DefaultCursor = None;
 
 	if (_dpy && _win && _BlankCursor == EmptyCursor)
@@ -286,7 +285,6 @@ void CDriverGL3::createCursors()
 		XFreePixmap(_dpy, pixmap_no_data);
 	}
 #endif
-#endif
 }
 
 // *************************************************************************************
@@ -295,11 +293,9 @@ void CDriverGL3::releaseCursors()
 #ifdef NL_OS_WINDOWS
 	SetClassLongPtr(_win, GCLP_HCURSOR, 0);
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
-#ifndef __EMSCRIPTEN__
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 	XUndefineCursor(_dpy, _win);
 	XFreeCursor(_dpy, _BlankCursor);
-#endif
 #endif
 
 	_Cursors.clear();
@@ -354,7 +350,7 @@ void CDriverGL3::setCursor(const std::string &name, NLMISC::CRGBA col, uint8 rot
 			curs.HotSpotX = hotSpotX;
 			curs.HotSpotY = hotSpotY;
 			curs.ColorDepth = _ColorDepth;
-#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC)
+#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__)
 			curs.Dpy = _dpy;
 #endif
 		}
@@ -370,7 +366,7 @@ void CDriverGL3::setCursor(const std::string &name, NLMISC::CRGBA col, uint8 rot
 			SetClassLongPtr(_win, GCLP_HCURSOR, (LONG_PTR) cursorHandle); // set default mouse icon to the last one
 		}
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 		if (cursorHandle == _DefaultCursor)
 		{
 			XUndefineCursor(_dpy, _win);
@@ -429,7 +425,7 @@ void CDriverGL3::setSystemArrow()
 	// set default mouse icon to the default one
 	SetClassLongPtr(_win, GCLP_HCURSOR, (LONG_PTR) _DefaultCursor);
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 	XUndefineCursor(_dpy, _win);
 #endif
 }
@@ -674,7 +670,7 @@ bool CDriverGL3::getBestCursorSize(uint srcWidth, uint srcHeight, uint &dstWidth
 	dstHeight = (uint)GetSystemMetrics(SM_CYCURSOR);
 
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	Status status = XQueryBestCursor(_dpy, _win, srcWidth, srcHeight, &dstWidth, &dstHeight);
 

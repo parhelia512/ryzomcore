@@ -144,7 +144,7 @@ public:
 /// This function will test and register WGL functions before than the gl context is created
 bool registerWGlExtensions(CGlExtensions &ext, HDC hDC);
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 /// This function will test and register GLX functions before than the gl context is created
 bool registerGlXExtensions(CGlExtensions &ext, Display *dpy, sint screen);
 #endif // NL_OS_WINDOWS
