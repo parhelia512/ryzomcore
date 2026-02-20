@@ -59,8 +59,9 @@ static const uint64 SamplerCube = 1;
 
 /// Builtin pixel program description.
 /// Per-material struct cached on CMaterialDrvInfosGL3.
-/// Tracks both driver state (VertexFormat, Fog, FogMode, SpecularSeparate) and
-/// material-derived state (Shader, Flags, TextureActive, TexEnvMode, TexSamplerMode).
+/// Tracks driver state (VertexFormat, Fog, FogMode, SpecularSeparate, WorldSpacePosition,
+/// PPL, PPLVertexColor, PPClipPlane) and material-derived state (Shader, Flags, TextureActive,
+/// TexEnvMode, TexSamplerMode, LightMapScale).
 /// Non-mega path: all fields determine which compiled PP variant to use.
 /// Mega path: only TexSamplerMode selects the cube split; Shader/Flags/TextureActive/TexEnvMode
 /// are read by uploadMaterialUBO() to pack the NlMaterial UBO.
@@ -68,39 +69,31 @@ struct CPPBuiltin
 {
 	CPPBuiltin() : Touched(true), FogMode(0), SpecularSeparate(false), WorldSpacePosition(false), LightMapScale(false), PPL(false), PPLVertexColor(false), PPClipPlane(false) { }
 
-	// Driver state (per-draw-call, not in material UBO)
+	// Driver state (per-draw-call, pulled in by checkDriverStateTouched)
 	uint16 VertexFormat;
 	bool Fog;
 	uint8 FogMode;
 	bool SpecularSeparate; // Whether VP outputs specularColor varying
 	bool WorldSpacePosition; // Whether VP outputs world-space position (affects fog calculation)
-	bool LightMapScale; // Whether PP uses nlLightMapScale uniform (lightmap x2 mode)
 	bool PPL; // Whether PP has per-pixel lighting code (computeLightPP, ecPos/normal varyings)
 	bool PPLVertexColor; // Whether PP declares vertexColor varying and multiplies PPL by it (PPL + VertexColorLighted)
 	bool PPClipPlane; // PP handles clip plane discard (declares ecPos, clipPlane uniforms)
 
-	// Material-derived state (packed into material UBO when active)
+	// Material-derived state (pushed by setupMaterial/setupLightMapPass/setupNormalPass)
 	CMaterial::TShader Shader;
 	uint32 Flags;                               // Masked to IDRV_MAT_ALPHA_TEST
 	uint32 TextureActive;                       // Bitmask of active texture stages
 	uint64 TexSamplerMode;                      // 2D vs cube per stage (not in material UBO, selects mega PP cube split)
 	uint32 TexEnvMode[IDRV_MAT_MAXTEXTURES];   // Packed TexEnv per stage (Normal, UserColor shaders)
+	bool LightMapScale; // Whether PP uses nlLightMapScale uniform (lightmap x2 mode)
 
 	NLMISC::CRefPtr<CPixelProgram> PixelProgram;
 
-	// Touched: any field changed, triggers PP recompilation (non-mega) or uniform re-upload (mega).
+	// Touched: any field changed, triggers PP recompilation or re-selection
 	bool Touched;
-	// MaterialUBOTouched: only set when material-UBO-relevant fields change
-	// (Shader, Flags, TextureActive, TexEnvMode). Avoids spurious material UBO
-	// re-uploads when only driver state (fog, vertex format, etc.) changes.
-	// bool MaterialUBOTouched; // nonsense field
 
+	// Update driver state fields and mark touched if necessary
 	void checkDriverStateTouched(CDriverGL3 *driver);
-	// TODO: Restructure — material-derived state (Shader, Flags, TextureActive, TexSamplerMode,
-	// TexEnvMode) should be pushed from setupMaterial. LightMap texture state should be pushed
-	// from setupLightmapPass. These functions are no longer called.
-	// void checkDriverMaterialStateTouched(CDriverGL3 *driver, CMaterial::TShader shader);
-	// void checkMaterialStateTouched(CMaterial &mat, CMaterial::TShader shader);
 };
 
 bool operator<(const CPPBuiltin &left, const CPPBuiltin &right);
