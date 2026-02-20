@@ -371,7 +371,6 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 					// Identity texture matrices
 					for (uint stage = 0; stage < IDRV_MAT_MAXTEXTURES; ++stage)
 						memcpy(matUBO.texMatrix[stage], CMatrix::Identity.get(), 16 * sizeof(float));
-					matDrv->HasEMBM = false;
 					matDrv->TexEnvMatDefault = true;
 				}
 			}
