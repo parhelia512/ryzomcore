@@ -713,28 +713,34 @@ void CDriverGL3::setupSpecularMaterial()
 	H_AUTO_OGL(CDriverGL3_setupSpecularMaterial)
 
 	CMaterialDrvInfosGL3 *matDrv = getMatDrv(*_CurrentMaterial);
-	CMaterial::TShader matShader = _CurrentMaterialSupportedShader;
+	matDrv->MaterialUBOCurrent = 0;
+	const uint32 touched = matDrv->SetupPass0Touched;
 
-	// Specular has no per-pass texture staging — populate TextureActive and
-	// TexSamplerMode from the textures activated earlier in setupMaterial.
-	uint maxTex = maxTextures(matShader);
-	uint32 textureActive = 0;
-	uint64 texSamplerMode = 0;
-	for (uint stage = 0; stage < maxTex; ++stage)
+	if (touched & IDRV_TOUCHED_ALLTEX)
 	{
-		ITexture *tex = _CurrentTexture[stage];
-		if (tex)
+		// Specular uses textures activated earlier in setupMaterial.
+		// No texenv, EMBM, or texture matrices — just TextureActive and TexSamplerMode.
+		uint maxTex = maxTextures(_CurrentMaterialSupportedShader);
+		uint32 textureActive = 0;
+		uint64 texSamplerMode = 0;
+		for (uint stage = 0; stage < maxTex; ++stage)
 		{
-			textureActive |= (1 << stage);
-			texSamplerMode |= (tex->isTextureCube() ? SamplerCube : Sampler2D) << (stage * 2);
+			ITexture *tex = _CurrentTexture[stage];
+			if (tex)
+			{
+				textureActive |= (1 << stage);
+				texSamplerMode |= (tex->isTextureCube() ? SamplerCube : Sampler2D) << (stage * 2);
+			}
 		}
+		matDrv->PPBuiltin.TextureActive = textureActive;
+		matDrv->PPBuiltin.TexSamplerMode = texSamplerMode;
+		matDrv->PPBuiltin.Touched = true;
+		CMaterialUBOData &matUBO = matDrv->MaterialUBO[0];
+		matUBO.nlTextureActive = textureActive;
+		matDrv->MaterialUBOTouched[0] = true;
 	}
-	matDrv->PPBuiltin.TextureActive = textureActive;
-	matDrv->PPBuiltin.TexSamplerMode = texSamplerMode;
-	matDrv->PPBuiltin.Touched = true;
-	CMaterialUBOData &matUBO = matDrv->MaterialUBO[0];
-	matUBO.nlTextureActive = textureActive;
-	matDrv->MaterialUBOTouched[0] = true;
+
+	matDrv->SetupPass0Touched = 0;
 }
 
 // ***************************************************************************
