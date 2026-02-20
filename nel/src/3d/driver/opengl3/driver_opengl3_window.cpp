@@ -353,6 +353,7 @@ bool CDriverGL3::init(uintptr_t windowIcon, emptyProc exitFunc)
 
 	nlunreferenced(windowIcon);
 
+#ifndef __EMSCRIPTEN__
 	_dpy = XOpenDisplay(NULL);
 
 	if (_dpy == NULL)
@@ -431,6 +432,7 @@ bool CDriverGL3::init(uintptr_t windowIcon, emptyProc exitFunc)
 	XA_WM_WINDOW_TYPE = XInternAtom(_dpy, "_NET_WM_WINDOW_TYPE", False);
 	XA_WM_WINDOW_TYPE_NORMAL = XInternAtom(_dpy, "_NET_WM_WINDOW_TYPE_NORMAL", False);
 	XA_FRAME_EXTENTS = XInternAtom(_dpy, "_NET_FRAME_EXTENTS", False);
+#endif // !__EMSCRIPTEN__
 
 #endif
 
@@ -474,11 +476,13 @@ bool CDriverGL3::unInit()
 
 #elif defined (NL_OS_UNIX)
 
+#ifndef __EMSCRIPTEN__
 	// restore default X errors handler
 	XSetErrorHandler(NULL);
 
 	XCloseDisplay(_dpy);
 	_dpy = NULL;
+#endif
 
 #endif // NL_OS_UNIX
 
@@ -599,7 +603,43 @@ bool CDriverGL3::setDisplay(nlWindow wnd, const GfxMode &mode, bool show, bool r
 	_Resizable = resizeable;
 	_DestroyWindow = false;
 
-#ifdef NL_OS_WINDOWS
+#if defined(__EMSCRIPTEN__)
+
+	// Emscripten / WebGL 2.0 context creation
+	{
+		EmscriptenWebGLContextAttributes attrs;
+		emscripten_webgl_init_context_attributes(&attrs);
+		attrs.majorVersion = 2;
+		attrs.minorVersion = 0;
+		attrs.alpha = false;
+		attrs.depth = true;
+		attrs.stencil = true;
+		attrs.antialias = true;
+		attrs.preserveDrawingBuffer = false;
+
+		_ctx = emscripten_webgl_create_context("#canvas", &attrs);
+		if (_ctx <= 0)
+		{
+			nlwarning("CDriverGL3::setDisplay: emscripten_webgl_create_context failed (%d)", _ctx);
+			return false;
+		}
+
+		EMSCRIPTEN_RESULT res = emscripten_webgl_make_context_current(_ctx);
+		if (res != EMSCRIPTEN_RESULT_SUCCESS)
+		{
+			nlwarning("CDriverGL3::setDisplay: emscripten_webgl_make_context_current failed (%d)", res);
+			return false;
+		}
+
+		// Set canvas size
+		emscripten_set_canvas_element_size("#canvas", mode.Width, mode.Height);
+
+		// Mark window as valid so isActive() returns true
+		_win = 1;
+		_WindowVisible = true;
+	}
+
+#elif defined(NL_OS_WINDOWS)
 
 	// Init pointers
 	_PBuffer = NULL;
@@ -2367,7 +2407,11 @@ emptyProc CDriverGL3::getWindowProc()
 {
 	H_AUTO_OGL(CDriverGL3_getWindowProc)
 
+#ifdef __EMSCRIPTEN__
+	return NULL;
+#else
 	return (emptyProc)GlWndProc;
+#endif
 }
 
 // --------------------------------------------------
@@ -2468,7 +2512,7 @@ bool CDriverGL3::activate()
 	if ([NSOpenGLContext currentContext] != _ctx)
 		[_ctx makeCurrentContext];
 
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	GLXContext nctx = glXGetCurrentContext();
 
@@ -2686,7 +2730,7 @@ bool CDriverGL3::isActive()
 
 #elif defined(NL_OS_MAC)
 # warning "OpenGL Driver: Missing Mac Implementation for isActive (always true if a window is set)"
-#elif defined (NL_OS_UNIX)
+#elif defined (NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 
 	// check if our window is still active
 	XWindowAttributes attr;

@@ -80,10 +80,17 @@ namespace NL3D {
 
 #ifdef NL_STATIC
 
+#ifdef USE_OPENGLES3
+IDriver* createGlEs3DriverInstance ()
+{
+	return new NLDRIVERGL3::CDriverGL3;
+}
+#else
 IDriver* createGl3DriverInstance ()
 {
 	return new NLDRIVERGL3::CDriverGL3;
 }
+#endif
 
 #else
 
@@ -419,7 +426,7 @@ bool CDriverGL3::setupDisplay()
 #if defined(NL_OS_WINDOWS)
 	registerWGlExtensions(_Extensions, _hDC);
 #elif defined(NL_OS_MAC)
-#elif defined(NL_OS_UNIX)
+#elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 	registerGlXExtensions(_Extensions, _dpy, DefaultScreen(_dpy));
 #endif // NL_OS_WINDOWS
 
@@ -768,7 +775,9 @@ bool CDriverGL3::swapBuffers()
 
 #elif defined (NL_OS_UNIX)
 
+#ifndef __EMSCRIPTEN__
 	glXSwapBuffers(_dpy, _win);
+#endif
 
 #endif // NL_OS_WINDOWS
 

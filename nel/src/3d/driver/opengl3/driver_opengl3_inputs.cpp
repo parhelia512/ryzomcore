@@ -271,6 +271,7 @@ void CDriverGL3::createCursors()
 	_BlankCursor = NULL;
 #elif defined(NL_OS_MAC)
 #elif defined(NL_OS_UNIX)
+#ifndef __EMSCRIPTEN__
 	_DefaultCursor = None;
 
 	if (_dpy && _win && _BlankCursor == EmptyCursor)
@@ -285,6 +286,7 @@ void CDriverGL3::createCursors()
 		XFreePixmap(_dpy, pixmap_no_data);
 	}
 #endif
+#endif
 }
 
 // *************************************************************************************
@@ -294,8 +296,10 @@ void CDriverGL3::releaseCursors()
 	SetClassLongPtr(_win, GCLP_HCURSOR, 0);
 #elif defined(NL_OS_MAC)
 #elif defined(NL_OS_UNIX)
+#ifndef __EMSCRIPTEN__
 	XUndefineCursor(_dpy, _win);
 	XFreeCursor(_dpy, _BlankCursor);
+#endif
 #endif
 
 	_Cursors.clear();
