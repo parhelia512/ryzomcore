@@ -305,7 +305,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 
 	ss << "float getArgA(int src, int op, vec4 texel, vec4 previous, vec4 diffuse, vec4 cnst) {" << std::endl;
 	ss << "  vec4 s = getTexEnvSrc(src, texel, previous, diffuse, cnst);" << std::endl;
-	ss << "  return (op == 0) ? s.r : (op == 1) ? (1.0 - s.r) : (op == 2) ? s.a : (1.0 - s.a);" << std::endl;
+	ss << "  return (op == 0) ? s.a : (op == 1) ? (1.0 - s.a) : (op == 2) ? s.a : (1.0 - s.a);" << std::endl;
 	ss << "}" << std::endl;
 	ss << std::endl;
 

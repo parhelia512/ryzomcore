@@ -391,6 +391,11 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 			if (desc.TexGenMode[i] == TexGenReflectionMap || desc.TexGenMode[i] == TexGenSphereMap)
 				needReflection = true;
 		}
+		else if (hasFlag(desc.VertexFormat, g_VertexFlags[TexCoord0 + i]))
+		{
+			// VB texcoord stage without texgen: declare texMatrix for user texture matrix support
+			ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
+		}
 	}
 	if (needSpecularTexMtx)
 		ss << "uniform mat4 specularTexMtx;" << std::endl;
@@ -551,6 +556,8 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 			}
 			else if (i == Normal && desc.Normalize)
 				ss << g_AttribNames[i] << " = vec4(normalize(v" << g_AttribNames[i] << ".xyz), 0.0);" << std::endl;
+			else if (i >= TexCoord0 && i <= TexCoord3)
+				ss << g_AttribNames[i] << " = texMatrix" << (i - TexCoord0) << " * v" << g_AttribNames[i] << ";" << std::endl;
 			else
 				ss << g_AttribNames[i] << " = " << "v" << g_AttribNames[i] << ";" << std::endl;
 		}

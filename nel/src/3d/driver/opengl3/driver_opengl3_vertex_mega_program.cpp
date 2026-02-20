@@ -346,6 +346,8 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 			ss << "  } else" << std::endl;
 			ss << "    " << g_AttribNames[i] << " = vec4(0.0, 0.0, 0.0, 0.0);" << std::endl;
 		}
+		else if (i >= TexCoord0 && i <= TexCoord3)
+			ss << "  " << g_AttribNames[i] << " = texMatrix" << (i - TexCoord0) << " * v" << g_AttribNames[i] << ";" << std::endl;
 		else
 			ss << "  " << g_AttribNames[i] << " = v" << g_AttribNames[i] << ";" << std::endl;
 	}

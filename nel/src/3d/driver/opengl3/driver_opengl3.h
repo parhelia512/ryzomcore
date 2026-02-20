@@ -1287,7 +1287,7 @@ private:
 	CIndexBufferInfo		_LastIB;
 
 	/// Sets up the rendering parameters for the normal shader
-	void setupNormalPass();
+	void setupNormalMaterial();
 
 
 	/// \name Lightmap.

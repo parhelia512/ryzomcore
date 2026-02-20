@@ -220,6 +220,17 @@ static CMaterialDrvInfosGL3 *getMatDrv(const CMaterial &mat)
 	return static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
 }
 
+static bool isSinglePass(CMaterial::TShader shader)
+{
+	switch (shader)
+	{
+	case CMaterial::Normal:
+	case CMaterial::UserColor:
+		return true;
+	}
+	return false;
+}
+
 // --------------------------------------------------
 void CDriverGL3::setTexGenFunction(uint stage, CMaterial &mat)
 {
@@ -435,6 +446,7 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 		if (touched & touchedBuiltinPPState)
 			matDrv->PPBuiltin.Touched = true;
 
+		matDrv->SetupMaterialTouched = 0;
 		mat.clearTouched(IDRV_TOUCHED_ALL);
 	}
 
@@ -601,11 +613,19 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 
 	// 4. Misc
 	//=====================================
-	// Texture matrices are read directly from the material in setupNormalPass.
+	// Single-pass materials can be used without going through the multi-pass loop.
+	// Texture matrices are read directly from the material in setupNormalMaterial.
 	// Specular _SpecularTexMtx is in the camera UBO; staged into matUBO.texMatrix[1] by setupSpecularPass.
+	switch (matShader)
+	{
+	case CMaterial::Normal:
+	case CMaterial::UserColor:
+		setupNormalMaterial();
+		break;
+	}
 
 	// Programs are set up per-pass in setupPass() after per-pass staging is complete.
-	return true;
+	return !isSinglePass(matShader) || setupBuiltinPrograms();
 }
 
 // ***************************************************************************
@@ -640,10 +660,6 @@ bool CDriverGL3::setupPass(uint pass)
 	//    PPBuiltin config, and override state (e.g. _LightMapUBOOverride, _FogColorOverrideBlack).
 	switch (_CurrentMaterialSupportedShader)
 	{
-	case CMaterial::Normal:
-	case CMaterial::UserColor:
-		setupNormalPass();
-		break;
 	case CMaterial::LightMap:
 		setupLightMapPass(pass);
 		break;
@@ -656,7 +672,7 @@ bool CDriverGL3::setupPass(uint pass)
 	}
 
 	// 2. Select/link programs and upload all uniforms and UBOs.
-	return setupBuiltinPrograms();
+	return isSinglePass(_CurrentMaterialSupportedShader) || setupBuiltinPrograms();
 }
 
 // ***************************************************************************
@@ -685,14 +701,8 @@ void CDriverGL3::endMultiPass()
 	}
 }
 
-void CDriverGL3::setupNormalPass()
+void CDriverGL3::setupNormalMaterial()
 {
-	if (_FogColorOverrideBlack)
-	{
-		_FogColorOverrideBlack = false;
-		_CameraUBODirty = true;
-	}
-
 	const CMaterial &mat = *_CurrentMaterial;
 	CMaterialDrvInfosGL3 *matDrv = getMatDrv(mat);
 	matDrv->MaterialUBOCurrent = 0;

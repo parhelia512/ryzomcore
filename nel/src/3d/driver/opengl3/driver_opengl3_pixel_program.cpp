@@ -298,10 +298,10 @@ void ppTexEnv(std::stringstream &ss, const CPPBuiltin &desc)
 				switch (alphaOp) // SrcColor=0, InvSrcColor, SrcAlpha, InvSrcAlpha
 				{
 				case CMaterial::SrcColor:
-					ss << alphaArgVec.str() << ".r";
+					ss << alphaArgVec.str() << ".a";
 					break;
 				case CMaterial::InvSrcColor:
-					ss << "1.0 - " << alphaArgVec.str() << ".r";
+					ss << "1.0 - " << alphaArgVec.str() << ".a";
 					break;
 				case CMaterial::SrcAlpha:
 					ss << alphaArgVec.str() << ".a";
@@ -401,7 +401,7 @@ void ppTexEnv(std::stringstream &ss, const CPPBuiltin &desc)
 			case CMaterial::InterpolateDiffuse:
 			case CMaterial::InterpolatePrevious:
 			case CMaterial::InterpolateTexture:
-				ss << "texop" << stage << "arg0.a * texop" << stage << "rgbAs + texop" << stage << "arg1.a * (1.0 - texop" << stage << "rgbAs)";
+				ss << "texop" << stage << "arg0.a * texop" << stage << "alphaAs + texop" << stage << "arg1.a * (1.0 - texop" << stage << "alphaAs)";
 				break;
 			case CMaterial::Mad:
 				ss << "texop" << stage << "arg0.a * texop" << stage << "arg1.a + texop" << stage << "arg2.a";
