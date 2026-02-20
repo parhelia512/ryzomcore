@@ -144,7 +144,7 @@ void CDriverGLStates3::forceDefaults()
 	m_CurPolygonMode = GL_FILL;
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // TODO GLES: not available
 
 	// Fragment operations
 	m_CurBlend = false;
@@ -182,7 +182,7 @@ void CDriverGLStates3::forceDefaults()
 	m_DepthRangeNear = 0.f;
 	m_DepthRangeFar = 1.f;
 	m_ZBias = 0.f;
-	glDepthRange(0, 1);
+	glDepthRange(0, 1); // TODO GLES: glDepthRangef(0.f, 1.f);
 
 	// Clip planes
 	for (uint i = 0; i < MaxClipDistances; ++i)
@@ -244,7 +244,7 @@ void CDriverGLStates3::polygonMode(GLenum mode)
 #endif
 	{
 		m_CurPolygonMode = mode;
-		glPolygonMode(GL_FRONT_AND_BACK, mode);
+		glPolygonMode(GL_FRONT_AND_BACK, mode); // TODO GLES: not available
 	}
 }
 
@@ -419,7 +419,7 @@ void CDriverGLStates3::updateDepthRange()
 {
 	H_AUTO_OGL(CDriverGLStates3_updateDepthRange)
 	float delta = m_ZBias * (m_DepthRangeFar - m_DepthRangeNear);
-	glDepthRange(delta + m_DepthRangeNear, delta + m_DepthRangeFar);
+	glDepthRange(delta + m_DepthRangeNear, delta + m_DepthRangeFar); // TODO GLES: glDepthRangef
 }
 
 void CDriverGLStates3::setDepthRange(float znear, float zfar)
