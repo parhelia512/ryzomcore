@@ -1037,6 +1037,11 @@ void getCallStack(std::string &result, sint skipNFirst)
 		result += e.what();
 	}
 #elif !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__)
+	const int MaxFrame = 64;
+	void *trace[MaxFrame];
+	char **messages = (char **)NULL;
+	int i, trace_size = 0;
+	trace_size = backtrace(trace, MaxFrame);
 	messages = backtrace_symbols(trace, trace_size);
 	result += "Dumping call stack :\n";
 	for (i=0; i<trace_size; ++i)

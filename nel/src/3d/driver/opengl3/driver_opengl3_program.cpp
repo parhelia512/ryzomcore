@@ -292,22 +292,31 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 
 		id = nglCreateProgram();
 		nglAttachShader(id, shader);
-		nglLinkProgram(id);
 
-		GLint linkOk;
-		nglGetProgramiv(id, GL_LINK_STATUS, &linkOk);
-		if (linkOk == 0)
+		// Under GL ES 3.0 / WebGL 2.0, single-stage programs cannot be linked
+		// (both vertex and fragment shaders are required). Skip the link here;
+		// the final link happens in linkPrograms() which combines VP + PP.
+		// Under desktop GL 3.3, we can link single-stage programs and use the
+		// result for uniform introspection.
+		if (m_SupportSSO)
 		{
-			char errorLog[1024];
-			nglGetProgramInfoLog(id, 1024, NULL, errorLog);
-			nlwarning("GL3: %s link failed (pipeline stage): %s", stageName, errorLog);
-			nglDeleteShader(shader);
-			nglDeleteProgram(id);
-			program->m_CompileFailed = true;
+			nglLinkProgram(id);
+
+			GLint linkOk;
+			nglGetProgramiv(id, GL_LINK_STATUS, &linkOk);
+			if (linkOk == 0)
+			{
+				char errorLog[1024];
+				nglGetProgramInfoLog(id, 1024, NULL, errorLog);
+				nlwarning("GL3: %s link failed (pipeline stage): %s", stageName, errorLog);
+				nglDeleteShader(shader);
+				nglDeleteProgram(id);
+				program->m_CompileFailed = true;
 #ifdef NL_DEBUG
-			nlerror("GL3: %s program link failed (pipeline stage)", stageName);
+				nlerror("GL3: %s program link failed (pipeline stage)", stageName);
 #endif
-			return false;
+				return false;
+			}
 		}
 		// NOTE: do NOT detach/delete the shader — keep it attached for later extraction
 	}
@@ -340,28 +349,32 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 		}
 	}
 
-	// Override OnlyUBOs based on actual program introspection
-	bool hasNonUBO = programHasNonUBOUniforms(id);
-	if (src->Features.OnlyUBOs && hasNonUBO)
+	// Override OnlyUBOs based on actual program introspection.
+	// This requires a linked program — skip when not linked (GL ES pipeline stages).
+	if (src->Profile != linkedProfile || m_SupportSSO)
 	{
-		nlwarning("GL3: %s '%s' claims OnlyUBOs but has non-UBO uniforms", stageName, src->DisplayName.c_str());
-		src->Features.OnlyUBOs = false;
-	}
-	else if (!src->Features.OnlyUBOs && !hasNonUBO)
-	{
-		src->Features.OnlyUBOs = true;
-	}
-	// Linked profiles only support UBOs; non-UBO uniforms won't be set by
-	// the engine, so reject the program.
-	if (src->Profile == linkedProfile && hasNonUBO)
-	{
-		nlwarning("GL3: %s '%s' has non-UBO uniforms (linked path requires UBOs only)", stageName, src->DisplayName.c_str());
-		nglDeleteProgram(id);
-		program->m_CompileFailed = true;
+		bool hasNonUBO = programHasNonUBOUniforms(id);
+		if (src->Features.OnlyUBOs && hasNonUBO)
+		{
+			nlwarning("GL3: %s '%s' claims OnlyUBOs but has non-UBO uniforms", stageName, src->DisplayName.c_str());
+			src->Features.OnlyUBOs = false;
+		}
+		else if (!src->Features.OnlyUBOs && !hasNonUBO)
+		{
+			src->Features.OnlyUBOs = true;
+		}
+		// Linked profiles only support UBOs; non-UBO uniforms won't be set by
+		// the engine, so reject the program.
+		if (src->Profile == linkedProfile && hasNonUBO)
+		{
+			nlwarning("GL3: %s '%s' has non-UBO uniforms (linked path requires UBOs only)", stageName, src->DisplayName.c_str());
+			nglDeleteProgram(id);
+			program->m_CompileFailed = true;
 #ifdef NL_DEBUG
-		nlerror("GL3: %s program has non-UBO uniforms (linked path)", stageName);
+			nlerror("GL3: %s program has non-UBO uniforms (linked path)", stageName);
 #endif
-		return false;
+			return false;
+		}
 	}
 
 	ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(), (NL3D::IProgramDrvInfos*)NULL);
@@ -372,7 +385,11 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 
 	program->buildInfo(src);
 
-	setupInitialUniforms(program);
+	// Setup initial uniforms (sampler bindings, UBO block bindings).
+	// Under GL ES 3.0 pipeline stages, the single-stage program isn't linked,
+	// so uniform setup is deferred to linkPrograms().
+	if (src->Profile != linkedProfile || m_SupportSSO)
+		setupInitialUniforms(program);
 
 	return true;
 }
