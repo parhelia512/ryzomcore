@@ -533,7 +533,6 @@ public:
 	bool					setupBuiltinVertexProgram(CVertexProgram *effectiveVP, CPixelProgram *effectivePP);
 	bool					setupBuiltinPixelProgram(CPixelProgram *effectivePP);
 	bool					setupUniforms();
-	bool					flushPassUniforms();
 	void					setupUniforms(TProgram program);
 	void					setupInitialUniforms(IProgram *program);
 
@@ -1061,6 +1060,7 @@ private:
 	TFogMode				_FogMode;
 	float					_FogDensity;
 	GLfloat					_CurrentFogColor[4];
+	bool					_FogColorOverrideBlack; // Lightmap multi-pass: additive passes use black fog
 
 
 
@@ -1120,9 +1120,12 @@ private:
 
 	// Camera/global state UBO (viewMatrix, fog, clipPlanes, pzbCameraPos)
 	GLuint						_CameraUBOId;
-	bool						_CameraUBODirty;
-	sint						_CameraUBOCapacity; // Current GPU buffer capacity (bytes)
-	void						uploadCameraUBO();
+	bool						_CameraUBODirty;        // Driver state changed — need to re-stage _CameraUBOData
+	bool						_CameraUBOUploadDirty;  // Staged data changed — need to re-upload to GPU
+	sint						_CameraUBOCapacity;     // Current GPU buffer capacity (bytes)
+	CCameraUBOData				_CameraUBOData;         // Persistent staging area (single source of truth for fog etc.)
+	void						stageCameraUBO();       // Populate _CameraUBOData from driver state
+	void						uploadCameraUBO();      // Upload _CameraUBOData to GPU if upload dirty
 
 	// Clip planes (in eye space, pre-transformed for shader)
 	enum { MaxClipPlanes = 6 };
@@ -1598,7 +1601,7 @@ private:
 	GLuint           _UserUBBoundId[UBBindingCount];  // GL buffer ID currently at each GL binding point (0 = unbound)
 	void    flushUserUBOs();
 
-	// Lightmap object UBO override (set before setupBuiltinPrograms for lightmap passes)
+	// Lightmap object UBO override (staged by setupLightMapPass, read by setupBuiltinPrograms in setupPass)
 	// Material-level fields (diffuse, specular, lightmapscale, constants) moved to per-material UBO slots.
 	struct CLightMapUBOOverride
 	{

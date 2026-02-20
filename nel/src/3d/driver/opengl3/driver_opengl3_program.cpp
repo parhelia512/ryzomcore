@@ -1061,6 +1061,11 @@ bool CDriverGL3::setupBuiltinPixelProgram(CPixelProgram *effectivePP)
 
 bool CDriverGL3::setupUniforms()
 {
+	// Stage camera data (fog, view matrix, clip planes) when dirty.
+	// Both UBO upload and SSO individual uniforms read from _CameraUBOData.
+	if (_CameraUBODirty)
+		stageCameraUBO();
+
 	if (m_DriverShaderProgram)
 	{
 		// Linked shader program path: only UBOs, no individual uniforms.
@@ -1116,17 +1121,7 @@ bool CDriverGL3::setupUniforms()
 	return true;
 }
 
-bool CDriverGL3::flushPassUniforms()
-{
-	// Re-flush dirty material UBO after per-pass staging.
-	// setupMaterial/setupNormalPass/setupLightMapPass stage into MaterialUBO[slot],
-	// and uploadMaterialUBO uploads the active slot when touched.
-	// For lightmap, setupBuiltinPrograms() inside setupLightMapPass already triggered
-	// one upload, but the touched flag prevents double-upload and bind is deduplicated.
-	if (m_ProgramUsesMaterialUBO[VertexProgram] || m_ProgramUsesMaterialUBO[PixelProgram])
-		uploadMaterialUBO();
-	return true;
-}
+
 
 void CDriverGL3::setupUniforms(TProgram program)
 {
@@ -1186,17 +1181,18 @@ void CDriverGL3::setupUniforms(TProgram program)
 
 	if (!m_ProgramUsesCameraUBO[program])
 	{
+		// Fog — read from _CameraUBOData (staged by stageCameraUBO(), includes override)
 		uint fogParamsIdx = p->getUniformIndex(CProgramIndex::FogParams);
 		if (fogParamsIdx != ~0)
-			nglProgramUniform2f(progId, fogParamsIdx, _FogStart, _FogEnd);
+			nglProgramUniform2fv(progId, fogParamsIdx, 1, _CameraUBOData.fogParams);
 
 		uint fogColorIdx = p->getUniformIndex(CProgramIndex::FogColor);
 		if (fogColorIdx != ~0)
-			nglProgramUniform4fv(progId, fogColorIdx, 1, _CurrentFogColor);
+			nglProgramUniform4fv(progId, fogColorIdx, 1, _CameraUBOData.fogColor);
 
 		uint fogDensityIdx = p->getUniformIndex(CProgramIndex::FogDensity);
 		if (fogDensityIdx != ~0)
-			nglProgramUniform1f(progId, fogDensityIdx, _FogDensity);
+			nglProgramUniform1f(progId, fogDensityIdx, _CameraUBOData.fogDensity);
 
 		// Camera forward for world-space fog (second row of view matrix, NeL Y = forward).
 		// When cameraUBO is active, the PP derives this from viewMatrix in the UBO instead.
@@ -1779,6 +1775,17 @@ void CDriverGL3::setupUniforms(TProgram program)
 			if (cpIdx != ~0u)
 				nglProgramUniform4f(progId, cpIdx, _ClipPlaneEye[i][0], _ClipPlaneEye[i][1], _ClipPlaneEye[i][2], _ClipPlaneEye[i][3]);
 		}
+	}
+
+	// Water bump factors — read from the water UB staging area (single source of truth)
+	if (program == PixelProgram && _WaterUB)
+	{
+		uint b0idx = p->getUniformIndex(CProgramIndex::Bump0ScaleBias);
+		if (b0idx != ~0u)
+			nglProgramUniform4fv(progId, b0idx, 1, _WaterUB->getFloat4(_WaterUBOOffsets.Bump0ScaleBias));
+		uint b1idx = p->getUniformIndex(CProgramIndex::Bump1ScaleBias);
+		if (b1idx != ~0u)
+			nglProgramUniform4fv(progId, b1idx, 1, _WaterUB->getFloat4(_WaterUBOOffsets.Bump1ScaleBias));
 	}
 }
 

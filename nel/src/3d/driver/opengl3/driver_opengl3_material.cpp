@@ -611,17 +611,8 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 	// Texture matrices are read directly from the material in setupNormalPass.
 	// Specular handles its own matrix (_SpecularTexMtx) separately.
 
-	// 5. Set up the program
-	// =====================
-	switch (matShader)
-	{
-	case CMaterial::LightMap:
-	case CMaterial::Water:
-		// Programs are setup in multipass
-		return true;
-	default:
-		return setupBuiltinPrograms();
-	}
+	// Programs are set up per-pass in setupPass() after per-pass staging is complete.
+	return true;
 }
 
 // ***************************************************************************
@@ -652,6 +643,8 @@ bool CDriverGL3::setupPass(uint pass)
 {
 	H_AUTO_OGL(CDriverGL3_setupPass)
 
+	// 1. Per-pass staging: each pass function stages textures, MaterialUBO slots,
+	//    PPBuiltin config, and override state (e.g. _LightMapUBOOverride, _FogColorOverrideBlack).
 	switch (_CurrentMaterialSupportedShader)
 	{
 	case CMaterial::Normal:
@@ -667,21 +660,10 @@ bool CDriverGL3::setupPass(uint pass)
 	case CMaterial::Water:
 		setupWaterPass(pass);
 		break;
-		// case CMaterial::PerPixelLighting: // deprecated, folded to Normal
-		// 	setupPPLPass(pass);
-		// 	break;
-		// case CMaterial::PerPixelLightingNoSpec:
-		// 	setupPPLNoSpecPass(pass);
-		// 	break;
-		// case CMaterial::Cloud:
-		// 	setupCloudPass();
-		// 	break;
 	}
 
-	// Upload per-pass uniforms and flush dirty UBOs.
-	// Individual uniforms (TexEnv constants, EMBM, TexMatrix) are set here for non-UBO paths.
-	// For UBO paths, the data was staged in setupMaterial/pass and now gets flushed to GPU.
-	return flushPassUniforms();
+	// 2. Select/link programs and upload all uniforms and UBOs.
+	return setupBuiltinPrograms();
 }
 
 // ***************************************************************************
@@ -712,6 +694,12 @@ void CDriverGL3::endMultiPass()
 
 void CDriverGL3::setupNormalPass()
 {
+	if (_FogColorOverrideBlack)
+	{
+		_FogColorOverrideBlack = false;
+		_CameraUBODirty = true;
+	}
+
 	const CMaterial &mat = *_CurrentMaterial;
 	CMaterialDrvInfosGL3 *matDrv = getMatDrv(mat);
 	matDrv->MaterialUBOCurrent = 0;
@@ -840,8 +828,6 @@ sint CDriverGL3::beginLightMapMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_beginLightMapMultiPass)
 
-	// setupBuiltinPrograms(); // FIXME GL3
-
 	const CMaterial &mat = *_CurrentMaterial;
 
 	// compute how many lightmap and pass we must process.
@@ -882,6 +868,17 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	nlassert(!m_UserPixelProgram);
 
 	H_AUTO_OGL(CDriverGL3_setupLightMapPass)
+
+	// Additive passes (pass > 0) use black fog to avoid adding fog multiple times.
+	{
+		bool fogOverride = (pass > 0 && _FogEnabled);
+		if (_FogColorOverrideBlack != fogOverride)
+		{
+			_FogColorOverrideBlack = fogOverride;
+			_CameraUBODirty = true;
+		}
+	}
+
 	const CMaterial &mat = *_CurrentMaterial;
 	CMaterialDrvInfosGL3 *matDrv = getMatDrv(mat);
 
@@ -954,14 +951,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		memset(_LightMapUBOOverride.SelfIllumination, 0, sizeof(_LightMapUBOOverride.SelfIllumination));
 		_LightMapUBOOverride.ZeroLightFactors = false;
 
-		// Setup the programs now (triggers uploadMaterialUBO for the active slot)
-		setupBuiltinPrograms();
-
-		_LightMapUBOOverride.Active = false;
-
-		// Individual uniform overrides (selfIllumination, specular zeroing) are now handled
-		// by setupUniforms() reading from the authoritative staging areas.
-
+		// Program setup and override clearing handled by setupPass() after return.
 		return;
 	}
 
@@ -1151,16 +1141,6 @@ void CDriverGL3::setupLightMapPass(uint pass)
 		}
 	}
 
-	// If multi-pass, set fog color to black for pass 1+ (additive blending must not add fog).
-	// Must be done BEFORE setupBuiltinPrograms() so the camera UBO picks up the zeroed color.
-	float savedFogColor[4];
-	if (pass > 0 && _FogEnabled)
-	{
-		memcpy(savedFogColor, _CurrentFogColor, sizeof(savedFogColor));
-		memset(_CurrentFogColor, 0, sizeof(_CurrentFogColor));
-		_CameraUBODirty = true;
-	}
-
 	// Stage per-material UBO slot for this pass
 	{
 		uint slot = pass + 1;
@@ -1223,19 +1203,7 @@ void CDriverGL3::setupLightMapPass(uint pass)
 	_LightMapUBOOverride.SelfIllumination[3] = 0.0f;
 	_LightMapUBOOverride.ZeroLightFactors = (pass > 0);
 
-	// Setup the programs now (triggers uploadMaterialUBO for the active slot)
-	setupBuiltinPrograms();
-
-	_LightMapUBOOverride.Active = false;
-
-	// Restore fog color (UBO already uploaded with black for this pass)
-	if (pass > 0 && _FogEnabled)
-		memcpy(_CurrentFogColor, savedFogColor, sizeof(savedFogColor));
-
-	// Individual uniform overrides (PP constants, VP selfIllumination, light colors,
-	// material diffuse/specular, light factors) are now handled by setupUniforms()
-	// reading from the authoritative staging areas (MaterialUBO, _LightMapUBOOverride).
-	// setupBuiltinPrograms() above triggers setupUniforms() with the override active.
+	// Program setup, override clearing, and fog restore handled by setupPass() after return.
 }
 
 // ***************************************************************************
@@ -1248,11 +1216,13 @@ void CDriverGL3::endLightMapMultiPass()
 	CMaterialDrvInfosGL3 *matDrv = getMatDrv(mat);
 	matDrv->MaterialUBOCurrent = 0;
 
-	// If multi-pass was used with fog, ensure the real fog color is restored.
-	// The camera UBO was uploaded with black fog for pass 1+; dirty it so the
-	// real color gets re-uploaded on the next draw call.
-	if (_NLightMapPass >= 2 && _FogEnabled)
+	// Clear lightmap override state
+	_LightMapUBOOverride.Active = false;
+	if (_FogColorOverrideBlack)
+	{
+		_FogColorOverrideBlack = false;
 		_CameraUBODirty = true;
+	}
 }
 
 // ***************************************************************************
@@ -1352,8 +1322,6 @@ sint CDriverGL3::beginWaterMultiPass()
 {
 	H_AUTO_OGL(CDriverGL3_beginWaterMultiPass)
 
-	// setupBuiltinPrograms(); // FIXME GL3
-
 	nlassert(_CurrentMaterial->getShader() == CMaterial::Water);
 	return 1;
 }
@@ -1412,7 +1380,7 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 		setupTexture(*tex);
 		activateTexture(3, tex);
 	}
-	for (k = 4; k < IDRV_MAT_MAXTEXTURES; ++k)
+	for (k = 4; k < IDRV_PROGRAM_MAXSAMPLERS; ++k)
 	{
 		activateTexture(k, NULL);
 	}
@@ -1477,8 +1445,8 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 		}
 	}
 
-	// Set water FP as material pixel program — setupBuiltinPrograms() handles
-	// activation (linked or SSO), UBO flags, and uniform setup.
+	// Set water FP as material pixel program — setupPass() will call
+	// setupBuiltinPrograms() for activation, UBO flags, and uniform setup.
 	m_MaterialPixelProgram = _WaterFP[fpIdx];
 
 	// Compute bump factors
@@ -1495,19 +1463,7 @@ void CDriverGL3::setupWaterPass(uint /* pass */)
 	_WaterUB->unlock();
 	bindUniformBuffer(UBBindingPixelProgram, _WaterUB);
 
-	// Activate programs (linked or SSO) and upload builtin uniforms/UBOs
-	setupBuiltinPrograms();
-
-	// For SSO path: set water-specific uniforms via legacy individual uniforms
-	if (!m_ProgramOnlyUBOs[PixelProgram])
-	{
-		uint b0idx = _WaterFP[fpIdx]->getUniformIndex(CProgramIndex::Bump0ScaleBias);
-		if (b0idx != ~0u)
-			setUniform4f(IDriver::PixelProgram, b0idx, 2.f * factor0, -factor0, 0.f, 0.f);
-		uint b1idx = _WaterFP[fpIdx]->getUniformIndex(CProgramIndex::Bump1ScaleBias);
-		if (b1idx != ~0u)
-			setUniform4f(IDriver::PixelProgram, b1idx, 2.f * factor1, -factor1, 0.f, 0.f);
-	}
+	// Program setup and SSO uniforms handled by setupPass() after return.
 }
 
 // ***************************************************************************
@@ -1521,7 +1477,7 @@ void CDriverGL3::endWaterMultiPass()
 	if (_BoundUserUB[UBBindingPixelProgram] == _WaterUB)
 		bindUniformBuffer(UBBindingPixelProgram, NULL);
 
-	// Clear material pixel program — next setupBuiltinPrograms() will restore builtin/mega PP
+	// Clear material pixel program — next setupPass() will restore builtin/mega PP
 	m_MaterialPixelProgram = NULL;
 }
 

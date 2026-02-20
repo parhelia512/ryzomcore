@@ -256,6 +256,7 @@ CDriverGL3::CDriverGL3()
 	_CurrentFogColor[1]= 0;
 	_CurrentFogColor[2]= 0;
 	_CurrentFogColor[3]= 0;
+	_FogColorOverrideBlack = false;
 
 	_RenderTargetFBO = NULL;
 
@@ -331,6 +332,7 @@ CDriverGL3::CDriverGL3()
 	_LightTableUBOCapacity = 0;
 	_CameraUBOId = 0;
 	_CameraUBODirty = true;
+	_CameraUBOUploadDirty = false;
 	_CameraUBOCapacity = 0;
 	_LightTableObjCount = 0;
 	_NumPerPixelLights = 0;

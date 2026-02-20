@@ -510,21 +510,19 @@ void CDriverGL3::uploadLightTableUBO()
 	}
 }
 
-void CDriverGL3::uploadCameraUBO()
+void CDriverGL3::stageCameraUBO()
 {
-	H_AUTO_OGL(CDriverGL3_uploadCameraUBO)
-
-	if (!_CameraUBOId || !_CameraUBODirty)
-		return;
-
-	CCameraUBOData data;
+	CCameraUBOData &data = _CameraUBOData;
 
 	// View matrix (column-major, CMatrix::get() returns column-major)
 	const float *vm = _ViewMtx.get();
 	memcpy(data.viewMatrix, vm, 16 * sizeof(float));
 
-	// Fog color
-	memcpy(data.fogColor, _CurrentFogColor, 4 * sizeof(float));
+	// Fog color (black for additive lightmap passes to avoid adding fog twice)
+	if (_FogColorOverrideBlack)
+		memset(data.fogColor, 0, 4 * sizeof(float));
+	else
+		memcpy(data.fogColor, _CurrentFogColor, 4 * sizeof(float));
 
 	// PZB camera position
 	data.pzbCameraPos[0] = _PZBCameraPos.x;
@@ -540,8 +538,6 @@ void CDriverGL3::uploadCameraUBO()
 
 	// Fog mode and clip plane mask
 	data.fogMode = (sint32)_FogMode;
-	// Compute real mask from _ClipPlaneEnabled[] — m_VPBuiltinCurrent.ClipPlaneMask
-	// may be zeroed when PP clip planes are active (VP doesn't use it in that mode).
 	{
 		sint32 mask = 0;
 		for (uint i = 0; i < MaxClipPlanes; ++i)
@@ -553,8 +549,7 @@ void CDriverGL3::uploadCameraUBO()
 	for (uint i = 0; i < MaxClipPlanes; ++i)
 		memcpy(data.clipPlane[i], _ClipPlaneEye[i], 4 * sizeof(float));
 
-	// Camera world position: -transpose(mat3(V)) * V[3]
-	// With PZB: V[3]=0 → (0,0,0). Without PZB: actual camera world position.
+	// Camera world position
 	{
 		CMatrix invView = _ViewMtx;
 		invView.invert();
@@ -565,26 +560,35 @@ void CDriverGL3::uploadCameraUBO()
 		data._pad0 = 0.f;
 	}
 
-	// Upload
+	_CameraUBODirty = false;
+	_CameraUBOUploadDirty = true;
+}
+
+void CDriverGL3::uploadCameraUBO()
+{
+	H_AUTO_OGL(CDriverGL3_uploadCameraUBO)
+
+	if (!_CameraUBOId || !_CameraUBOUploadDirty)
+		return;
+
 	const GLsizeiptr dataSize = sizeof(CCameraUBOData);
 	_DriverGLStates.forceBindUniformBuffer(_CameraUBOId);
 
 	if (_CameraUBOCapacity < (sint)dataSize)
 	{
-		nglBufferData(GL_UNIFORM_BUFFER, dataSize, &data, GL_STREAM_DRAW);
+		nglBufferData(GL_UNIFORM_BUFFER, dataSize, &_CameraUBOData, GL_STREAM_DRAW);
 		_CameraUBOCapacity = (sint)dataSize;
 	}
 	else
 	{
-		// Orphan + rewrite
 		nglBufferData(GL_UNIFORM_BUFFER, _CameraUBOCapacity, NULL, GL_STREAM_DRAW);
-		nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, &data);
+		nglBufferSubData(GL_UNIFORM_BUFFER, 0, dataSize, &_CameraUBOData);
 	}
 
 	_DriverGLStates.forceBindUniformBuffer(0);
 	_DriverGLStates.forceBindUniformBufferBase(NL_BUILTIN_CAMERA_BINDING, _CameraUBOId);
 
-	_CameraUBODirty = false;
+	_CameraUBOUploadDirty = false;
 }
 
 // ***************************************************************************
