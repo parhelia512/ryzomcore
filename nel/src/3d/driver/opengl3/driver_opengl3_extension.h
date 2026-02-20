@@ -284,7 +284,7 @@ inline GLuint _nglCreateShaderProgramv(GLenum, GLsizei, const GLchar *const*) { 
 inline void _nglProgramParameteri(GLuint, GLenum, GLint) { }
 inline void _nglBindProgramPipeline(GLuint) { }
 inline void _nglDeleteProgramPipelines(GLsizei, const GLuint *) { }
-inline void _nglGenProgramPipelines(GLsizei, GLuint *) { }
+inline void _nglGenProgramPipelines(GLsizei n, GLuint *pipelines) { for (GLsizei i = 0; i < n; ++i) pipelines[i] = 1; }
 inline GLboolean _nglIsProgramPipeline(GLuint) { return GL_FALSE; }
 inline void _nglGetProgramPipelineiv(GLuint, GLenum, GLint *) { }
 inline void _nglProgramUniform1f(GLuint, GLint, GLfloat) { }
