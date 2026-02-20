@@ -1234,18 +1234,7 @@ void CDriverGL3::setupUniforms(TProgram program)
 		{
 			uint shIdx = p->getUniformIndex(CProgramIndex::NlShader);
 			if (shIdx != ~0u)
-			{
-				int shaderInt = 0;
-				switch (matDrv->PPBuiltin.Shader)
-				{
-				case CMaterial::Normal:    shaderInt = 0; break;
-				case CMaterial::UserColor: shaderInt = 1; break;
-				case CMaterial::Specular:  shaderInt = 2; break;
-				case CMaterial::LightMap:  shaderInt = 3; break;
-				default:                   shaderInt = 0; break;
-				}
-				nglProgramUniform1i(progId, shIdx, shaderInt);
-			}
+				nglProgramUniform1i(progId, shIdx, (sint32)matDrv->PPBuiltin.Shader);
 
 			uint taIdx = p->getUniformIndex(CProgramIndex::NlTextureActive);
 			if (taIdx != ~0u)
