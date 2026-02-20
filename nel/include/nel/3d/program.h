@@ -639,6 +639,9 @@ public:
 	// Build feature info, called automatically by the driver after compile succeeds
 	void buildInfo(CSource *source);
 
+	// Set source without resolving uniform indices (for unlinked pipeline stages)
+	inline void setBuildSrc(CSource *source) { m_Source = source; }
+
 	// Override this to build additional info in a subclass
 	virtual void buildInfo();
 

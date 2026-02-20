@@ -383,7 +383,15 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 	program->m_DrvInfo = drvInfo;
 	drvInfo->setProgramId(id);
 
-	program->buildInfo(src);
+	// buildInfo resolves and caches uniform locations via getUniformIndex.
+	// Under GL ES 3.0, single-stage pipeline programs aren't linked yet
+	// (linking happens in linkPrograms()), so uniform queries would fail.
+	// Defer uniform resolution to linkPrograms() for these programs, but
+	// still associate the source so features()/source() are available.
+	if (src->Profile != linkedProfile || m_SupportSSO)
+		program->buildInfo(src);
+	else
+		program->setBuildSrc(src);
 
 	// Setup initial uniforms (sampler bindings, UBO block bindings).
 	// Under GL ES 3.0 pipeline stages, the single-stage program isn't linked,

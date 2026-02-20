@@ -83,11 +83,6 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 	if (objectUBO) { tableUBO = true; cameraUBO = true; }
 
 	std::stringstream ss;
-	ss << "// Megashader Vertex Program";
-	ss << " (fogOrPpl=" << (int)fogOrPpl << ", hwClip=" << (int)hwClip << ", tableUBO=" << (int)tableUBO
-	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
-	   << ", materialUBO=" << (int)materialUBO << ", linked=" << (int)linked << ")" << std::endl;
-	ss << std::endl;
 	if (linked)
 	{
 		ss << "#version 300 es" << std::endl;
@@ -95,9 +90,18 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 			ss << "#extension GL_EXT_clip_cull_distance : enable" << std::endl;
 		ss << "precision highp float;" << std::endl;
 		ss << "precision highp int;" << std::endl;
+		ss << "// Megashader Vertex Program";
+		ss << " (fogOrPpl=" << (int)fogOrPpl << ", hwClip=" << (int)hwClip << ", tableUBO=" << (int)tableUBO
+		   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
+		   << ", materialUBO=" << (int)materialUBO << ", linked=" << (int)linked << ")" << std::endl;
 	}
 	else
 	{
+		ss << "// Megashader Vertex Program";
+		ss << " (fogOrPpl=" << (int)fogOrPpl << ", hwClip=" << (int)hwClip << ", tableUBO=" << (int)tableUBO
+		   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
+		   << ", materialUBO=" << (int)materialUBO << ", linked=" << (int)linked << ")" << std::endl;
+		ss << std::endl;
 		ss << "#version 330" << std::endl;
 		ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
 	}
