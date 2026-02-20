@@ -560,8 +560,8 @@ public:
 	void					setupMegaVPUniforms();
 	void					setupMegaPPUniforms();
 
-	virtual void			startSpecularBatch();
-	virtual void			endSpecularBatch();
+	virtual void			startSpecularBatch() { }
+	virtual void			endSpecularBatch() { }
 
 	virtual void			setFrustum(float left, float right, float bottom, float top, float znear, float zfar, bool perspective = true);
 	virtual	void			setFrustumMatrix(CMatrix &frust);
@@ -1288,6 +1288,8 @@ private:
 
 	/// Sets up the rendering parameters for the normal shader
 	void setupNormalMaterial();
+	/// Sets up the rendering parameters for the specular shader
+	void setupSpecularMaterial();
 
 
 	/// \name Lightmap.
@@ -1304,21 +1306,7 @@ private:
 	// This array is the LUT from lmapId in [0, _NLightMaps[, to original lightmap id in material.
 	std::vector<uint>		_LightMapLUT;
 
-	// last stage env.
-	CMaterial::CTexEnv	_LightMapLastStageEnv;
-
 	// @}
-
-	/// \name Specular.
-	// @{
-	sint			beginSpecularMultiPass();
-	void			setupSpecularPass(uint pass);
-	void			endSpecularMultiPass();
-	void			setupSpecularBegin();
-	void			setupSpecularEnd();
-	bool			_SpecularBatchOn;
-	// @}
-
 
 	/// \name Water
 	// @{

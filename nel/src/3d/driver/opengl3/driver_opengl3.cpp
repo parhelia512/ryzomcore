@@ -291,14 +291,6 @@ CDriverGL3::CDriverGL3()
 
 	// reserve enough space to never reallocate, nor test for reallocation.
 	_LightMapLUT.resize(NL3D_DRV_MAX_LIGHTMAP);
-	// must set replace for alpha part.
-	_LightMapLastStageEnv.Env.OpAlpha= CMaterial::Replace;
-	_LightMapLastStageEnv.Env.SrcArg0Alpha= CMaterial::Texture;
-	_LightMapLastStageEnv.Env.OpArg0Alpha= CMaterial::SrcAlpha;
-
-///	buildCausticCubeMapTex();
-
-	_SpecularBatchOn= false;
 
 	_PolygonSmooth= false;
 
