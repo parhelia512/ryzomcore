@@ -531,8 +531,17 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 
 		// Fog Part.
 		//=================
-		// Disable fog if dest blend is ONE or restore fog state to its current value
-		enableFogVP((blend && (matDrv->DstBlend == GL_ONE)) ? false : _FogEnabled);
+		enableFogVP(_FogEnabled);
+
+		// Use black fog color for additive blend to avoid brightening the scene with fog
+		{
+			bool fogOverride = (blend && (matDrv->DstBlend == GL_ONE) && _FogEnabled);
+			if (_FogColorOverrideBlack != fogOverride)
+			{
+				_FogColorOverrideBlack = fogOverride;
+				_CameraUBODirty = true;
+			}
+		}
 
 		// Done.
 		_CurrentMaterial = &mat;
