@@ -467,6 +467,8 @@ uint32	 CFontGenerator::getCharIndex (u32char c)
 
 #else // NL_DONT_USE_EXTERNAL_CODE
 
+#ifdef NL_OS_WINDOWS
+
 #define NOMINMAX
 #include <windows.h>
 
@@ -708,6 +710,21 @@ uint32	 CFontGenerator::getCharIndex (u32char c)
 
 
 } // NL3D
+
+#else // !NL_OS_WINDOWS (non-Windows stub when freetype is not available)
+
+namespace NL3D {
+
+CFontGenerator::CFontGenerator(const std::string &fontFileName, const std::string &fontExFileName) { nlerror("Font generation not supported on this platform without FreeType"); }
+CFontGenerator::~CFontGenerator() {}
+void CFontGenerator::getSizes(u32char c, uint32 size, uint32 &width, uint32 &height) { width = height = 0; }
+uint8 *CFontGenerator::getBitmap(u32char c, uint32 size, bool embolden, bool oblique, uint32 &width, uint32 &height, uint32 &pitch, sint32 &left, sint32 &top, sint32 &advx, uint32 &glyphIndex) { width = height = pitch = 0; left = top = advx = 0; glyphIndex = 0; return NULL; }
+void CFontGenerator::getKerning(u32char left, u32char right, sint32 &kernx) { kernx = 0; }
+uint32 CFontGenerator::getCharIndex(u32char c) { return 0; }
+
+} // NL3D
+
+#endif // NL_OS_WINDOWS
 
 #endif // NL_DONT_USE_EXTERNAL_CODE
 

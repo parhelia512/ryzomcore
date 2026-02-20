@@ -511,7 +511,11 @@ MACRO(NL_SETUP_BUILD)
 
   # If not specified, use the same CPU as host
   IF(NOT TARGET_CPU)
-    SET(TARGET_CPU ${HOST_CPU})
+    IF(EMSCRIPTEN)
+      SET(TARGET_CPU "wasm")
+    ELSE()
+      SET(TARGET_CPU ${HOST_CPU})
+    ENDIF()
   ENDIF()
 
   IF(TARGET_CPU MATCHES "(amd|AMD|x86_)64")
