@@ -2317,6 +2317,9 @@ bool CDriverGL3::initProgramPipeline()
 {
 	ppoId = 0;
 
+	if (!m_SupportSSO)
+		return true;
+
 	nglGenProgramPipelines(1, &ppoId);
 	if (ppoId == 0)
 		return false;
