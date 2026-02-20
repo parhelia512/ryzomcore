@@ -167,6 +167,119 @@ bool registerGlExtensions(CGlExtensions &ext);
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
+#ifdef USE_OPENGLES3
+
+// For GLES 3.0, core functions are directly linked - map ngl* to gl*
+
+// Core 3.00 ES
+#define nglGetStringi glGetStringi
+
+#define nglClearBufferiv glClearBufferiv
+#define nglClearBufferuiv glClearBufferuiv
+#define nglClearBufferfv glClearBufferfv
+#define nglClearBufferfi glClearBufferfi
+
+#define nglAttachShader glAttachShader
+#define nglCompileShader glCompileShader
+#define nglCreateProgram glCreateProgram
+#define nglCreateShader glCreateShader
+#define nglDeleteProgram glDeleteProgram
+#define nglDeleteShader glDeleteShader
+#define nglDetachShader glDetachShader
+#define nglDisableVertexAttribArray glDisableVertexAttribArray
+#define nglEnableVertexAttribArray glEnableVertexAttribArray
+#define nglGetAttachedShaders glGetAttachedShaders
+#define nglGetProgramiv glGetProgramiv
+#define nglGetProgramInfoLog glGetProgramInfoLog
+#define nglGetShaderiv glGetShaderiv
+#define nglGetShaderInfoLog glGetShaderInfoLog
+#define nglGetActiveUniform glGetActiveUniform
+#define nglGetActiveUniformsiv glGetActiveUniformsiv
+#define nglGetUniformLocation glGetUniformLocation
+#define nglIsProgram glIsProgram
+#define nglIsShader glIsShader
+#define nglLinkProgram glLinkProgram
+#define nglShaderSource glShaderSource
+#define nglUseProgram glUseProgram
+#define nglValidateProgram glValidateProgram
+#define nglVertexAttribPointer glVertexAttribPointer
+
+#define nglGenVertexArrays glGenVertexArrays
+#define nglDeleteVertexArrays glDeleteVertexArrays
+#define nglBindVertexArray glBindVertexArray
+
+#define nglBindBuffer glBindBuffer
+#define nglBindBufferBase glBindBufferBase
+#define nglGetUniformBlockIndex glGetUniformBlockIndex
+#define nglUniformBlockBinding glUniformBlockBinding
+#define nglDeleteBuffers glDeleteBuffers
+#define nglGenBuffers glGenBuffers
+#define nglIsBuffer glIsBuffer
+#define nglBufferData glBufferData
+#define nglBufferSubData glBufferSubData
+// glGetBufferSubData not available in GLES 3.0
+// glMapBuffer not available in GLES 3.0, use glMapBufferRange
+#define nglUnmapBuffer glUnmapBuffer
+#define nglGetBufferParameteriv glGetBufferParameteriv
+#define nglGetBufferPointerv glGetBufferPointerv
+
+#define nglMapBufferRange glMapBufferRange
+#define nglFlushMappedBufferRange glFlushMappedBufferRange
+
+#define nglGenQueries glGenQueries
+#define nglDeleteQueries glDeleteQueries
+#define nglIsQuery glIsQuery
+#define nglBeginQuery glBeginQuery
+#define nglEndQuery glEndQuery
+#define nglGetQueryiv glGetQueryiv
+// glGetQueryObjectiv not available in GLES 3.0, use glGetQueryObjectuiv
+#define nglGetQueryObjectuiv glGetQueryObjectuiv
+
+#define nglIsRenderbuffer glIsRenderbuffer
+#define nglBindRenderbuffer glBindRenderbuffer
+#define nglDeleteRenderbuffers glDeleteRenderbuffers
+#define nglGenRenderbuffers glGenRenderbuffers
+#define nglRenderbufferStorage glRenderbufferStorage
+#define nglGetRenderbufferParameteriv glGetRenderbufferParameteriv
+#define nglIsFramebuffer glIsFramebuffer
+#define nglBindFramebuffer glBindFramebuffer
+#define nglDeleteFramebuffers glDeleteFramebuffers
+#define nglGenFramebuffers glGenFramebuffers
+#define nglCheckFramebufferStatus glCheckFramebufferStatus
+// glFramebufferTexture1D not available in GLES 3.0
+#define nglFramebufferTexture2D glFramebufferTexture2D
+// glFramebufferTexture3D not available in GLES 3.0
+#define nglFramebufferRenderbuffer glFramebufferRenderbuffer
+#define nglGetFramebufferAttachmentParameteriv glGetFramebufferAttachmentParameteriv
+#define nglGenerateMipmap glGenerateMipmap
+#define nglBlitFramebuffer glBlitFramebuffer
+#define nglRenderbufferStorageMultisample glRenderbufferStorageMultisample
+#define nglFramebufferTextureLayer glFramebufferTextureLayer
+
+#define nglActiveTexture glActiveTexture
+
+#define nglCompressedTexImage3D glCompressedTexImage3D
+#define nglCompressedTexImage2D glCompressedTexImage2D
+// glCompressedTexImage1D not available in GLES 3.0
+#define nglCompressedTexSubImage3D glCompressedTexSubImage3D
+#define nglCompressedTexSubImage2D glCompressedTexSubImage2D
+// glCompressedTexSubImage1D not available in GLES 3.0
+// glGetCompressedTexImage not available in GLES 3.0
+
+#define nglBlendColor glBlendColor
+
+#define nglFenceSync glFenceSync
+#define nglIsSync glIsSync
+#define nglDeleteSync glDeleteSync
+#define nglClientWaitSync glClientWaitSync
+#define nglWaitSync glWaitSync
+#define nglGetInteger64v glGetInteger64v
+#define nglGetSynciv glGetSynciv
+
+// GL_ARB_separate_shader_objects not available in GLES 3.0 core
+
+#else // !USE_OPENGLES3
+
 // Core 3.30
 extern PFNGLGETSTRINGIPROC								nglGetStringi;
 
@@ -398,6 +511,8 @@ extern NEL_PFNGLXSWAPINTERVALMESAPROC			nglXSwapIntervalMESA;
 extern NEL_PFNGLXGETSWAPINTERVALMESAPROC		nglXGetSwapIntervalMESA;
 
 #endif
+
+#endif // !USE_OPENGLES3
 
 } // NLDRIVERGL3
 } // NL3D

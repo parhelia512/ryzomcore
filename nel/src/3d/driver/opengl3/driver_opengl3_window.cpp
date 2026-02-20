@@ -26,6 +26,25 @@
 // by default, we disable the windows menu keys (F10, ALT and ALT+SPACE key doesn't freeze or open the menu)
 #define NL_DISABLE_MENU
 
+#ifdef USE_OPENGLES3
+#ifdef __EMSCRIPTEN__
+#	include <emscripten.h>
+#	include <emscripten/html5.h>
+#elif defined(NL_OS_MAC)
+#	import "mac/cocoa_window_delegate.h"
+#	import "mac/cocoa_application_delegate.h"
+#elif defined(NL_OS_UNIX)
+#	ifdef HAVE_XRANDR
+#		include <X11/extensions/Xrandr.h>
+#	endif
+#	ifdef HAVE_XRENDER
+#		include <X11/extensions/Xrender.h>
+#	endif
+#	include <X11/Xatom.h>
+#	define _NET_WM_STATE_REMOVE	0
+#	define _NET_WM_STATE_ADD	1
+#endif
+#else // !USE_OPENGLES3
 #ifdef NL_OS_MAC
 #	import "mac/cocoa_window_delegate.h"
 #	import "mac/cocoa_application_delegate.h"
@@ -41,6 +60,7 @@
 #	define _NET_WM_STATE_REMOVE	0
 #	define _NET_WM_STATE_ADD	1
 #endif // NL_OS_UNIX
+#endif // USE_OPENGLES3
 
 #include "nel/3d/u_driver.h"
 #include "nel/misc/file.h"

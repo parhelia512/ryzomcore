@@ -30,7 +30,13 @@
 #	define H_AUTO_OGL(label)
 #endif
 
-#ifdef NL_OS_MAC
+#ifdef USE_OPENGLES3
+// OpenGL ES 3.0 / Emscripten - no platform-specific windowing headers needed here
+#ifdef __EMSCRIPTEN__
+#	include <emscripten.h>
+#	include <emscripten/html5.h>
+#endif
+#elif defined(NL_OS_MAC)
 #	import  <Cocoa/Cocoa.h>
 #	import  "mac/cocoa_opengl3_view.h"
 #elif defined (NL_OS_UNIX)
@@ -69,7 +75,18 @@
 #include "driver_opengl3_program.h"
 
 
-#ifdef NL_OS_WINDOWS
+#ifdef USE_OPENGLES3
+// OpenGL ES 3.0 - event handling via Emscripten or platform-specific code
+#	ifndef __EMSCRIPTEN__
+#		ifdef NL_OS_WINDOWS
+#			include "nel/misc/win_event_emitter.h"
+#		elif defined(NL_OS_MAC)
+#			include "mac/cocoa_event_emitter.h"
+#		elif defined (NL_OS_UNIX)
+#			include "unix_event_emitter.h"
+#		endif
+#	endif
+#elif defined(NL_OS_WINDOWS)
 #include "nel/misc/win_event_emitter.h"
 #elif defined(NL_OS_MAC)
 #include "mac/cocoa_event_emitter.h"
@@ -99,6 +116,26 @@ class   COcclusionQueryGL3;
 
 void displayGLError(GLenum error);
 
+#ifdef USE_OPENGLES3
+#ifdef __EMSCRIPTEN__
+// Emscripten doesn't need traditional window procedures
+typedef void* nlCursor;
+#define EmptyCursor (nlCursor)NULL
+#elif defined(NL_OS_WINDOWS)
+bool GlWndProc(CDriverGL3 *driver, HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+typedef HCURSOR nlCursor;
+#define EmptyCursor (nlCursor)NULL
+#elif defined(NL_OS_MAC)
+bool GlWndProc(CDriverGL3 *driver, const void* e);
+typedef void* nlCursor;
+#define EmptyCursor (nlCursor)NULL
+#elif defined(NL_OS_UNIX)
+bool GlWndProc(CDriverGL3 *driver, XEvent &e);
+typedef Cursor nlCursor;
+#define EmptyCursor None
+#endif
+#else // !USE_OPENGLES3
+
 #ifdef NL_OS_WINDOWS
 
 bool GlWndProc(CDriverGL3 *driver, HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -118,6 +155,8 @@ typedef Cursor nlCursor;
 #define EmptyCursor None
 
 #endif
+
+#endif // USE_OPENGLES3
 
 typedef std::list<COcclusionQueryGL3 *> TOcclusionQueryList;
 
@@ -960,6 +999,35 @@ private:
 
 	TCursorMap					_Cursors;
 
+#ifdef USE_OPENGLES3
+#ifdef __EMSCRIPTEN__
+	// Emscripten WebGL context - managed by the HTML5 canvas
+	EMSCRIPTEN_WEBGL_CONTEXT_HANDLE	_ctx;
+#elif defined(NL_OS_WINDOWS)
+	HGLRC						_hRC;
+	HDC							_hDC;
+	PIXELFORMATDESCRIPTOR		_pfd;
+	HPBUFFERARB					_PBuffer;
+#elif defined(NL_OS_UNIX)
+	// EGL context for native GLES 3.0
+	void*						_ctx;
+#endif
+
+#ifdef __EMSCRIPTEN__
+	// Emscripten event handling is done through HTML5 API
+	NLMISC::CEventEmitterMulti	_EventEmitter;
+#elif defined(NL_OS_WINDOWS)
+	bool						convertBitmapToIcon(const NLMISC::CBitmap &bitmap, HICON &icon, uint iconWidth, uint iconHeight, uint iconDepth, const NLMISC::CRGBA &col = NLMISC::CRGBA::White, sint hotSpotX = 0, sint hotSpotY = 0, bool cursor = false);
+	friend bool GlWndProc(CDriverGL3 *driver, HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	static uint					_Registered;
+	DEVMODE						_OldScreenMode;
+	NLMISC::CEventEmitterMulti	_EventEmitter;
+#elif defined(NL_OS_UNIX)
+	NLMISC::CEventEmitterMulti	_EventEmitter;
+#endif
+
+#else // !USE_OPENGLES3
+
 #if defined(NL_OS_WINDOWS)
 	HGLRC						_hRC;
 	HDC							_hDC;
@@ -1019,6 +1087,8 @@ private:
 #endif //XF86VIDMODE
 
 #endif // NL_OS_UNIX
+
+#endif // USE_OPENGLES3
 
 	bool					_Initialized;
 

@@ -46,6 +46,16 @@
 #	include <windowsx.h>
 #endif
 
+#ifdef USE_OPENGLES3
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <GLES3/gl3.h>
+#else
+#include <GLES3/gl3.h>
+#include <GLES3/gl3ext.h>
+#include <EGL/egl.h>
+#endif
+#else
 #ifdef NL_OS_WINDOWS
 #include <GL/gl.h>
 #include "GL/wglext.h"
@@ -59,6 +69,7 @@
 #include "GL/glxext.h"
 #endif
 #include "GL/glext.h"
+#endif
 
 #include "nel/misc/common.h"
 #include "nel/misc/debug.h"
