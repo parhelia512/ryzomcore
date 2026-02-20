@@ -997,7 +997,9 @@ MACRO(NL_SETUP_BUILD)
     ADD_PLATFORM_FLAGS("-D_REENTRANT")
 
     # hardening
-    ADD_PLATFORM_FLAGS("-D_FORTIFY_SOURCE=2")
+    IF(NOT EMSCRIPTEN)
+      ADD_PLATFORM_FLAGS("-D_FORTIFY_SOURCE=2")
+    ENDIF()
 
     IF(NOT WITH_LOW_MEMORY)
       ADD_PLATFORM_FLAGS("-pipe")
@@ -1069,11 +1071,13 @@ MACRO(NL_SETUP_BUILD)
     ENDIF()
 
     # hardening
-    ADD_PLATFORM_FLAGS("-fstack-protector --param=ssp-buffer-size=4")
+    IF(NOT EMSCRIPTEN)
+      ADD_PLATFORM_FLAGS("-fstack-protector --param=ssp-buffer-size=4")
 
-    # If -fstack-protector or -fstack-protector-all enabled, enable too new warnings and fix possible link problems
-    IF(WITH_WARNINGS)
-      ADD_PLATFORM_FLAGS("-Wstack-protector")
+      # If -fstack-protector or -fstack-protector-all enabled, enable too new warnings and fix possible link problems
+      IF(WITH_WARNINGS)
+        ADD_PLATFORM_FLAGS("-Wstack-protector")
+      ENDIF()
     ENDIF()
 
     # Fix undefined reference to `__stack_chk_fail' error
