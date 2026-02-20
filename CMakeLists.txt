@@ -190,7 +190,8 @@ IF(HUNTER_ENABLED)
 ELSE()
 IF(EMSCRIPTEN)
   # For Emscripten builds, zlib/libpng/libxml2 are not required for the sample demos.
-  # Create empty imported target for ZLIB so downstream CMake code works without errors.
+  # Create stub ZLIB::ZLIB imported target so nelmisc's TARGET_LINK_LIBRARIES doesn't
+  # error out. No actual zlib is linked; the stub is intentionally empty.
   ADD_LIBRARY(ZLIB::ZLIB INTERFACE IMPORTED)
   SET(ZLIB_FOUND TRUE)
   SET(ZLIB_INCLUDE_DIRS "")
