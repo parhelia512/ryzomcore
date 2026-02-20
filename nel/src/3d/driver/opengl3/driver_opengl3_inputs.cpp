@@ -21,7 +21,7 @@
 #include "stdopengl3.h"
 #include "driver_opengl3.h"
 
-#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC)
+#if defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__)
 # include <X11/Xatom.h>
 # ifdef HAVE_XRENDER
 #  include <X11/extensions/Xrender.h>
@@ -29,7 +29,7 @@
 # ifdef HAVE_XCURSOR
 #  include <X11/Xcursor/Xcursor.h>
 # endif // HAVE_XCURSOR
-#endif // defined(NL_OS_UNIX) && !defined(NL_OS_MAC)
+#endif // defined(NL_OS_UNIX) && !defined(NL_OS_MAC) && !defined(__EMSCRIPTEN__)
 
 #include "nel/3d/u_driver.h"
 #include "nel/misc/file.h"
