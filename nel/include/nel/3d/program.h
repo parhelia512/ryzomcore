@@ -36,7 +36,10 @@
 
 namespace NL3D {
 
-static const uint32 IDRV_PROGRAM_MAXSAMPLERS = 32;
+// Max sampler/constant stages for the GL3 driver.
+// Raising this increases megashader code size (unrolled per-stage) and material UBO size.
+// GL 3.3 guarantees 16 fragment texture units; some hardware supports 32.
+static const uint32 IDRV_PROGRAM_MAXSAMPLERS = 8;
 
 // List typedef.
 class	IDriver;
@@ -456,6 +459,7 @@ struct CProgramIndex
 		NlWorldSpacePosition,
 		NlNumPerPixelLights,
 		NlFogEnabled,
+		NlUVRouting,
 		CameraForward,
 		SamplerCube0,
 		SamplerCube1,
@@ -485,6 +489,7 @@ struct CProgramIndex
 		PzbCameraPos,
 		CameraWorldPos,
 		NlLightMapScale,
+		SpecularTexMtx,
 
 		// Per-pixel lighting uniforms for pixel programs (raw values, not pre-multiplied)
 		NlPpLightMode0, NlPpLightMode1, NlPpLightMode2, NlPpLightMode3,
@@ -574,6 +579,9 @@ public:
 		glsl330v = 0x65010330, // GLSL vertex program version 330
 		glsl330f = 0x65020330, // GLSL fragment program version 330
 		glsl330g = 0x65030330, // GLSL geometry program version 330
+		glsl300esv = 0x65010300, // GLSL ES 300 vertex program (pipeline stage, for linking)
+		glsl300esf = 0x65020300, // GLSL ES 300 fragment program (pipeline stage, for linking)
+		glsl300es  = 0x65000300, // GLSL ES 300 linked program (combined VP+PP)
 	};
 
 	struct CSource : public NLMISC::CRefCount
@@ -650,6 +658,27 @@ public:
 	bool m_CompileFailed;
 
 }; /* class IProgram */
+
+/**
+ * \brief CShaderProgram
+ * A combined linked VP+PP shader program (non-SSO).
+ * Wraps a single GPU program containing both vertex and fragment stages.
+ * A single buildInfo() call resolves all uniforms from both stages.
+ * Stores separate VP and PP feature copies for per-stage UBO flag queries.
+ * Only used internally by the driver implementations; not exposed to user code.
+ */
+class CShaderProgram : public IProgram
+{
+public:
+	CShaderProgram();
+	virtual ~CShaderProgram();
+
+	/// VP-side features (for per-stage UBO flag queries)
+	CProgramFeatures VPFeatures;
+
+	/// PP-side features (for per-stage UBO flag queries)
+	CProgramFeatures PPFeatures;
+};
 
 } /* namespace NL3D */
 

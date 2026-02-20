@@ -27,6 +27,7 @@ SOURCE_GROUP("" FILES
 
 SOURCE_GROUP(rendering FILES
 		driver_opengl3_rendering.cpp
+		driver_opengl3_render_state.cpp
 		driver_opengl3_material.cpp
 		driver_opengl3_texture.cpp
 		driver_opengl3_light.cpp

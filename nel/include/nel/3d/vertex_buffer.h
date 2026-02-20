@@ -596,6 +596,11 @@ public:
 	// @}
 
 	/// \name UV Routing.
+	/// Maps material texture stage -> VB texcoord index.
+	/// Array is MaxStage (8) entries to match the VB texcoord count,
+	/// but only the first IDRV_MAT_MAXTEXTURES (4) entries are used
+	/// by material rendering. The lightmap path (which can use up to
+	/// 8 samplers) reads from fixed texcoord varyings and ignores routing.
 	const uint8	*getUVRouting () const { return _UVRouting; }
 	void		setUVRouting (uint8 uvChannel, uint newUVRouting) { _UVRouting[uvChannel] = uint8(newUVRouting); }
 

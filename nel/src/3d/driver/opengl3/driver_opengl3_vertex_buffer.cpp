@@ -95,9 +95,9 @@ CVertexBufferGL3::CVertexBufferGL3(CDriverGL3 *drv, uint size, uint numVertices,
 	// Initialize
 	for (GLsizei i = 0; i < nbBuff; ++i)
 	{
-		drv->_DriverGLStates.forceBindARBVertexBuffer(m_VertexObjectId[i]);
+		drv->_DriverGLStates.forceBindArrayBuffer(m_VertexObjectId[i]);
 		nglBufferData(GL_ARRAY_BUFFER, size, NULL, drv->vertexBufferUsageGL3(preferred));
-		drv->_DriverGLStates.forceBindARBVertexBuffer(0);
+		drv->_DriverGLStates.forceBindArrayBuffer(0);
 	}
 }
 
@@ -111,9 +111,9 @@ CVertexBufferGL3::~CVertexBufferGL3()
 		GLsizei nbBuff = vbgl3BufferForType(m_MemType);
 		for (GLsizei i = 0; i < nbBuff; ++i)
 		{
-			if (m_Driver->_DriverGLStates.getCurrBoundARBVertexBuffer() == m_VertexObjectId[i])
+			if (m_Driver->_DriverGLStates.getCurrBoundArrayBuffer() == m_VertexObjectId[i])
 			{
-				m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
+				m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 			}
 		}
 	}
@@ -181,9 +181,9 @@ void *CVertexBufferGL3::lock()
 
 		for (GLsizei i = 0; i < nbBuff; ++i)
 		{
-			m_Driver->_DriverGLStates.forceBindARBVertexBuffer(m_VertexObjectId[i]);
+			m_Driver->_DriverGLStates.forceBindArrayBuffer(m_VertexObjectId[i]);
 			nglBufferData(GL_ARRAY_BUFFER, size, NULL, m_Driver->vertexBufferUsageGL3(m_MemType));
-			m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
+			m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 			if (glGetError() != GL_NO_ERROR)
 			{
 				m_Driver->incrementResetCounter();
@@ -232,7 +232,7 @@ void *CVertexBufferGL3::lock()
 			m_CurrentIndex %= NL3D_GL3_BUFFER_QUEUE_MAX;
 			m_CurrentInFlight = false;
 		}
-		m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId[m_CurrentIndex]);
+		m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
 		if (m_FrameInFlight[m_CurrentIndex] != NL3D_GL3_BUFFER_NOT_IN_FLIGHT
 			&& m_FrameInFlight[m_CurrentIndex] >= m_Driver->getSwapBufferInFlight())
 		{
@@ -255,7 +255,7 @@ void *CVertexBufferGL3::lock()
 		break;
 	}
 	default:
-		m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId[m_CurrentIndex]);
+		m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
 		m_VertexPtr = nglMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
 		break;
 	}
@@ -271,7 +271,7 @@ void *CVertexBufferGL3::lock()
 	#ifdef NL_DEBUG
 		// Vertex array range tracking removed in GL3 driver
 	#endif
-	m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
+	m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 	// Lock Profile?
 	if (m_Driver->_VBHardProfiling)
 	{
@@ -304,7 +304,7 @@ void CVertexBufferGL3::unlock()
 	{
 		beforeLock= CTime::getPerformanceTime();
 	}
-	m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId[m_CurrentIndex]);
+	m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
 	GLboolean unmapOk = GL_FALSE;
 
 	unmapOk = nglUnmapBuffer(GL_ARRAY_BUFFER);
@@ -315,7 +315,7 @@ void CVertexBufferGL3::unlock()
 		afterLock= CTime::getPerformanceTime();
 		m_Driver->appendVBHardLockProfile(afterLock-beforeLock, VB);
 	}
-	m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
+	m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 	if (!unmapOk)
 	{
 		invalidate();
@@ -393,9 +393,9 @@ void CVertexBufferGL3::flush()
 	// glBufferData with a data pointer implicitly orphans — the GPU
 	// keeps reading from the old allocation while we upload new data.
 	const uint size = VB->getNumVertices() * VB->getVertexSize();
-	m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId[m_CurrentIndex]);
+	m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
 	nglBufferData(GL_ARRAY_BUFFER, size, m_ShadowData.data(), GL_STREAM_DRAW);
-	m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
+	m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 	m_ShadowDirty = false;
 }
 
@@ -460,9 +460,9 @@ CVertexBufferAMDPinned::~CVertexBufferAMDPinned()
 	H_AUTO_OGL(CVertexBufferAMDPinned_CVertexBufferAMDPinnedDtor)
 	if (m_Driver && m_VertexObjectId)
 	{
-		if (m_Driver->_DriverGLStates.getCurrBoundARBVertexBuffer() == m_VertexObjectId)
+		if (m_Driver->_DriverGLStates.getCurrBoundArrayBuffer() == m_VertexObjectId)
 		{
-			m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
+			m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 		}
 	}
 	if (m_VertexObjectId)
@@ -497,7 +497,7 @@ void *CVertexBufferAMDPinned::lock()
 	}
 
 	// Lock
-	m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId);
+	m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId);
 	switch (m_MemType)
 	{
 	case CVertexBuffer::AGPVolatile:
@@ -512,7 +512,7 @@ void *CVertexBufferAMDPinned::lock()
 		m_VertexPtr = nglMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
 		break;
 	}
-	m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
+	m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 	nlassert(m_VertexPtr);
 
 	// May actually return a different virtual address on some systems
@@ -548,9 +548,9 @@ void CVertexBufferAMDPinned::unlock()
 	}
 
 	// Unlock
-	m_Driver->_DriverGLStates.bindARBVertexBuffer(m_VertexObjectId);
+	m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId);
 	nglUnmapBuffer(GL_ARRAY_BUFFER);
-	m_Driver->_DriverGLStates.forceBindARBVertexBuffer(0);
+	m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 
 	// Profiling
 	if (m_Driver->_VBHardProfiling)

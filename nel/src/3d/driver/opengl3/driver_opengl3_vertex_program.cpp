@@ -66,6 +66,9 @@ bool operator<(const CVPBuiltin &left, const CVPBuiltin &right)
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
 			return left.TexGenMode[i] < right.TexGenMode[i];
+	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		if (left.UVRouting[i] != right.UVRouting[i])
+			return left.UVRouting[i] < right.UVRouting[i];
 	if (left.Fog != right.Fog)
 		return right.Fog;
 	if (left.VertexColorLighted != right.VertexColorLighted)
@@ -103,6 +106,9 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 		if (left.TexGenMode[i] != right.TexGenMode[i])
 			return false;
+	for (sint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+		if (left.UVRouting[i] != right.UVRouting[i])
+			return false;
 	if (left.Fog != right.Fog)
 		return false;
 	if (left.VertexColorLighted != right.VertexColorLighted)
@@ -136,6 +142,8 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 			h = NLMISC::lowbias32(h ^ vpLightMode(v, i));
 	for (sint i = 0; i < NL3D::IDRV_MAT_MAXTEXTURES; ++i)
 		h = NLMISC::lowbias32(h ^ v.TexGenMode[i]);
+	for (sint i = 0; i < NL3D::IDRV_MAT_MAXTEXTURES; ++i)
+		h = NLMISC::lowbias32(h ^ v.UVRouting[i]);
 
 	nlctassert(sizeof(size_t) >= sizeof(uint32));
 	return (size_t)h;
@@ -374,6 +382,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	bool needTexGen = false;
 	bool needEyeLinear = false;
 	bool needReflection = false;
+	bool needSpecularTexMtx = false;
 	for (int i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
 	{
 		if (desc.TexGenMode[i] >= 0)
@@ -381,14 +390,23 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 			ss << "layout(location = " << (TexCoord0 + i) << ") smooth out vec4 texCoord" << i << "; // texgen" << std::endl;
 			needTexGen = true;
 			if (desc.TexGenMode[i] == TexGenObjectLinear || desc.TexGenMode[i] == TexGenEyeLinear
-				|| desc.TexGenMode[i] == TexGenReflectionMap || desc.TexGenMode[i] == TexGenSphereMap)
+				|| desc.TexGenMode[i] == TexGenSphereMap)
 				ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
 			if (desc.TexGenMode[i] == TexGenEyeLinear)
 				needEyeLinear = true;
+			if (desc.TexGenMode[i] == TexGenReflectionMap)
+				needSpecularTexMtx = true;
 			if (desc.TexGenMode[i] == TexGenReflectionMap || desc.TexGenMode[i] == TexGenSphereMap)
 				needReflection = true;
 		}
+		else if (hasFlag(desc.VertexFormat, g_VertexFlags[TexCoord0 + i]))
+		{
+			// VB texcoord stage without texgen: declare texMatrix for user texture matrix support
+			ss << "uniform mat4 texMatrix" << i << ";" << std::endl;
+		}
 	}
+	if (needSpecularTexMtx)
+		ss << "uniform mat4 specularTexMtx;" << std::endl;
 	ss << std::endl;
 
 	// Clip plane uniforms
@@ -508,8 +526,8 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		}
 		else if (!lighting)
 		{
-			// Unlit: vertex color modulates materialColor
-			ss << "diffuseVertex = diffuseVertex * vprimaryColor;" << std::endl;
+			// Unlit: vertex color replaces materialColor (fixed-function GL behavior)
+			ss << "diffuseVertex = vprimaryColor;" << std::endl;
 		}
 		// When lighting && !VertexColorLighted: vprimaryColor is ignored (matDiffuse pre-multiplied on CPU)
 	}
@@ -546,6 +564,8 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 			}
 			else if (i == Normal && desc.Normalize)
 				ss << g_AttribNames[i] << " = vec4(normalize(v" << g_AttribNames[i] << ".xyz), 0.0);" << std::endl;
+			else if (i >= TexCoord0 && i <= TexCoord3)
+				ss << g_AttribNames[i] << " = texMatrix" << (i - TexCoord0) << " * v" << g_AttribNames[TexCoord0 + desc.UVRouting[i - TexCoord0]] << ";" << std::endl;
 			else
 				ss << g_AttribNames[i] << " = " << "v" << g_AttribNames[i] << ";" << std::endl;
 		}
@@ -581,8 +601,8 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		}
 		else if (desc.TexGenMode[i] == TexGenReflectionMap)
 		{
-			// Reflection map (cubemap): eye-space reflection vector, transformed by texMatrix
-			ss << "texCoord" << i << " = texMatrix" << i << " * vec4(refl_r, 0.0);" << std::endl;
+			// Reflection map (cubemap): eye-space reflection vector, transformed by specularTexMtx (inverse view rotation)
+			ss << "texCoord" << i << " = specularTexMtx * vec4(refl_r, 0.0);" << std::endl;
 		}
 		else if (desc.TexGenMode[i] == TexGenSphereMap)
 		{
@@ -695,6 +715,15 @@ void CDriverGL3::touchVertexFormatVP()
 	{
 		m_VPBuiltinCurrent.VertexFormat = format;
 		m_VPBuiltinTouched = true;
+	}
+	const uint8 *uvRouting = _CurrentVertexBufferGL->VB->getUVRouting();
+	for (uint i = 0; i < IDRV_MAT_MAXTEXTURES; ++i)
+	{
+		if (m_VPBuiltinCurrent.UVRouting[i] != uvRouting[i])
+		{
+			m_VPBuiltinCurrent.UVRouting[i] = uvRouting[i];
+			m_VPBuiltinTouched = true;
+		}
 	}
 }
 
