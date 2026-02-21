@@ -193,6 +193,15 @@ public:
 
 
 	/**
+	  * Dirty byte range for partial buffer uploads.
+	  */
+	struct CDirtyRange
+	{
+		uint32 Begin; ///< First dirty byte offset (inclusive)
+		uint32 End;   ///< Last dirty byte offset (exclusive)
+	};
+
+	/**
 	  * Type of index buffer location
 	  */
 	enum TLocation
@@ -247,6 +256,21 @@ public:
 
 	/** Called by the driver implementation during the buffer activation */
 	void					fillBuffer ();
+
+	/// Enable/disable dirty range accumulation. Called by the driver during buffer setup.
+	void					setDirtyTracking(bool enable) { _DirtyTracking = enable; if (!enable) _DirtyRanges.clear(); }
+	bool					getDirtyTracking() const { return _DirtyTracking; }
+
+	/// Mark an index range as dirty (first inclusive, last exclusive index indices).
+	/// Called by engine/user code while the buffer is locked.
+	/// Ignored when dirty tracking is not enabled.
+	void					invalidateRange(uint first, uint last);
+
+	/// Read accumulated dirty byte ranges. Called by the driver during flush.
+	const std::vector<CDirtyRange> &getDirtyRanges() const { return _DirtyRanges; }
+
+	/// Clear accumulated dirty ranges. Called by the driver after uploading.
+	void					clearDirtyRanges() { _DirtyRanges.clear(); }
 	// @}
 
 public:
@@ -500,6 +524,10 @@ private:
 
 	// Keep in local memory
 	bool					_KeepLocalMemory;
+
+	// Dirty range tracking for partial uploads
+	std::vector<CDirtyRange>	_DirtyRanges;
+	bool					_DirtyTracking;
 
 	// debug name
 	std::string				_Name;

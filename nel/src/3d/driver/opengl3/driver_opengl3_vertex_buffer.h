@@ -92,9 +92,15 @@ private:
 	CVertexBuffer::TBufferUsage m_MemType;
 	void *m_VertexPtr; // pointer on current datas. Null if not locked
 
-	// Shadow buffer for CpuReadWrite: CPU reads/writes go here, uploaded to GL at draw time
+	// Shadow buffer for CpuReadWrite/PartialWrite: CPU reads/writes go here, uploaded to GL at draw time
 	std::vector<uint8> m_ShadowData;
 	bool m_ShadowDirty;
+
+	// Scratch buffer for coalescing dirty ranges during flush (avoids reallocation)
+	std::vector<CVertexBuffer::CDirtyRange> m_MergedRanges;
+
+	// Staging GL buffer for stall-free partial uploads via CopyBufferSubData
+	GLuint m_StagingBufferId;
 
 	// if buffer has been invalidated, returns a dummy memory block and silently fails rendering
 	std::vector<uint8> m_DummyVB;

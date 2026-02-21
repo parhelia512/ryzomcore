@@ -58,6 +58,7 @@ CIndexBuffer::CIndexBuffer()
 	_Location = NotResident;
 	_ResidentSize = 0;
 	_KeepLocalMemory = false;
+	_DirtyTracking = false;
 	_Format = Indices32;
 }
 
@@ -77,6 +78,7 @@ CIndexBuffer::CIndexBuffer(const CIndexBuffer &vb) : CRefCount()
 	_Location = NotResident;
 	_ResidentSize = 0;
 	_KeepLocalMemory = false;
+	_DirtyTracking = false;
 	operator=(vb);
 }
 
@@ -96,6 +98,7 @@ CIndexBuffer::CIndexBuffer(const char *name)
 	_Location = NotResident;
 	_ResidentSize = 0;
 	_KeepLocalMemory = false;
+	_DirtyTracking = false;
 	_Name = name;
 }
 
@@ -128,6 +131,8 @@ CIndexBuffer	&CIndexBuffer::operator=(const CIndexBuffer &vb)
 	_NonResidentIndexes = vb._NonResidentIndexes;
 	_BufferUsage = vb._BufferUsage;
 	_KeepLocalMemory = vb._KeepLocalMemory;
+	_DirtyTracking = false;
+	_DirtyRanges.clear();
 	_Format = vb._Format;
 
 	// Set touch flags
@@ -284,6 +289,9 @@ void CIndexBuffer::restoreNonResidentMemory()
 {
 	setLocation (NotResident);
 
+	_DirtyRanges.clear();
+	_DirtyTracking = false;
+
 	if (DrvInfos)
 		DrvInfos->IndexBufferPtr = NULL;	// Tell the driver info to not restore memory when it will die
 
@@ -291,6 +299,18 @@ void CIndexBuffer::restoreNonResidentMemory()
 	DrvInfos.kill();
 }
 
+
+// ***************************************************************************
+
+void CIndexBuffer::invalidateRange(uint first, uint last)
+{
+	if (!_DirtyTracking || first >= last) return;
+	uint indexBytes = getIndexNumBytes();
+	CDirtyRange r;
+	r.Begin = first * indexBytes;
+	r.End = last * indexBytes;
+	_DirtyRanges.push_back(r);
+}
 
 // ***************************************************************************
 void CIndexBuffer::buildSerialVector(std::vector<uint32> &dest) const

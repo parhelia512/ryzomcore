@@ -130,6 +130,10 @@ bool CDriverGL3::setupVertexBuffer(CVertexBuffer& VB)
 			// Vertex buffer hard
 			info->_VBHard = createVertexBufferGL(size, VB.capacity(), preferred, &VB);
 
+			// Enable dirty tracking for shadow-buffered modes
+			if (preferred == CVertexBuffer::PartialWrite || preferred == CVertexBuffer::CpuReadWrite)
+				VB.setDirtyTracking(true);
+
 			// Upload the data
 			CVertexBuffer::TLocation location;
 			if (info->_VBHard->VBType == IVertexBufferGL3::AMDPinned)
@@ -263,10 +267,11 @@ GLenum CDriverGL3::vertexBufferUsageGL3(CVertexBuffer::TBufferUsage usage)
 	switch (usage)
 	{
 	case CVertexBuffer::CpuReadWrite:
-		return GL_STREAM_DRAW; // Shadow buffer: orphan + full upload each frame
+		return GL_DYNAMIC_DRAW; // Shadow buffer: orphan + full upload, drawn from many times
 	case CVertexBuffer::FullRewrite:
-	case CVertexBuffer::PartialWrite:
 		return GL_DYNAMIC_DRAW;
+	case CVertexBuffer::PartialWrite:
+		return GL_STATIC_DRAW; // Only written by GPU-side CopyBufferSubData from staging
 	case CVertexBuffer::Immutable:
 		return getStaticMemoryToVRAM() ? GL_STATIC_DRAW : GL_DYNAMIC_DRAW;
 	case CVertexBuffer::SmallStream:

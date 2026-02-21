@@ -114,6 +114,7 @@ void CVertexBuffer::construct()
 	_Location = NotResident;
 	_ResidentSize = 0;
 	_KeepLocalMemory = false;
+	_DirtyTracking = false;
 
 	// Default routing
 	uint i;
@@ -154,6 +155,7 @@ CVertexBuffer::CVertexBuffer(const CVertexBuffer &vb) : CRefCount()
 	_Location = NotResident;
 	_ResidentSize = 0;
 	_KeepLocalMemory = false;
+	_DirtyTracking = false;
 
 	operator=(vb);
 
@@ -196,6 +198,8 @@ CVertexBuffer	&CVertexBuffer::operator=(const CVertexBuffer &vb)
 	_VertexColorFormat = vb._VertexColorFormat;
 	_BufferUsage = vb._BufferUsage;
 	_KeepLocalMemory = vb._KeepLocalMemory;
+	_DirtyTracking = false;
+	_DirtyRanges.clear();
 	uint i;
 	_LockCounter = 0;
 	_LockedBuffer = NULL;
@@ -1083,6 +1087,17 @@ void CVertexBuffer::setBufferUsage (TBufferUsage usage, bool keepLocalMemory)
 }
 
 // --------------------------------------------------
+
+void CVertexBuffer::invalidateRange(uint first, uint last)
+{
+	if (!_DirtyTracking || first >= last) return;
+	CDirtyRange r;
+	r.Begin = first * _VertexSize;
+	r.End = last * _VertexSize;
+	_DirtyRanges.push_back(r);
+}
+
+// --------------------------------------------------
 void CVertexBuffer::setLocation (TLocation newLocation)
 {
 	// Upload ?
@@ -1147,6 +1162,9 @@ void CVertexBuffer::setLocation (TLocation newLocation)
 void CVertexBuffer::restoreNonResidentMemory()
 {
 	setLocation (NotResident);
+
+	_DirtyRanges.clear();
+	_DirtyTracking = false;
 
 	if (DrvInfos)
 		DrvInfos->VertexBufferPtr = NULL;	// Tell the driver info to not restore memory when it will die

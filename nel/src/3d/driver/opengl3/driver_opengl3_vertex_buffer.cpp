@@ -74,12 +74,13 @@ CVertexBufferGL3::CVertexBufferGL3(CDriverGL3 *drv, uint size, uint numVertices,
 	m_ReuseCount(0),
 	m_InvalidateCount(0),
 #endif
-	m_MemType(preferred)
+	m_MemType(preferred),
+	m_StagingBufferId(0)
 {
 	H_AUTO_OGL(CVertexBufferGLARB_CVertexBufferGLARB);
 
-	// Allocate shadow buffer for CpuReadWrite (CPU reads/writes go here)
-	if (preferred == CVertexBuffer::CpuReadWrite)
+	// Allocate shadow buffer for CpuReadWrite and PartialWrite (CPU reads/writes go here)
+	if (preferred == CVertexBuffer::CpuReadWrite || preferred == CVertexBuffer::PartialWrite)
 		m_ShadowData.resize(size, 0);
 
 	for (GLsizei i = 0; i < NL3D_GL3_BUFFER_QUEUE_MAX; ++i)
@@ -125,6 +126,10 @@ CVertexBufferGL3::~CVertexBufferGL3()
 			nlassert(nglIsBuffer(id));
 			nglDeleteBuffers(1, &id);
 		}
+	}
+	if (m_StagingBufferId)
+	{
+		nglDeleteBuffers(1, &m_StagingBufferId);
 	}
 	if (m_Driver)
 	{
@@ -254,6 +259,10 @@ void *CVertexBufferGL3::lock()
 		}
 		break;
 	}
+	case CVertexBuffer::FullRewrite:
+		m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
+		m_VertexPtr = nglMapBufferRange(GL_ARRAY_BUFFER, 0, size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+		break;
 	default:
 		m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
 		m_VertexPtr = nglMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
@@ -389,14 +398,95 @@ void CVertexBufferGL3::flush()
 	if (!m_ShadowDirty) return;
 	if (m_Invalid) return;
 
-	// Orphan the old GL buffer and upload shadow data in one call.
-	// glBufferData with a data pointer implicitly orphans — the GPU
-	// keeps reading from the old allocation while we upload new data.
 	const uint size = VB->getNumVertices() * VB->getVertexSize();
-	m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
-	nglBufferData(GL_ARRAY_BUFFER, size, &m_ShadowData[0], GL_STREAM_DRAW);
-	m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
+
+	const std::vector<CVertexBuffer::CDirtyRange> &ranges = VB->getDirtyRanges();
+	if (ranges.empty())
+	{
+		// No explicit dirty ranges: full orphan+upload
+		m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
+		nglBufferData(GL_ARRAY_BUFFER, size, &m_ShadowData[0], GL_DYNAMIC_DRAW);
+		m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
+	}
+	else
+	{
+		// Copy into reusable scratch vector (avoids per-flush allocation)
+		m_MergedRanges.resize(ranges.size());
+		memcpy(&m_MergedRanges[0], &ranges[0], ranges.size() * sizeof(CVertexBuffer::CDirtyRange));
+
+		// Sort by Begin offset
+		std::sort(m_MergedRanges.begin(), m_MergedRanges.end(),
+			[](const CVertexBuffer::CDirtyRange &a, const CVertexBuffer::CDirtyRange &b)
+			{ return a.Begin < b.Begin; });
+
+		// Merge overlapping/adjacent and ranges within 128 bytes of each other
+		uint writeIdx = 0;
+		for (uint i = 1; i < m_MergedRanges.size(); ++i)
+		{
+			if (m_MergedRanges[i].Begin <= m_MergedRanges[writeIdx].End + 128)
+			{
+				if (m_MergedRanges[i].End > m_MergedRanges[writeIdx].End)
+					m_MergedRanges[writeIdx].End = m_MergedRanges[i].End;
+			}
+			else
+			{
+				++writeIdx;
+				m_MergedRanges[writeIdx] = m_MergedRanges[i];
+			}
+		}
+		m_MergedRanges.resize(writeIdx + 1);
+
+		// Align: round Begin down to 64 bytes, round End up to 64 bytes, clamp to buffer
+		for (uint i = 0; i < m_MergedRanges.size(); ++i)
+		{
+			m_MergedRanges[i].Begin = m_MergedRanges[i].Begin & ~(uint32)63;
+			m_MergedRanges[i].End = std::min((m_MergedRanges[i].End + 63) & ~(uint32)63, (uint32)size);
+			if (m_MergedRanges[i].Begin >= size) { m_MergedRanges.resize(i); break; }
+		}
+
+		// Sum total dirty bytes
+		uint totalDirty = 0;
+		for (uint i = 0; i < m_MergedRanges.size(); ++i)
+			totalDirty += m_MergedRanges[i].End - m_MergedRanges[i].Begin;
+
+		if (totalDirty >= size / 2 || m_MergedRanges.size() > 16)
+		{
+			// Too much dirty: full orphan+upload from CPU, data persists for many frames
+			m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
+			nglBufferData(GL_ARRAY_BUFFER, size, &m_ShadowData[0], GL_DYNAMIC_DRAW);
+			m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
+		}
+		else
+		{
+			// Staging buffer pattern: CPU -> orphaned staging buf -> GL copies into real buf.
+			// Neither CPU nor GPU stalls: staging is orphaned (CPU free), copy is GPU-internal.
+			if (!m_StagingBufferId)
+				nglGenBuffers(1, &m_StagingBufferId);
+
+			nglBindBuffer(GL_COPY_READ_BUFFER, m_StagingBufferId);
+			nglBindBuffer(GL_COPY_WRITE_BUFFER, m_VertexObjectId[m_CurrentIndex]);
+
+			for (uint i = 0; i < m_MergedRanges.size(); ++i)
+			{
+				uint32 rangeBegin = m_MergedRanges[i].Begin;
+				uint32 rangeSize = m_MergedRanges[i].End - rangeBegin;
+
+				// Orphan staging and upload dirty region from shadow
+				nglBufferData(GL_COPY_READ_BUFFER, rangeSize,
+					&m_ShadowData[rangeBegin], GL_STREAM_DRAW);
+
+				// GL copies staging -> real buffer (GPU-side, no stall)
+				nglCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER,
+					0, rangeBegin, rangeSize);
+			}
+
+			nglBindBuffer(GL_COPY_READ_BUFFER, 0);
+			nglBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+		}
+	}
+
 	m_ShadowDirty = false;
+	VB->clearDirtyRanges();
 }
 
 // ***************************************************************************
