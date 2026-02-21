@@ -1458,7 +1458,7 @@ private:
 	void			setUniformMatrix(TProgram program, uint index, TMatrix matrix, TTransform transform);
 	void			setUniformFog(TProgram program, uint index);
 
-	bool			isUniformProgramState() { return false; }
+	bool			isUniformProgramState() { return true; }
 
 	virtual bool	bindUniformBuffer(TUBBinding binding, CUniformBuffer *ub) NL_OVERRIDE;
 

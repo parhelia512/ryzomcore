@@ -142,6 +142,7 @@ bool CDriverGL3::renderSimpleTriangles(uint32 firstTri, uint32 ntris)
 	H_AUTO_OGL(CDriverGL3_renderSimpleTriangles);
 
 	flushNelvpUserVP();
+	setupBuiltinPrograms();
 
 	nlassert(ntris>0);
 
