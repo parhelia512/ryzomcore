@@ -470,7 +470,9 @@ uint32	 CFontGenerator::getCharIndex (u32char c)
 #ifdef NL_OS_WINDOWS
 
 #define NOMINMAX
+#define byte win_byte_override
 #include <windows.h>
+#undef byte
 
 using namespace NLMISC;
 
