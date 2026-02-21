@@ -724,7 +724,10 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 	newSrc->DisplayName = "nelvp-converted";
 
 	// Set features
-	newSrc->Features.OnlyUBOs = true;
+	// Note: OnlyUBOs is NOT set here. The nelvp constant register UBO is transparent
+	// to callers — they use setUniform4f/setUniformMatrix, and the driver internally
+	// routes those to the UBO. compileProgram() will auto-detect OnlyUBOs for the
+	// driver-internal m_ProgramOnlyUBOs flag via GL introspection.
 	newSrc->Features.UsesCameraUBO = true; // ecPos epilogue reads inverseProjectionBasis from camera UBO
 	newSrc->Features.OutputsSpecularColor = outputUsed[CVPOperand::OSecondaryColor];
 	newSrc->Features.NelvpRegisterCount = (uint16)registerCount;
