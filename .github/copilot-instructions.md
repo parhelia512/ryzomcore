@@ -43,7 +43,7 @@ emcmake cmake /path/to/ryzomcore \
 
 ```bash
 cd /tmp/embuild
-emmake make -j$(nproc) nl_sample_clip_plane nl_sample_nelvp nl_sample_planar_reflection nl_sample_ppl
+emmake make -j$(nproc) nl_sample_clip_plane nl_sample_nelvp nl_sample_planar_reflection nl_sample_ppl nl_sample_font
 ```
 
 ### Serve and test in browser
@@ -76,6 +76,8 @@ Then navigate Playwright to `http://localhost:8888/SAMPLE_NAME.html`.
 ### Notes
 
 - WebGL 2.0 `glMapBufferRange` only supports `GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT`
+- WebGL 2.0 does NOT support `glMapBufferRange` on `GL_PIXEL_UNPACK_BUFFER` (PBOs); partial texture uploads must use direct `glTexSubImage2D` with CPU pointers
+- WebGL 2.0 does NOT support `GL_TEXTURE_SWIZZLE_R/G/B/A/RGBA` despite being in the GLES 3.0 spec; Alpha/Luminance textures must be converted to RGBA on the CPU side before upload
 - UBOs must be pre-allocated to full declared size before first draw call
 - SSO (Separate Shader Objects) is not available in WebGL 2.0 / GLES 3.0
 - Builtin (non-mega) shaders are never used under GLES 3.0; only linked mega shaders
@@ -87,6 +89,11 @@ Then navigate Playwright to `http://localhost:8888/SAMPLE_NAME.html`.
 - Nelvp VP must always use `layout(location=i)` on vertex inputs (even in linked mode); GLSL ES 3.00 requires explicit locations to match vertex buffer attribute bindings
 - Nelvp VP in linked mode must declare ALL output varyings the mega PP expects (not just the ones written); WebGL 2.0 hard-fails the link if any fragment input has no matching vertex output
 - The nelvp sample renders correctly on WebGL 2.0; clip_plane, ppl, and planar_reflection all render correctly
+- The font sample renders correctly on WebGL 2.0 with FreeType (via Emscripten `-sUSE_FREETYPE=1` port)
+- `CNELU::initDriver` automatically uses `CDRU::createGlEs3Driver()` on Emscripten
+- Emscripten samples must use `emscripten_set_main_loop()` instead of a blocking `do/while` loop
+- Emscripten FreeType is enabled via the CMake imported target `Freetype::Freetype` with `INTERFACE_COMPILE_OPTIONS -sUSE_FREETYPE=1`; the Emscripten cache must not be frozen (`EM_FROZEN_CACHE=""`)
+- Font files must be embedded into the Emscripten build via `--embed-file` in LINK_FLAGS
 
 ## Desktop OpenGL 3.3 Build
 
@@ -115,5 +122,5 @@ cmake /path/to/ryzomcore \
   -DWITH_WEB=OFF \
   -DCMAKE_BUILD_TYPE=Release
 
-make -j$(nproc) nl_sample_clip_plane nl_sample_nelvp nl_sample_planar_reflection nl_sample_ppl
+make -j$(nproc) nl_sample_clip_plane nl_sample_nelvp nl_sample_planar_reflection nl_sample_ppl nl_sample_font
 ```
