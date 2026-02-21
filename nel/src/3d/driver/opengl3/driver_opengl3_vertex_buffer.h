@@ -67,7 +67,7 @@ protected:
 class CVertexBufferGL3 : public IVertexBufferGL3
 {
 public:
-	CVertexBufferGL3(CDriverGL3 *drv, uint size, uint numVertices, CVertexBuffer::TPreferredMemory preferred, CVertexBuffer *vb);
+	CVertexBufferGL3(CDriverGL3 *drv, uint size, uint numVertices, CVertexBuffer::TBufferUsage preferred, CVertexBuffer *vb);
 	virtual	~CVertexBufferGL3();
 
 	/// \name Implementation
@@ -89,10 +89,10 @@ public:
 private:
 	friend class CDriverGL3;
 
-	CVertexBuffer::TPreferredMemory m_MemType;
+	CVertexBuffer::TBufferUsage m_MemType;
 	void *m_VertexPtr; // pointer on current datas. Null if not locked
 
-	// Shadow buffer for RAMPreferred: CPU reads/writes go here, uploaded to GL at draw time
+	// Shadow buffer for CpuReadWrite: CPU reads/writes go here, uploaded to GL at draw time
 	std::vector<uint8> m_ShadowData;
 	bool m_ShadowDirty;
 
@@ -115,7 +115,7 @@ private:
 class CVertexBufferAMDPinned : public IVertexBufferGL3
 {
 public:
-	CVertexBufferAMDPinned(CDriverGL3 *drv, uint size, uint numVertices, CVertexBuffer::TPreferredMemory preferred, CVertexBuffer *vb);
+	CVertexBufferAMDPinned(CDriverGL3 *drv, uint size, uint numVertices, CVertexBuffer::TBufferUsage preferred, CVertexBuffer *vb);
 	virtual	~CVertexBufferAMDPinned();
 
 	/// \name Implementation
@@ -131,7 +131,7 @@ public:
 	// @}
 
 private:
-	CVertexBuffer::TPreferredMemory m_MemType;
+	CVertexBuffer::TBufferUsage m_MemType;
 	void *m_VertexPtrAllocated;
 	void *m_VertexPtrAligned;
 	void *m_VertexPtr;
@@ -152,7 +152,7 @@ public:
 	~CVolatileBufferGL3();
 
 	// Initialize
-	//  location: Either AGPVolatile or RAMVolatile
+	//  location: Either FullStream or SmallStream
 	void init(CVertexBuffer::TLocation location, GLsizei size, GLsizei maxSize, CDriverGL3 *driver);
 	void release();
 

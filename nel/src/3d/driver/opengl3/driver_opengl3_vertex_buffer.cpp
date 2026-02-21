@@ -52,19 +52,19 @@ IVertexBufferGL3::~IVertexBufferGL3()
 // ***************************************************************************
 // ***************************************************************************
 
-static inline GLsizei vbgl3BufferForType(CVertexBuffer::TPreferredMemory mem)
+static inline GLsizei vbgl3BufferForType(CVertexBuffer::TBufferUsage mem)
 {
 	switch (mem)
 	{
-	case CVertexBuffer::AGPVolatile:
-	case CVertexBuffer::RAMVolatile:
+	case CVertexBuffer::FullStream:
+	case CVertexBuffer::SmallStream:
 		return NL3D_GL3_BUFFER_QUEUE_MAX;
-	default: 
+	default:
 		return 1;
 	}
 }
 
-CVertexBufferGL3::CVertexBufferGL3(CDriverGL3 *drv, uint size, uint numVertices, CVertexBuffer::TPreferredMemory preferred, CVertexBuffer *vb)
+CVertexBufferGL3::CVertexBufferGL3(CDriverGL3 *drv, uint size, uint numVertices, CVertexBuffer::TBufferUsage preferred, CVertexBuffer *vb)
 	: IVertexBufferGL3(drv, vb, IVertexBufferGL3::GL3),
 	m_VertexPtr(NULL),
 	m_ShadowDirty(false),
@@ -78,8 +78,8 @@ CVertexBufferGL3::CVertexBufferGL3(CDriverGL3 *drv, uint size, uint numVertices,
 {
 	H_AUTO_OGL(CVertexBufferGLARB_CVertexBufferGLARB);
 
-	// Allocate shadow buffer for RAMPreferred (CPU reads/writes go here)
-	if (preferred == CVertexBuffer::RAMPreferred)
+	// Allocate shadow buffer for CpuReadWrite (CPU reads/writes go here)
+	if (preferred == CVertexBuffer::CpuReadWrite)
 		m_ShadowData.resize(size, 0);
 
 	for (GLsizei i = 0; i < NL3D_GL3_BUFFER_QUEUE_MAX; ++i)
@@ -223,8 +223,8 @@ void *CVertexBufferGL3::lock()
 	// Invalidate when updating volatile buffers, framerate from 24fps to 38fps in reference test on AMD platform
 	switch (m_MemType)
 	{
-	case CVertexBuffer::AGPVolatile:
-	case CVertexBuffer::RAMVolatile:
+	case CVertexBuffer::FullStream:
+	case CVertexBuffer::SmallStream:
 	{
 		if (m_CurrentInFlight)
 		{
@@ -419,7 +419,7 @@ void CVertexBufferGL3::invalidate()
 // ***************************************************************************
 // ***************************************************************************
 
-CVertexBufferAMDPinned::CVertexBufferAMDPinned(CDriverGL3 *drv, uint size, uint numVertices, CVertexBuffer::TPreferredMemory preferred, CVertexBuffer *vb) 
+CVertexBufferAMDPinned::CVertexBufferAMDPinned(CDriverGL3 *drv, uint size, uint numVertices, CVertexBuffer::TBufferUsage preferred, CVertexBuffer *vb) 
 	: IVertexBufferGL3(drv, vb, IVertexBufferGL3::AMDPinned),
 	m_MemType(preferred),
 	m_VertexPtr(NULL),
@@ -500,12 +500,12 @@ void *CVertexBufferAMDPinned::lock()
 	m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId);
 	switch (m_MemType)
 	{
-	case CVertexBuffer::AGPVolatile:
-	case CVertexBuffer::RAMVolatile:
+	case CVertexBuffer::FullStream:
+	case CVertexBuffer::SmallStream:
 		nlerror("Volatile currently not supported by pinned memory, this would require a re-allocating RAM, and thus require a fast allocation mechanism");
 		m_VertexPtr = NULL;
 		break;
-	case CVertexBuffer::RAMPreferred:
+	case CVertexBuffer::CpuReadWrite:
 		m_VertexPtr = nglMapBuffer(GL_ARRAY_BUFFER, GL_READ_WRITE);
 		break;
 	default:

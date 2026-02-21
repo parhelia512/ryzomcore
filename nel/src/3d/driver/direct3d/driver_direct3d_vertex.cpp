@@ -368,28 +368,29 @@ bool CDriverD3D::activeVertexBuffer(CVertexBuffer& VB)
 		}
 		else
 		{
-			switch (VB.getPreferredMemory ())
+			switch (VB.getBufferUsage ())
 			{
-			case CVertexBuffer::RAMPreferred:
+			case CVertexBuffer::CpuReadWrite:
 				preferredMemory = CVertexBuffer::RAMResident;
 				info->Volatile = false;
 				break;
-			case CVertexBuffer::AGPPreferred:
+			case CVertexBuffer::FullRewrite:
+			case CVertexBuffer::PartialWrite:
 				preferredMemory = CVertexBuffer::AGPResident;
 				info->Volatile = false;
 				break;
-			case CVertexBuffer::StaticPreferred:
+			case CVertexBuffer::Immutable:
 				if (getStaticMemoryToVRAM())
 					preferredMemory = CVertexBuffer::VRAMResident;
 				else
 					preferredMemory = CVertexBuffer::AGPResident;
 				info->Volatile = false;
 				break;
-			case CVertexBuffer::RAMVolatile:
+			case CVertexBuffer::SmallStream:
 				preferredMemory = CVertexBuffer::RAMResident;
 				info->Volatile = true;
 				break;
-			case CVertexBuffer::AGPVolatile:
+			case CVertexBuffer::FullStream:
 				preferredMemory = CVertexBuffer::AGPResident;
 				info->Volatile = true;
 				break;
@@ -446,8 +447,8 @@ bool CDriverD3D::activeVertexBuffer(CVertexBuffer& VB)
 	VB.fillBuffer ();
 
 	setVertexDecl (info->VertexDecl, info->VertexDeclAliasDiffuseToSpecular, info->VertexDeclNoDiffuse, info->Stride);
-	//setVertexBuffer (info->VertexBuffer, info->Offset, info->Stride, info->UseVertexColor, VB.getNumVertices(), VB.getPreferredMemory(), info->Usage, info->ColorOffset);
-	setVertexBuffer (info->VertexBuffer, info->Offset, info->Stride, info->UseVertexColor, VB.getNumVertices(), VB.getPreferredMemory(), info->Usage, info->ColorOffset);
+	//setVertexBuffer (info->VertexBuffer, info->Offset, info->Stride, info->UseVertexColor, VB.getNumVertices(), VB.getBufferUsage(), info->Usage, info->ColorOffset);
+	setVertexBuffer (info->VertexBuffer, info->Offset, info->Stride, info->UseVertexColor, VB.getNumVertices(), VB.getBufferUsage(), info->Usage, info->ColorOffset);
 
 
 	// Set UVRouting

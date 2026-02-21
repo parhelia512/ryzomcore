@@ -256,28 +256,29 @@ bool CDriverD3D::activeIndexBuffer(CIndexBuffer& IB)
 		}
 		else
 		{
-			switch (IB.getPreferredMemory ())
+			switch (IB.getBufferUsage ())
 			{
-			case CIndexBuffer::RAMPreferred:
+			case CIndexBuffer::CpuReadWrite:
 				preferredMemory = CIndexBuffer::RAMResident;
 				info->Volatile = false;
 				break;
-			case CIndexBuffer::AGPPreferred:
+			case CIndexBuffer::FullRewrite:
+			case CIndexBuffer::PartialWrite:
 				preferredMemory = CIndexBuffer::AGPResident;
 				info->Volatile = false;
 				break;
-			case CIndexBuffer::StaticPreferred:
+			case CIndexBuffer::Immutable:
 				if (getStaticMemoryToVRAM())
 					preferredMemory = CIndexBuffer::VRAMResident;
 				else
 					preferredMemory = CIndexBuffer::AGPResident;
 				info->Volatile = false;
 				break;
-			case CIndexBuffer::RAMVolatile:
+			case CIndexBuffer::SmallStream:
 				preferredMemory = CIndexBuffer::RAMResident;
 				info->Volatile = true;
 				break;
-			case CIndexBuffer::AGPVolatile:
+			case CIndexBuffer::FullStream:
 				preferredMemory = CIndexBuffer::AGPResident;
 				info->Volatile = true;
 				break;

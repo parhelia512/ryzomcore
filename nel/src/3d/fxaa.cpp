@@ -308,7 +308,7 @@ CFXAA::CFXAA(NL3D::UDriver *driver) : m_Driver(driver), m_VP(NULL), m_PP(NULL), 
 		vb.addValueEx(CVertexBuffer::TexCoord0, CVertexBuffer::Float2);
 		vb.addValueEx(CVertexBuffer::TexCoord1, CVertexBuffer::Float4);
 		vb.initEx();
-		vb.setPreferredMemory(CVertexBuffer::RAMVolatile, false);
+		vb.setBufferUsage(CVertexBuffer::SmallStream, false);
 		vb.setNumVertices(4);*/
 	}
 }

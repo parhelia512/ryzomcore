@@ -346,7 +346,7 @@ void				CVegetableVBAllocator::allocateVertexBufferAndFillVBHard(uint32 numVerti
 			if(numVertices <= _MaxVertexInBufferHard)
 			{
 				_VBHard = _VBSoft;
-				_VBHard.setPreferredMemory(CVertexBuffer::AGPPreferred, false);
+				_VBHard.setBufferUsage(CVertexBuffer::PartialWrite, false);
 				_VBHard.setNumVertices (_MaxVertexInBufferHard);
 
 				// Force this VB to be hard

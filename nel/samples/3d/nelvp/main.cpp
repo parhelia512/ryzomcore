@@ -258,11 +258,11 @@ static void buildSphere(CVertexBuffer &vb, CIndexBuffer &ib,
 	uint numTris = stacks * slices * 2;
 
 	vb.setVertexFormat(CVertexBuffer::PositionFlag | CVertexBuffer::NormalFlag);
-	vb.setPreferredMemory(CVertexBuffer::StaticPreferred, false);
+	vb.setBufferUsage(CVertexBuffer::Immutable, false);
 	vb.setNumVertices(numVerts);
 
 	ib.setFormat(NL_DEFAULT_INDEX_BUFFER_FORMAT);
-	ib.setPreferredMemory(CIndexBuffer::StaticPreferred, false);
+	ib.setBufferUsage(CIndexBuffer::Immutable, false);
 	ib.setNumIndexes(numTris * 3);
 
 	{

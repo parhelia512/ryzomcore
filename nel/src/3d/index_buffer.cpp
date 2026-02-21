@@ -54,7 +54,7 @@ CIndexBuffer::CIndexBuffer()
 	_InternalFlags = 0;
 	_LockCounter = 0;
 	_LockedBuffer = NULL;
-	_PreferredMemory = RAMPreferred;
+	_BufferUsage = CpuReadWrite;
 	_Location = NotResident;
 	_ResidentSize = 0;
 	_KeepLocalMemory = false;
@@ -73,7 +73,7 @@ CIndexBuffer::CIndexBuffer(const CIndexBuffer &vb) : CRefCount()
 	_NbIndexes = 0;
 	_LockCounter = 0;
 	_LockedBuffer = NULL;
-	_PreferredMemory = RAMPreferred;
+	_BufferUsage = CpuReadWrite;
 	_Location = NotResident;
 	_ResidentSize = 0;
 	_KeepLocalMemory = false;
@@ -92,7 +92,7 @@ CIndexBuffer::CIndexBuffer(const char *name)
 	_InternalFlags = 0;
 	_LockCounter = 0;
 	_LockedBuffer = NULL;
-	_PreferredMemory = RAMPreferred;
+	_BufferUsage = CpuReadWrite;
 	_Location = NotResident;
 	_ResidentSize = 0;
 	_KeepLocalMemory = false;
@@ -126,7 +126,7 @@ CIndexBuffer	&CIndexBuffer::operator=(const CIndexBuffer &vb)
 	_NbIndexes = vb._NbIndexes;
 	_Capacity = vb._Capacity;
 	_NonResidentIndexes = vb._NonResidentIndexes;
-	_PreferredMemory = vb._PreferredMemory;
+	_BufferUsage = vb._BufferUsage;
 	_KeepLocalMemory = vb._KeepLocalMemory;
 	_Format = vb._Format;
 
@@ -140,11 +140,11 @@ CIndexBuffer	&CIndexBuffer::operator=(const CIndexBuffer &vb)
 
 // ***************************************************************************
 
-void CIndexBuffer::setPreferredMemory (TPreferredMemory preferredMemory, bool keepLocalMemory)
+void CIndexBuffer::setBufferUsage (TBufferUsage usage, bool keepLocalMemory)
 {
-	if ((_PreferredMemory != preferredMemory) || (_KeepLocalMemory != keepLocalMemory))
+	if ((_BufferUsage != usage) || (_KeepLocalMemory != keepLocalMemory))
 	{
-		_PreferredMemory = preferredMemory;
+		_BufferUsage = usage;
 		_KeepLocalMemory = keepLocalMemory;
 
 		// Force non resident
@@ -228,7 +228,7 @@ void CIndexBuffer::setLocation (TLocation newLocation)
 		nlassert (DrvInfos);
 
 		// Current size of the buffer
-		const uint size = ((_PreferredMemory==RAMVolatile)||(_PreferredMemory==AGPVolatile))?_NbIndexes:_Capacity;
+		const uint size = ((_BufferUsage==SmallStream)||(_BufferUsage==FullStream))?_NbIndexes:_Capacity;
 
 		// The buffer must not be resident
 		if (_Location != NotResident)
@@ -242,7 +242,7 @@ void CIndexBuffer::setLocation (TLocation newLocation)
 		DrvInfos->unlock(0, 0);
 
 		// Reset the non resident container if not a static preferred memory and not put in RAM
-		if ((_PreferredMemory != StaticPreferred) && (_Location != RAMResident) && !_KeepLocalMemory)
+		if ((_BufferUsage != Immutable) && (_Location != RAMResident) && !_KeepLocalMemory)
 			contReset(_NonResidentIndexes);
 
 		// Clear touched flags
@@ -257,7 +257,7 @@ void CIndexBuffer::setLocation (TLocation newLocation)
 		_NonResidentIndexes.resize (_Capacity * getIndexNumBytes());
 
 		// If resident in RAM, backup the data in non resident memory
-		if ((_Location == RAMResident) && (_PreferredMemory != RAMVolatile) && (_PreferredMemory != AGPVolatile) && !_KeepLocalMemory)
+		if ((_Location == RAMResident) && (_BufferUsage != SmallStream) && (_BufferUsage != FullStream) && !_KeepLocalMemory)
 		{
 			// The driver must have setuped the driver info
 			nlassert (DrvInfos);
@@ -342,12 +342,13 @@ void CIndexBuffer::serial(NLMISC::IStream &f)
 	 *	It can be loaded/called through CAsyncFileManager for instance
 	 * ***********************************************/
 
-	/** Version 2 : no more write only flags
+	/** Version 3 : TBufferUsage replaces TPreferredMemory
+	  * Version 2 : no more write only flags
 	  * Version 1 : index buffer
 	  * Version 0 : primitive block
 	  */
 
-	sint ver = f.serialVersion(2);
+	sint ver = f.serialVersion(3);
 
 	// Primitive block?
 	if (ver < 1)
@@ -392,7 +393,37 @@ void CIndexBuffer::serial(NLMISC::IStream &f)
 		}
 		f.serial(_NbIndexes, _Capacity);
 		f.serialCont(nonResidentIndexes);
-		f.serialEnum(_PreferredMemory);
+
+		if (ver >= 3)
+		{
+			// New TBufferUsage enum
+			f.serialEnum(_BufferUsage);
+		}
+		else
+		{
+			// Version 1-2: old TPreferredMemory enum
+			if (f.isReading())
+			{
+				sint32 oldPref;
+				f.serial(oldPref);
+				// Remap old enum values to new TBufferUsage
+				switch (oldPref)
+				{
+				case 0: _BufferUsage = CpuReadWrite; break;  // RAMPreferred
+				case 1: _BufferUsage = FullRewrite; break;    // AGPPreferred
+				case 2: _BufferUsage = Immutable; break;      // StaticPreferred
+				case 3: _BufferUsage = SmallStream; break;    // RAMVolatile
+				case 4: _BufferUsage = FullStream; break;     // AGPVolatile
+				default: _BufferUsage = CpuReadWrite; break;
+				}
+			}
+			else
+			{
+				// Should not write old format
+				nlstop;
+			}
+		}
+
 		if (f.isReading())
 		{
 			restoreFromSerialVector(nonResidentIndexes);
@@ -402,7 +433,7 @@ void CIndexBuffer::serial(NLMISC::IStream &f)
 		{
 			uint i;
 			bool temp;
-			for (i=0; i<PreferredCount; i++)
+			for (i=0; i<5; i++) // Old PreferredCount was 5
 				f.serial(temp);
 		}
 	}
