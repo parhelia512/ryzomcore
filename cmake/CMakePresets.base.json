@@ -10,6 +10,15 @@
       "binaryDir": "${sourceDir}/build"
     },
     {
+      "name": "hunter",
+      "hidden": true,
+      "cacheVariables": {
+        "HUNTER_ENABLED": true,
+        "HUNTER_ROOT": "${sourceDir}/build/.hunter",
+        "HUNTER_CONFIGURATION_TYPES": "Release"
+      }
+    },
+    {
       "inherits": "base",
       "name": "default",
       "cacheVariables": {
@@ -59,34 +68,6 @@
         "WITH_RYZOM_CLIENT": true,
         "WITH_RYZOM_SERVER": false,
         "WITH_RYZOM_TOOLS": false
-      }
-    },
-    {
-      "inherits": [
-        "linux",
-        "client"
-      ],
-      "name": "linux-client"
-    },
-    {
-      "inherits": [
-        "windows",
-        "client"
-      ],
-      "name": "windows-client",
-      "cacheVariables": {
-        "WITH_DRIVER_DIRECT3D": true,
-        "WITH_DRIVER_XAUDIO2": true
-      }
-    },
-    {
-      "inherits": [
-        "macos",
-        "client"
-      ],
-      "name": "macos-client",
-      "cacheVariables": {
-        "WITH_LIBXML2_ICONV": false
       }
     }
   ],
