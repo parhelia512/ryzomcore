@@ -922,7 +922,7 @@ public:
 #endif
 
 private:
-	virtual class IVertexBufferGL3	*createVertexBufferGL(uint size, uint numVertices, CVertexBuffer::TPreferredMemory preferred, CVertexBuffer *vb);
+	virtual class IVertexBufferGL3	*createVertexBufferGL(uint size, uint numVertices, CVertexBuffer::TBufferUsage preferred, CVertexBuffer *vb);
 	friend class					CTextureDrvInfosGL3;
 	friend class					CMaterialDrvInfosGL3;
 	friend class					CVertexProgamDrvInfosGL3;
@@ -1434,7 +1434,7 @@ private:
 
 	// The VertexBufferHardGL activated.
 	IVertexBufferGL3					*_CurrentVertexBufferGL;
-	GLenum							vertexBufferUsageGL3(CVertexBuffer::TPreferredMemory usage);
+	GLenum							vertexBufferUsageGL3(CVertexBuffer::TBufferUsage usage);
 
 	// Handle lost buffers
 	void							updateLostBuffers();

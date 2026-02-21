@@ -264,7 +264,7 @@ CLandscape::CLandscape() :
 		CLandscapeGlobals::PassTriArray.setNumIndexes( 1000 );
 
 	// set volatile index buffer to avoid stalls
-	CLandscapeGlobals::PassTriArray.setPreferredMemory(CIndexBuffer::RAMVolatile, false);
+	CLandscapeGlobals::PassTriArray.setBufferUsage(CIndexBuffer::SmallStream, false);
 
 	_LockCount = 0;
 
