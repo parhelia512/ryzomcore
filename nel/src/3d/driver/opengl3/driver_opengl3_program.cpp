@@ -25,9 +25,6 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
-// nelvp UBO layout: 96 constant registers
-static const int NELVP_UBO_VEC4_COUNT = 96;
-
 // Insert builtin UBO headers after leading preprocessor and precision lines
 static std::string insertBuiltinHeaders(const char *source, bool lightTable, bool camera, bool object, bool material,
 	const std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> > &userUBOs)
@@ -427,14 +424,16 @@ bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 			(IProgramDrvInfos *)program->m_DrvInfo);
 		if (drvInfo && drvInfo->isNelvpConverted)
 		{
-			// Create the UBO for constant registers
+			// Create the UBO for constant registers, sized by NelvpRegisterCount
+			uint16 regCount = program->features().NelvpRegisterCount;
+			nlassert(regCount > 0);
 			drvInfo->NelvpConstantUB = new CUniformBuffer();
 			drvInfo->NelvpConstantUB->Format.Name = "NlNelvpConstants";
-			drvInfo->NelvpConstantUB->Format.push("c", CUniformBufferFormat::FloatVec4, NELVP_UBO_VEC4_COUNT);
+			drvInfo->NelvpConstantUB->Format.push("c", CUniformBufferFormat::FloatVec4, regCount);
 			drvInfo->NelvpConstantUB->UsageHint = CUniformBuffer::StreamDraw;
 			// Initialize UBO host memory by locking/unlocking
 			void *p = drvInfo->NelvpConstantUB->lock();
-			memset(p, 0, NELVP_UBO_VEC4_COUNT * 16);
+			memset(p, 0, regCount * 16);
 			drvInfo->NelvpConstantUB->unlock();
 		}
 	}
@@ -1061,6 +1060,9 @@ void CDriverGL3::generateShaderDesc(CShaderDesc &desc, CMaterial &mat)
 
 bool CDriverGL3::setupBuiltinPrograms()
 {
+	// Bind and flush the nelvp constant UBO if the active VP is a converted nelvp program.
+	flushNelvpUserVP();
+
 	// Effective programs: user > material > NULL
 	CVertexProgram *effectiveVP = m_UserVertexProgram ? m_UserVertexProgram : m_MaterialVertexProgram;
 	CPixelProgram *effectivePP = m_UserPixelProgram ? m_UserPixelProgram : m_MaterialPixelProgram;

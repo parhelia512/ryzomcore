@@ -33,9 +33,8 @@
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
-// Number of nelvp constant registers
+// Maximum number of nelvp constant registers (ARB_vertex_program spec)
 static const int NELVP_NUM_CONSTANTS = 96;
-static const int NELVP_UBO_VEC4_COUNT = NELVP_NUM_CONSTANTS;
 
 // Output register enum values from CVPOperand::EOutputRegister
 // mapped to their hardware slot indices
@@ -146,7 +145,7 @@ static int writeMaskCount(uint mask)
 // Write a source operand reference.
 // numComponents controls how many swizzle components are emitted (must match
 // the destination write mask width for component-wise ops).  Default 4 = full vec4.
-static void writeSrcOperand(std::stringstream &ss, const CVPOperand &op, int numComponents = 4)
+static void writeSrcOperand(std::stringstream &ss, const CVPOperand &op, int registerCount, int numComponents = 4)
 {
 	if (op.Negate)
 		ss << "(-";
@@ -158,7 +157,7 @@ static void writeSrcOperand(std::stringstream &ss, const CVPOperand &op, int num
 		break;
 	case CVPOperand::Constant:
 		if (op.Indexed)
-			ss << "c[clamp(A0x + (" << op.Value.ConstantValue << "), 0, " << (NELVP_UBO_VEC4_COUNT - 1) << ")]";
+			ss << "c[clamp(A0x + (" << op.Value.ConstantValue << "), 0, " << (registerCount - 1) << ")]";
 		else
 			ss << "c[" << op.Value.ConstantValue << "]";
 		break;
@@ -194,7 +193,7 @@ static void writeSrcOperand(std::stringstream &ss, const CVPOperand &op, int num
 }
 
 // Write a scalar source operand (for RCP, RSQ, EXP, LOG, ARL)
-static void writeScalarSrcOperand(std::stringstream &ss, const CVPOperand &op)
+static void writeScalarSrcOperand(std::stringstream &ss, const CVPOperand &op, int registerCount)
 {
 	if (op.Negate)
 		ss << "(-";
@@ -206,7 +205,7 @@ static void writeScalarSrcOperand(std::stringstream &ss, const CVPOperand &op)
 		break;
 	case CVPOperand::Constant:
 		if (op.Indexed)
-			ss << "c[clamp(A0x + (" << op.Value.ConstantValue << "), 0, " << (NELVP_UBO_VEC4_COUNT - 1) << ")]";
+			ss << "c[clamp(A0x + (" << op.Value.ConstantValue << "), 0, " << (registerCount - 1) << ")]";
 		else
 			ss << "c[" << op.Value.ConstantValue << "]";
 		break;
@@ -330,6 +329,7 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 	bool tempUsed[12];
 	bool addressUsed = false;
 	bool indexedConstantUsed = false;
+	int highestConstant = -1; // Highest constant register referenced (direct or indexed upper bound)
 	memset(inputUsed, 0, sizeof(inputUsed));
 	memset(outputUsed, 0, sizeof(outputUsed));
 	memset(tempUsed, 0, sizeof(tempUsed));
@@ -355,10 +355,32 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 				inputUsed[src.Value.InputRegisterValue] = true;
 			else if (src.Type == CVPOperand::Variable)
 				tempUsed[src.Value.VariableValue] = true;
-			else if (src.Type == CVPOperand::Constant && src.Indexed)
-				indexedConstantUsed = true;
+			else if (src.Type == CVPOperand::Constant)
+			{
+				if (src.Indexed)
+				{
+					// Indexed access: c[A0.x + offset]. The upper bound is NELVP_NUM_CONSTANTS - 1
+					// since A0.x can range up to (NELVP_NUM_CONSTANTS - 1 - offset).
+					indexedConstantUsed = true;
+					highestConstant = NELVP_NUM_CONSTANTS - 1;
+				}
+				else
+				{
+					if (src.Value.ConstantValue > highestConstant)
+						highestConstant = src.Value.ConstantValue;
+				}
+			}
 		}
 	}
+
+	// Register count: use explicit count from nelvp source if set, otherwise auto-detect.
+	// Rounded up to multiple of 4 for std140 alignment, minimum 4 to avoid zero-size UBO.
+	int registerCount;
+	if (nelvpSrc->Features.NelvpRegisterCount > 0)
+		registerCount = nelvpSrc->Features.NelvpRegisterCount;
+	else
+		registerCount = std::max(highestConstant + 1, 4);
+	registerCount = (registerCount + 3) & ~3;
 
 	// Build GLSL
 	std::stringstream ss;
@@ -437,7 +459,7 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 				int mc = writeMaskCount(instr.Dest.WriteMask);
 				writeDestOperand(ss, instr.Dest);
 				ss << " = ";
-				writeSrcOperand(ss, instr.Src1, mc);
+				writeSrcOperand(ss, instr.Src1, registerCount, mc);
 				ss << ";\n";
 			}
 			break;
@@ -445,7 +467,7 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 		case CVPInstruction::ARL:
 			{
 				ss << "A0x = int(floor(";
-				writeScalarSrcOperand(ss, instr.Src1);
+				writeScalarSrcOperand(ss, instr.Src1, registerCount);
 				ss << "));\n";
 			}
 			break;
@@ -455,9 +477,9 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 				int mc = writeMaskCount(instr.Dest.WriteMask);
 				writeDestOperand(ss, instr.Dest);
 				ss << " = ";
-				writeSrcOperand(ss, instr.Src1, mc);
+				writeSrcOperand(ss, instr.Src1, registerCount, mc);
 				ss << " + ";
-				writeSrcOperand(ss, instr.Src2, mc);
+				writeSrcOperand(ss, instr.Src2, registerCount, mc);
 				ss << ";\n";
 			}
 			break;
@@ -467,9 +489,9 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 				int mc = writeMaskCount(instr.Dest.WriteMask);
 				writeDestOperand(ss, instr.Dest);
 				ss << " = ";
-				writeSrcOperand(ss, instr.Src1, mc);
+				writeSrcOperand(ss, instr.Src1, registerCount, mc);
 				ss << " * ";
-				writeSrcOperand(ss, instr.Src2, mc);
+				writeSrcOperand(ss, instr.Src2, registerCount, mc);
 				ss << ";\n";
 			}
 			break;
@@ -479,11 +501,11 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 				int mc = writeMaskCount(instr.Dest.WriteMask);
 				writeDestOperand(ss, instr.Dest);
 				ss << " = ";
-				writeSrcOperand(ss, instr.Src1, mc);
+				writeSrcOperand(ss, instr.Src1, registerCount, mc);
 				ss << " * ";
-				writeSrcOperand(ss, instr.Src2, mc);
+				writeSrcOperand(ss, instr.Src2, registerCount, mc);
 				ss << " + ";
-				writeSrcOperand(ss, instr.Src3, mc);
+				writeSrcOperand(ss, instr.Src3, registerCount, mc);
 				ss << ";\n";
 			}
 			break;
@@ -492,9 +514,9 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 			{
 				std::stringstream expr;
 				expr << "dot(";
-				writeSrcOperand(expr, instr.Src1);
+				writeSrcOperand(expr, instr.Src1, registerCount);
 				expr << ".xyz, ";
-				writeSrcOperand(expr, instr.Src2);
+				writeSrcOperand(expr, instr.Src2, registerCount);
 				expr << ".xyz)";
 				writeBroadcastAssign(ss, instr.Dest, expr.str());
 			}
@@ -504,9 +526,9 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 			{
 				std::stringstream expr;
 				expr << "dot(";
-				writeSrcOperand(expr, instr.Src1);
+				writeSrcOperand(expr, instr.Src1, registerCount);
 				expr << ", ";
-				writeSrcOperand(expr, instr.Src2);
+				writeSrcOperand(expr, instr.Src2, registerCount);
 				expr << ")";
 				writeBroadcastAssign(ss, instr.Dest, expr.str());
 			}
@@ -516,13 +538,13 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 			{
 				// dest = (1.0, src1.y*src2.y, src1.z, src2.w)
 				ss << "{ vec4 _dst = vec4(1.0, ";
-				writeSrcOperand(ss, instr.Src1);
+				writeSrcOperand(ss, instr.Src1, registerCount);
 				ss << ".y * ";
-				writeSrcOperand(ss, instr.Src2);
+				writeSrcOperand(ss, instr.Src2, registerCount);
 				ss << ".y, ";
-				writeSrcOperand(ss, instr.Src1);
+				writeSrcOperand(ss, instr.Src1, registerCount);
 				ss << ".z, ";
-				writeSrcOperand(ss, instr.Src2);
+				writeSrcOperand(ss, instr.Src2, registerCount);
 				ss << ".w);\n";
 				writeDestOperand(ss, instr.Dest);
 				ss << " = _dst";
@@ -536,7 +558,7 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 				// LIT: dest = (1.0, max(src.x, 0.0), (src.x > 0.0) ? pow(max(src.y, 0.0), clamp(src.w, -128, 128)) : 0.0, 1.0)
 				// Use a temp to avoid evaluating the source multiple times
 				ss << "{ vec4 _lit_src = ";
-				writeSrcOperand(ss, instr.Src1);
+				writeSrcOperand(ss, instr.Src1, registerCount);
 				ss << ";\n";
 				ss << "vec4 _lit = vec4(1.0, max(_lit_src.x, 0.0), "
 				   << "(_lit_src.x > 0.0) ? exp2(clamp(_lit_src.w, -128.0, 128.0) * log2(max(_lit_src.y, 1e-30))) : 0.0, "
@@ -553,9 +575,9 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 				int mc = writeMaskCount(instr.Dest.WriteMask);
 				writeDestOperand(ss, instr.Dest);
 				ss << " = min(";
-				writeSrcOperand(ss, instr.Src1, mc);
+				writeSrcOperand(ss, instr.Src1, registerCount, mc);
 				ss << ", ";
-				writeSrcOperand(ss, instr.Src2, mc);
+				writeSrcOperand(ss, instr.Src2, registerCount, mc);
 				ss << ");\n";
 			}
 			break;
@@ -565,9 +587,9 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 				int mc = writeMaskCount(instr.Dest.WriteMask);
 				writeDestOperand(ss, instr.Dest);
 				ss << " = max(";
-				writeSrcOperand(ss, instr.Src1, mc);
+				writeSrcOperand(ss, instr.Src1, registerCount, mc);
 				ss << ", ";
-				writeSrcOperand(ss, instr.Src2, mc);
+				writeSrcOperand(ss, instr.Src2, registerCount, mc);
 				ss << ");\n";
 			}
 			break;
@@ -579,18 +601,18 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 				if (mc == 1)
 				{
 					ss << " = (";
-					writeSrcOperand(ss, instr.Src1, 1);
+					writeSrcOperand(ss, instr.Src1, registerCount, 1);
 					ss << " < ";
-					writeSrcOperand(ss, instr.Src2, 1);
+					writeSrcOperand(ss, instr.Src2, registerCount, 1);
 					ss << ") ? 1.0 : 0.0;\n";
 				}
 				else
 				{
 					static const char *vecCast[] = { NULL, NULL, "vec2", "vec3", "vec4" };
 					ss << " = " << vecCast[mc] << "(lessThan(";
-					writeSrcOperand(ss, instr.Src1, mc);
+					writeSrcOperand(ss, instr.Src1, registerCount, mc);
 					ss << ", ";
-					writeSrcOperand(ss, instr.Src2, mc);
+					writeSrcOperand(ss, instr.Src2, registerCount, mc);
 					ss << "));\n";
 				}
 			}
@@ -603,18 +625,18 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 				if (mc == 1)
 				{
 					ss << " = (";
-					writeSrcOperand(ss, instr.Src1, 1);
+					writeSrcOperand(ss, instr.Src1, registerCount, 1);
 					ss << " >= ";
-					writeSrcOperand(ss, instr.Src2, 1);
+					writeSrcOperand(ss, instr.Src2, registerCount, 1);
 					ss << ") ? 1.0 : 0.0;\n";
 				}
 				else
 				{
 					static const char *vecCast[] = { NULL, NULL, "vec2", "vec3", "vec4" };
 					ss << " = " << vecCast[mc] << "(greaterThanEqual(";
-					writeSrcOperand(ss, instr.Src1, mc);
+					writeSrcOperand(ss, instr.Src1, registerCount, mc);
 					ss << ", ";
-					writeSrcOperand(ss, instr.Src2, mc);
+					writeSrcOperand(ss, instr.Src2, registerCount, mc);
 					ss << "));\n";
 				}
 			}
@@ -624,7 +646,7 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 			{
 				std::stringstream expr;
 				expr << "(1.0 / ";
-				writeScalarSrcOperand(expr, instr.Src1);
+				writeScalarSrcOperand(expr, instr.Src1, registerCount);
 				expr << ")";
 				writeBroadcastAssign(ss, instr.Dest, expr.str());
 			}
@@ -634,7 +656,7 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 			{
 				std::stringstream expr;
 				expr << "inversesqrt(abs(";
-				writeScalarSrcOperand(expr, instr.Src1);
+				writeScalarSrcOperand(expr, instr.Src1, registerCount);
 				expr << "))";
 				writeBroadcastAssign(ss, instr.Dest, expr.str());
 			}
@@ -644,7 +666,7 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 			{
 				// EXP dest, src: dest = (2^floor(src), fract(src), 2^src, 1.0)
 				ss << "{ float _exp_s = ";
-				writeScalarSrcOperand(ss, instr.Src1);
+				writeScalarSrcOperand(ss, instr.Src1, registerCount);
 				ss << ";\n";
 				ss << "vec4 _exp = vec4(exp2(floor(_exp_s)), fract(_exp_s), exp2(_exp_s), 1.0);\n";
 				writeDestOperand(ss, instr.Dest);
@@ -658,7 +680,7 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 			{
 				// LOG dest, src: dest = (floor(log2(|src|)), |src|/2^floor(log2(|src|)), log2(|src|), 1.0)
 				ss << "{ float _log_a = abs(";
-				writeScalarSrcOperand(ss, instr.Src1);
+				writeScalarSrcOperand(ss, instr.Src1, registerCount);
 				ss << ");\n";
 				ss << "float _log_f = log2(max(_log_a, 1e-30));\n";
 				ss << "vec4 _log = vec4(floor(_log_f), _log_a * exp2(-floor(_log_f)), _log_f, 1.0);\n";
@@ -686,7 +708,7 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 	// Create UBO format for constant registers
 	NLMISC::CSmartPtr<CUniformBufferFormat> ubf = new CUniformBufferFormat();
 	ubf->Name = "NlNelvpConstants";
-	ubf->push("c", CUniformBufferFormat::FloatVec4, NELVP_UBO_VEC4_COUNT);
+	ubf->push("c", CUniformBufferFormat::FloatVec4, registerCount);
 
 	// Create new CSource entry
 	IProgram::CSource *newSrc = new IProgram::CSource();
@@ -698,6 +720,7 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 	newSrc->Features.OnlyUBOs = true;
 	newSrc->Features.UsesCameraUBO = true; // ecPos epilogue reads inverseProjectionBasis from camera UBO
 	newSrc->Features.OutputsSpecularColor = outputUsed[CVPOperand::OSecondaryColor];
+	newSrc->Features.NelvpRegisterCount = (uint16)registerCount;
 	newSrc->Features.OutputsWorldSpacePosition = false; // ecPos is NeL-space, not world-space
 
 	// Compute VPVertexFormat from used inputs
