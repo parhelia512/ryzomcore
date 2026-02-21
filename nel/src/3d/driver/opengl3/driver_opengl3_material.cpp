@@ -415,13 +415,14 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 	// Must setup textures each frame, even when the same CMaterial applied. (need to test if touched).
 	// Must separate texture setup and texture activation in 2 "for"...
 	// because setupTexture() may disable all stage.
+	bool textureFailed = false;
 	if (matShader != CMaterial::Water && matShader != CMaterial::Program)
 	{
 		for (uint stage = 0; stage < IDRV_MAT_MAXTEXTURES; ++stage)
 		{
 			ITexture *text = mat.getTexture(uint8(stage));
 			if (text != NULL && !setupTexture(*text))
-				return false;
+				textureFailed = true;
 		}
 	}
 	// Here, for Lightmap materials, setup the lightmaps.
@@ -431,7 +432,7 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 		{
 			ITexture *text = mat._LightMaps[stage].Texture;
 			if (text != NULL && !setupTexture(*text))
-				return false;
+				textureFailed = true;
 		}
 	}
 
@@ -564,7 +565,9 @@ bool CDriverGL3::setupMaterial(CMaterial &mat)
 	}
 
 	// Programs are set up per-pass in setupPass() after per-pass staging is complete.
-	return !isSinglePass(matShader) || setupBuiltinPrograms();
+	if (!isSinglePass(matShader) || setupBuiltinPrograms())
+		return !textureFailed;
+	return false;
 }
 
 // ***************************************************************************

@@ -100,8 +100,13 @@ public:
 	inline void set(sint offset, NLMISC::CVectorH vec4) { NL3D_UNIFORM_BUFFER_ASSERT_LOCKED(this); reinterpret_cast<NLMISC::CVectorH &>(m_HostMemory[offset]) = vec4; }
 	inline void set(sint offset, NLMISC::CMatrix mat4)  { NL3D_UNIFORM_BUFFER_ASSERT_LOCKED(this); float *f = reinterpret_cast<float *>(&m_HostMemory[offset]); mat4.get(f); }
 
+	inline void setSInt(sint offset, sint32 v) { NL3D_UNIFORM_BUFFER_ASSERT_LOCKED(this); reinterpret_cast<sint32 &>(m_HostMemory[offset]) = v; }
+	inline void setUInt(sint offset, uint32 v) { NL3D_UNIFORM_BUFFER_ASSERT_LOCKED(this); reinterpret_cast<uint32 &>(m_HostMemory[offset]) = v; }
+
 	inline float getFloat(sint offset) const { return reinterpret_cast<const float &>(m_HostMemory[offset]); }
 	inline const float *getFloat4(sint offset) const { return reinterpret_cast<const float *>(&m_HostMemory[offset]); }
+	inline sint32 getSInt(sint offset) const { return reinterpret_cast<const sint32 &>(m_HostMemory[offset]); }
+	inline uint32 getUInt(sint offset) const { return reinterpret_cast<const uint32 &>(m_HostMemory[offset]); }
 
 private:
 	std::vector<char> m_HostMemory;

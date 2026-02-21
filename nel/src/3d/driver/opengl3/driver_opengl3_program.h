@@ -129,6 +129,7 @@ static const int VaryingLocationVertexColor = Weight; // = 1, vertex color for P
 static const int VaryingLocationNormal = Normal; // = 2, world-space normal (when WorldSpaceNormal is set)
 static const int VaryingLocationDiffuseColor = PrimaryColor; // = 3, PrimaryColor is always skipped
 static const int VaryingLocationSpecularColor = SecondaryColor; // = 4, SecondaryColor is always skipped
+static const int VaryingLocationWorldPos = Fog; // = 5, world-space position for PPL (Fog VB slot is never a VP→PP varying)
 static const int VaryingLocationTangent = Tangent; // = 7, world-space tangent (vec4: xyz = tangent, w = bitangent sign)
 
 extern const uint16 g_VertexFlags[CVertexBuffer::NumValue];
