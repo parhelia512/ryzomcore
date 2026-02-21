@@ -677,10 +677,11 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 		}
 	}
 
-	// Epilogue: synthesize ecPos from gl_Position via inverse projection stored in c[96..99].
+	// Epilogue: synthesize ecPos from gl_Position via inv(P * ChangeBasis) stored in c[96..99].
 	// Using gl_Position ensures ecPos reflects any VP modifications (geomorphing, wind, etc.).
-	// inv(P) * gl_Position = ChangeBasis * ModelView * adjustedPos = GL eye-space position.
-	ss << "\n// Synthesize eye-space position for fog\n";
+	// inv(P * CB) * gl_Position = ModelView * adjustedPos = NeL-space position.
+	// Must be NeL space (not GL eye space) because builtin PP fog uses ecPos.y as forward depth.
+	ss << "\n// Synthesize NeL-space position for fog\n";
 	ss << "ecPos = mat4(c[" << NELVP_INV_PROJ_BASE << "], c[" << (NELVP_INV_PROJ_BASE + 1)
 	   << "], c[" << (NELVP_INV_PROJ_BASE + 2) << "], c[" << (NELVP_INV_PROJ_BASE + 3) << "]) * gl_Position;\n";
 

@@ -659,10 +659,11 @@ void CDriverGL3::flushNelvpUserVP()
 
 	CUniformBuffer *ub = di->NelvpConstantUB;
 
-	// Store inverse projection matrix for ecPos synthesis epilogue.
-	// ecPos = inv(P) * gl_Position = ChangeBasis * MV * adjustedPos (GL eye space).
-	// Using gl_Position ensures ecPos reflects any VP modifications (geomorphing, wind, etc.).
-	CMatrix invProj = _GLProjMat;
+	// Store inverse(Projection * ChangeBasis) for ecPos synthesis epilogue.
+	// nelvp MVP = _GLProjMat * _ChangeBasis * _ModelViewMatrix, so:
+	// ecPos = inv(P * CB) * gl_Position = MV * adjustedPos (NeL space).
+	// The builtin PP fog uses ecPos.y (NeL forward axis) for depth — must be NeL space, not GL eye space.
+	CMatrix invProj = _GLProjMat * _ChangeBasis;
 	invProj.invert();
 	ub->lock();
 	ub->set(NELVP_INV_PROJ_BASE * 16, invProj);
