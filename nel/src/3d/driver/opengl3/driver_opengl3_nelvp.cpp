@@ -35,9 +35,7 @@ namespace NLDRIVERGL3 {
 
 // Number of nelvp constant registers
 static const int NELVP_NUM_CONSTANTS = 96;
-// Extra UBO slots for inverse projection matrix (4 vec4 columns) used by ecPos epilogue
-static const int NELVP_INV_PROJ_BASE = 96;
-static const int NELVP_UBO_VEC4_COUNT = 100;
+static const int NELVP_UBO_VEC4_COUNT = NELVP_NUM_CONSTANTS;
 
 // Output register enum values from CVPOperand::EOutputRegister
 // mapped to their hardware slot indices
@@ -677,13 +675,11 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 		}
 	}
 
-	// Epilogue: synthesize ecPos from gl_Position via inv(P * ChangeBasis) stored in c[96..99].
-	// Using gl_Position ensures ecPos reflects any VP modifications (geomorphing, wind, etc.).
+	// Epilogue: synthesize ecPos from gl_Position via inverseProjectionBasis from camera UBO.
 	// inv(P * CB) * gl_Position = ModelView * adjustedPos = NeL-space position.
 	// Must be NeL space (not GL eye space) because builtin PP fog uses ecPos.y as forward depth.
 	ss << "\n// Synthesize NeL-space position for fog\n";
-	ss << "ecPos = mat4(c[" << NELVP_INV_PROJ_BASE << "], c[" << (NELVP_INV_PROJ_BASE + 1)
-	   << "], c[" << (NELVP_INV_PROJ_BASE + 2) << "], c[" << (NELVP_INV_PROJ_BASE + 3) << "]) * gl_Position;\n";
+	ss << "ecPos = inverseProjectionBasis * gl_Position;\n";
 
 	ss << "}\n";
 
@@ -700,8 +696,9 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 
 	// Set features
 	newSrc->Features.OnlyUBOs = true;
+	newSrc->Features.UsesCameraUBO = true; // ecPos epilogue reads inverseProjectionBasis from camera UBO
 	newSrc->Features.OutputsSpecularColor = outputUsed[CVPOperand::OSecondaryColor];
-	newSrc->Features.OutputsWorldSpacePosition = false; // ecPos is eye-space
+	newSrc->Features.OutputsWorldSpacePosition = false; // ecPos is NeL-space, not world-space
 
 	// Compute VPVertexFormat from used inputs
 	uint16 vpVertexFormat = 0;

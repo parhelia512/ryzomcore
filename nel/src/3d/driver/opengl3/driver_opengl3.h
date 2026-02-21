@@ -236,8 +236,9 @@ struct CCameraUBOData
 	float cameraWorldPos[3]; // 12  (inverse view translation: actual camera world position)
 	float _pad0;             //  4
 	float specularTexMtx[16]; // 64  (inverse view rotation: eye-space reflection → world-space cubemap lookup)
-};                           // 288
-static_assert(sizeof(CCameraUBOData) == 288, "Camera UBO layout mismatch");
+	float inverseProjectionBasis[16]; // 64  inv(Projection * ChangeBasis): clip-space → NeL eye-space for nelvp ecPos
+};                           // 352
+static_assert(sizeof(CCameraUBOData) == 352, "Camera UBO layout mismatch");
 
 // ***************************************************************************
 // CPU-side struct matching the std140 NlLightInfo layout (96 bytes)
