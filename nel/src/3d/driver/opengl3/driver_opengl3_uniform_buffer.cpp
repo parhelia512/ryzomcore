@@ -67,6 +67,7 @@ const char *GLSLCameraHeader =
 	"    vec3  cameraWorldPos;\n"
 	"    float _nlCamPad0;\n"
 	"    mat4  specularTexMtx;\n"
+	"    mat4  inverseProjectionBasis;\n" // inv(Projection * ChangeBasis): clip-space → NeL eye-space
 	"};\n";
 
 const char *GLSLObjectHeader =

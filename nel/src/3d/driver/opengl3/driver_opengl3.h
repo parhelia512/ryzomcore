@@ -275,8 +275,9 @@ struct CCameraUBOData
 	float cameraWorldPos[3]; // 12  (inverse view translation: actual camera world position)
 	float _pad0;             //  4
 	float specularTexMtx[16]; // 64  (inverse view rotation: eye-space reflection → world-space cubemap lookup)
-};                           // 288
-static_assert(sizeof(CCameraUBOData) == 288, "Camera UBO layout mismatch");
+	float inverseProjectionBasis[16]; // 64  inv(Projection * ChangeBasis): clip-space → NeL eye-space for nelvp ecPos
+};                           // 352
+static_assert(sizeof(CCameraUBOData) == 352, "Camera UBO layout mismatch");
 
 // ***************************************************************************
 // CPU-side struct matching the std140 NlLightInfo layout (96 bytes)
@@ -1479,6 +1480,9 @@ private:
 	bool			supportVertexProgram(CVertexProgram::TProfile profile) const;
 
 	bool			compileVertexProgram(CVertexProgram *program);
+	bool			convertNelvpToGLSL(CVertexProgram *program, bool linked);
+	CUniformBuffer	*getNelvpUB(TProgram program) const;
+	void			flushNelvpUserVP();
 
 	bool			activeVertexProgram(CVertexProgram *program);
 	bool			activeVertexProgram(CVertexProgram *program, bool driver);
@@ -1525,7 +1529,7 @@ private:
 	void			setUniformMatrix(TProgram program, uint index, TMatrix matrix, TTransform transform);
 	void			setUniformFog(TProgram program, uint index);
 
-	bool			isUniformProgramState() { return false; }
+	bool			isUniformProgramState() { return true; }
 
 	virtual bool	bindUniformBuffer(TUBBinding binding, CUniformBuffer *ub) NL_OVERRIDE;
 
@@ -1649,6 +1653,7 @@ private:
 	bool m_ProgramUsesCameraUBO[NumTProgram];     // Program reads camera/fog/clip from NlCamera UBO
 	bool m_ProgramUsesObjectUBO[NumTProgram];     // Program reads from NlModel UBO
 	bool m_ProgramUsesMaterialUBO[NumTProgram];   // Program reads from NlMaterial UBO
+	CUniformBuffer *m_NelvpActiveUB;              // Non-null when active VP is nelvp-converted
 
 	// Per-Object UBO (runtime state of currently bound program)
 	GLuint  _ObjectUBOId;           // Global GL buffer
@@ -1764,6 +1769,11 @@ public:
 	// Linked program cache for user VP + user PP combinations
 	// Keyed by the other program's drvinfo pointer
 	std::map<CProgramDrvInfosGL3*, NLMISC::CSmartPtr<CShaderProgram>> LinkedUserVPPP;
+
+	// nelvp-converted program state
+	bool isNelvpConverted;                                // True if this VP was converted from nelvp
+	NLMISC::CSmartPtr<CUniformBuffer> NelvpConstantUB;   // UBO for nelvp constant registers (96 + 4 modelView)
+	std::map<std::string, uint> NelvpParamIndices;        // ParamIndices from nelvp source (name → register index)
 
 private:
 	GLuint programId;

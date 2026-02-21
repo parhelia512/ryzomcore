@@ -123,6 +123,8 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 			continue;
 		if (fogOrPpl && i == VaryingLocationVertexColor)
 			continue; // Slot used by vertexColor
+		if (fogOrPpl && i == VaryingLocationWorldPos)
+			continue; // Slot used by worldPos
 		if (!linked)
 			ss << "layout(location = " << i << ") ";
 		ss << "smooth in vec4 " << g_AttribNames[i] << ";" << std::endl;
@@ -137,6 +139,9 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		if (!linked)
 			ss << "layout(location = " << VaryingLocationVertexColor << ") ";
 		ss << "smooth in vec4 vertexColor;" << std::endl;
+		if (!linked)
+			ss << "layout(location = " << VaryingLocationWorldPos << ") ";
+		ss << "smooth in vec4 worldPos;" << std::endl;
 	}
 	if (!linked)
 		ss << "layout(location = " << VaryingLocationDiffuseColor << ") ";
@@ -195,7 +200,6 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		ss << "uniform vec2 fogParams;" << std::endl;
 		ss << "uniform vec4 fogColor;" << std::endl;
 		ss << "uniform float fogDensity;" << std::endl;
-		ss << "uniform vec3 cameraForward;" << std::endl;
 		ss << std::endl;
 	}
 
@@ -223,8 +227,6 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		ss << "uniform int nlVertexFormat;" << std::endl;
 	if (fogOrPpl && !cameraUBO)
 		ss << "uniform int nlFogMode;" << std::endl;
-	if (fogOrPpl && !objectUBO)
-		ss << "uniform int nlWorldSpacePosition;" << std::endl;
 	if (fogOrPpl && !objectUBO)
 		ss << "uniform int nlVertexColorLighted;" << std::endl;
 
@@ -375,13 +377,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	if (fogOrPpl)
 	{
 		ss << "vec4 applyFog(vec4 col) {" << std::endl;
-		ss << "  float z;" << std::endl;
-		ss << "  if (nlWorldSpacePosition != 0) {" << std::endl;
-		if (cameraUBO)
-			ss << "    vec3 camFwd = vec3(viewMatrix[0].y, viewMatrix[1].y, viewMatrix[2].y);" << std::endl;
-		ss << "    z = abs(dot(ecPos.xyz / ecPos.w - cameraWorldPos, " << (cameraUBO ? "camFwd" : "cameraForward") << "));" << std::endl;
-		ss << "  } else" << std::endl;
-		ss << "    z = abs(ecPos.y / ecPos.w);" << std::endl;
+		ss << "  float z = abs(ecPos.y / ecPos.w);" << std::endl;
 		ss << "  float fogFactor;" << std::endl;
 		ss << "  if (nlFogMode == 1) fogFactor = clamp(exp(-fogDensity * z), 0.0, 1.0);" << std::endl;
 		ss << "  else if (nlFogMode == 2) fogFactor = clamp(exp(-fogDensity * fogDensity * z * z), 0.0, 1.0);" << std::endl;
@@ -434,14 +430,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	if (ppClip)
 	{
 		ss << "  {" << std::endl;
-		ss << "    vec4 clipPos;" << std::endl;
-		if (cameraUBO)
-		{
-			ss << "    if (nlWorldSpacePosition != 0)" << std::endl;
-			ss << "      clipPos = viewMatrix * vec4(ecPos.xyz / ecPos.w, 1.0);" << std::endl;
-			ss << "    else" << std::endl;
-		}
-		ss << "      clipPos = vec4(ecPos.xyz / ecPos.w, 1.0);" << std::endl;
+		ss << "    vec4 clipPos = vec4(ecPos.xyz / ecPos.w, 1.0);" << std::endl;
 		for (int i = 0; i < 6; ++i)
 			ss << "    if ((nlClipPlaneMask & " << (1 << i) << ") != 0 && dot(clipPlane" << i << ", clipPos) < 0.0) discard;" << std::endl;
 		ss << "  }" << std::endl;
@@ -463,7 +452,7 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 		// Material diffuse must be skipped in the light equation, matching VP behavior (effectiveDiffuse = 1.0).
 		ss << "  vec4 pplMatDiff = (nlVertexColorLighted != 0) ? vec4(1.0) : " << matDiffStr << ";" << std::endl;
 		ss << "  if (nlNumPerPixelLights > 0) {" << std::endl;
-		ss << "    vec3 wsPos = ecPos.xyz / ecPos.w;" << std::endl;
+		ss << "    vec3 wsPos = worldPos.xyz / worldPos.w;" << std::endl;
 		ss << "    vec3 wsNormal = normalize(normal.xyz);" << std::endl;
 		// cameraWorldPos: precomputed on CPU as inverse view matrix position
 		// With PZB: (0,0,0) since view translation is zeroed. Without PZB: actual camera world position.

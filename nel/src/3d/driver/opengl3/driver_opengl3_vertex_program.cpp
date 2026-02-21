@@ -434,6 +434,8 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 		ss << "uniform mat3 normalMatrix;" << std::endl;
 	if (needPositionOutput)
 		ss << "layout(location = " << VaryingLocationEcPos << ") smooth out vec4 ecPos;" << std::endl;
+	if (desc.WorldSpacePosition)
+		ss << "layout(location = " << VaryingLocationWorldPos << ") smooth out vec4 worldPos;" << std::endl;
 	ss << std::endl;
 
 	if (!lighting)
@@ -467,12 +469,9 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 	if (needEcPos)
 		ss << "ecPos4 = modelView * v" << g_AttribNames[0] << ";" << std::endl;
 	if (needPositionOutput)
-	{
-		if (desc.WorldSpacePosition)
-			ss << "ecPos = vec4(transpose(mat3(viewMatrix)) * (ecPos4.xyz - viewMatrix[3].xyz * ecPos4.w), ecPos4.w);" << std::endl;
-		else
-			ss << "ecPos = ecPos4;" << std::endl;
-	}
+		ss << "ecPos = ecPos4;" << std::endl;
+	if (desc.WorldSpacePosition)
+		ss << "worldPos = vec4(transpose(mat3(viewMatrix)) * (ecPos4.xyz - viewMatrix[3].xyz * ecPos4.w), ecPos4.w);" << std::endl;
 	ss << std::endl;
 
 	ss << "vec4 diffuseVertex;" << std::endl;

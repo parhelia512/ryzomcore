@@ -390,6 +390,14 @@ void CDriverGL3::stageCameraUBO()
 	// Specular texture matrix: inverse view rotation for eye-space reflection → world-space cubemap lookup
 	memcpy(data.specularTexMtx, _SpecularTexMtx.get(), 16 * sizeof(float));
 
+	// Inverse projection basis: inv(Projection * ChangeBasis) transforms clip-space → NeL eye-space.
+	// Used by nelvp-converted VPs to synthesize ecPos from gl_Position for fog computation.
+	{
+		CMatrix invProjBasis = _GLProjMat * _ChangeBasis;
+		invProjBasis.invert();
+		memcpy(data.inverseProjectionBasis, invProjBasis.get(), 16 * sizeof(float));
+	}
+
 	_CameraUBODirty = false;
 	_CameraUBOUploadDirty = true;
 }
