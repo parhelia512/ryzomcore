@@ -68,6 +68,7 @@ CVertexBufferGL3::CVertexBufferGL3(CDriverGL3 *drv, uint size, uint numVertices,
 	: IVertexBufferGL3(drv, vb, IVertexBufferGL3::GL3),
 	m_VertexPtr(NULL),
 	m_ShadowDirty(false),
+	m_InitialUploadDone(false),
 	m_CurrentIndex(0),
 	m_CurrentInFlight(false),
 #if NL3D_GL3_VERTEX_BUFFER_INFLIGHT_DEBUG
@@ -400,12 +401,20 @@ void CVertexBufferGL3::flush()
 
 	const uint size = VB->getNumVertices() * VB->getVertexSize();
 
+	// First full upload preserves creation hint (e.g. GL_STATIC_DRAW for PartialWrite),
+	// subsequent full orphan uploads use GL_DYNAMIC_DRAW since we're doing repeated full rewrites.
+	const bool firstUpload = !m_InitialUploadDone;
+	const GLenum fullUploadHint = firstUpload
+		? m_Driver->vertexBufferUsageGL3(m_MemType)
+		: GL_DYNAMIC_DRAW;
+	m_InitialUploadDone = true;
+
 	const std::vector<CVertexBuffer::CDirtyRange> &ranges = VB->getDirtyRanges();
 	if (ranges.empty())
 	{
 		// No explicit dirty ranges: full orphan+upload
 		m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
-		nglBufferData(GL_ARRAY_BUFFER, size, &m_ShadowData[0], GL_DYNAMIC_DRAW);
+		nglBufferData(GL_ARRAY_BUFFER, size, &m_ShadowData[0], fullUploadHint);
 		m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 	}
 	else
@@ -449,11 +458,11 @@ void CVertexBufferGL3::flush()
 		for (uint i = 0; i < m_MergedRanges.size(); ++i)
 			totalDirty += m_MergedRanges[i].End - m_MergedRanges[i].Begin;
 
-		if (totalDirty >= size / 2 || m_MergedRanges.size() > 16)
+		if (firstUpload && (totalDirty >= size / 2 || m_MergedRanges.size() > 16))
 		{
 			// Too much dirty: full orphan+upload from CPU, data persists for many frames
 			m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
-			nglBufferData(GL_ARRAY_BUFFER, size, &m_ShadowData[0], GL_DYNAMIC_DRAW);
+			nglBufferData(GL_ARRAY_BUFFER, size, &m_ShadowData[0], fullUploadHint);
 			m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 		}
 		else

@@ -63,7 +63,49 @@ protected:
 	bool m_Invalid;
 };
 
-/* GL Core vertex buffer. */
+/*
+ * GL Core vertex buffer — upload strategy by TBufferUsage:
+ *
+ *  FullStream / SmallStream:
+ *    Round-robin ring of NL3D_GL3_BUFFER_QUEUE_MAX GL buffers.
+ *    Lock picks the next free buffer; if still in-flight, orphans via
+ *    MAP_INVALIDATE_BUFFER_BIT, otherwise maps unsynchronized.  No shadow.
+ *    GL hint: GL_STREAM_DRAW.
+ *
+ *  FullRewrite:
+ *    Single GL buffer. Lock always orphans (MAP_INVALIDATE_BUFFER_BIT),
+ *    so it never stalls even if the GPU is still reading the old contents.
+ *    No shadow.  GL hint: GL_DYNAMIC_DRAW.
+ *
+ *  CpuReadWrite / PartialWrite:
+ *    Single GL buffer + CPU shadow (m_ShadowData). Lock/unlock are pure-CPU
+ *    operations on the shadow. At draw time, flush() uploads to the GL buffer:
+ *
+ *    - No dirty ranges (or first upload): full orphan glBufferData.
+ *      First upload uses the creation hint (STATIC_DRAW for PartialWrite,
+ *      DYNAMIC_DRAW for CpuReadWrite); subsequent full uploads use DYNAMIC_DRAW.
+ *
+ *    - With dirty ranges, small total (<50%, <=16 ranges): staging-copy pattern.
+ *      A direct glBufferSubData would stall the CPU because GL must immediately
+ *      copy the caller's memory while the GPU may still be reading the
+ *      destination. Instead, dirty shadow regions are uploaded into an orphaned
+ *      GL staging buffer (GL_COPY_READ_BUFFER, STREAM_DRAW) — orphaning means
+ *      GL allocates fresh storage so the CPU never waits. Then
+ *      glCopyBufferSubData copies from staging into the real buffer
+ *      (GL_COPY_WRITE_BUFFER) entirely on the GPU side, scheduled in the
+ *      normal command stream after any pending reads complete. The real
+ *      buffer's existing data is preserved and neither side stalls.
+ *
+ *    - With dirty ranges, large total: falls back to full orphan as above.
+ *
+ *    Dirty ranges are coalesced (sorted, merged within 128 bytes, aligned
+ *    to 64-byte boundaries) before upload.
+ *
+ *  Immutable:
+ *    Single GL buffer. Lock uses glMapBuffer(WRITE_ONLY) — may stall if
+ *    the GPU is reading, but Immutable buffers are only locked once at
+ *    load time.  No shadow.  GL hint: GL_STATIC_DRAW.
+ */
 class CVertexBufferGL3 : public IVertexBufferGL3
 {
 public:
@@ -95,6 +137,7 @@ private:
 	// Shadow buffer for CpuReadWrite/PartialWrite: CPU reads/writes go here, uploaded to GL at draw time
 	std::vector<uint8> m_ShadowData;
 	bool m_ShadowDirty;
+	bool m_InitialUploadDone; // First flush uses creation hint, subsequent full flushes use GL_DYNAMIC_DRAW
 
 	// Scratch buffer for coalescing dirty ranges during flush (avoids reallocation)
 	std::vector<CVertexBuffer::CDirtyRange> m_MergedRanges;
