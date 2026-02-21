@@ -339,6 +339,17 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 		}
 	}
 
+	// Detect nelvp-converted source early (before OnlyUBOs override).
+	// Nelvp-converted programs have no GL uniforms but callers still use
+	// setUniform4f/setUniformMatrix, so OnlyUBOs must stay false on the source.
+	bool isNelvp = false;
+	for (std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> >::const_iterator
+		ubIt = src->UniformBufferFormats.begin(); ubIt != src->UniformBufferFormats.end(); ++ubIt)
+	{
+		if (ubIt->second && ubIt->second->Name == "NlNelvpConstants")
+		{ isNelvp = true; break; }
+	}
+
 	// Override OnlyUBOs based on actual program introspection
 	bool hasNonUBO = programHasNonUBOUniforms(id);
 	if (src->Features.OnlyUBOs && hasNonUBO)
@@ -346,7 +357,7 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 		nlwarning("GL3: %s '%s' claims OnlyUBOs but has non-UBO uniforms", stageName, src->DisplayName.c_str());
 		src->Features.OnlyUBOs = false;
 	}
-	else if (!src->Features.OnlyUBOs && !hasNonUBO)
+	else if (!isNelvp && !src->Features.OnlyUBOs && !hasNonUBO)
 	{
 		src->Features.OnlyUBOs = true;
 	}
@@ -369,17 +380,12 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 	program->m_DrvInfo = drvInfo;
 	drvInfo->setProgramId(id);
 
-	// Detect nelvp-converted source before buildInfo so getUniformIndex returns
+	// Set nelvp-converted flag (detected earlier) so getUniformIndex returns
 	// constant register indices instead of querying GL uniform locations.
-	for (std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> >::const_iterator
-		ubIt = src->UniformBufferFormats.begin(); ubIt != src->UniformBufferFormats.end(); ++ubIt)
+	if (isNelvp)
 	{
-		if (ubIt->second && ubIt->second->Name == "NlNelvpConstants")
-		{
-			drvInfo->isNelvpConverted = true;
-			drvInfo->NelvpParamIndices = src->ParamIndices;
-			break;
-		}
+		drvInfo->isNelvpConverted = true;
+		drvInfo->NelvpParamIndices = src->ParamIndices;
 	}
 
 	program->buildInfo(src);
@@ -1160,6 +1166,9 @@ bool CDriverGL3::setupBuiltinVertexProgram(CVertexProgram *effectiveVP, CPixelPr
 			{
 				bindUniformBuffer(UBBindingVertexProgram, di->NelvpConstantUB);
 				m_NelvpActiveUB = di->NelvpConstantUB;
+				// Nelvp-converted programs have no GL uniforms (all go through UBO),
+				// but OnlyUBOs is kept false on the source so callers use setUniform*.
+				m_ProgramOnlyUBOs[VertexProgram] = true;
 			}
 		}
 
@@ -2141,7 +2150,12 @@ CShaderProgram *CDriverGL3::linkPrograms(
 		}
 		else
 		{
-			sp->VPFeatures.OnlyUBOs = true;
+			// Don't auto-promote OnlyUBOs for nelvp-converted VPs — callers
+			// still use setUniform* which routes through the nelvp UBO internally.
+			bool vpIsNelvp = vpProg && vpProg->m_DrvInfo
+				&& static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)vpProg->m_DrvInfo)->isNelvpConverted;
+			if (!vpIsNelvp)
+				sp->VPFeatures.OnlyUBOs = true;
 			sp->PPFeatures.OnlyUBOs = true;
 		}
 		src->Features = sp->VPFeatures;
@@ -2380,6 +2394,7 @@ bool CDriverGL3::setupUserLinkedPrograms(CVertexProgram *vpProg, CPixelProgram *
 		{
 			bindUniformBuffer(UBBindingVertexProgram, vpDi->NelvpConstantUB);
 			m_NelvpActiveUB = vpDi->NelvpConstantUB;
+			m_ProgramOnlyUBOs[VertexProgram] = true;
 		}
 	}
 

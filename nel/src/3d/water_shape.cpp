@@ -139,7 +139,7 @@ CVertexProgramWaterVPNoWave::CVertexProgramWaterVPNoWave(bool diffuse)
 		CWaterShape::_WaterVPUB->Format = *fmt;
 	}
 
-	// nelvp
+	// nelvp — used by all drivers; GL3 auto-converts to GLSL
 	{
 		CSource *source = new CSource();
 		source->Profile = nelvp;
@@ -165,6 +165,7 @@ CVertexProgramWaterVPNoWave::CVertexProgramWaterVPNoWave(bool diffuse)
 		}
 		addSource(source);
 	}
+#ifdef NL_WATER_VP_GLSL
 	// glsl300esv — pipeline stage UBO source (preferred for linked program path)
 	{
 		CSource *source = new CSource();
@@ -232,6 +233,7 @@ CVertexProgramWaterVPNoWave::CVertexProgramWaterVPNoWave(bool diffuse)
 		source->setSource(src);
 		addSource(source);
 	}
+#endif // NL_WATER_VP_GLSL
 }
 
 void CVertexProgramWaterVPNoWave::buildInfo()
