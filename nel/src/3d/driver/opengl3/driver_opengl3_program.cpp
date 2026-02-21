@@ -1410,15 +1410,6 @@ void CDriverGL3::setupUniforms(TProgram program)
 		uint fogDensityIdx = p->getUniformIndex(CProgramIndex::FogDensity);
 		if (fogDensityIdx != ~0)
 			nglProgramUniform1f(progId, fogDensityIdx, _CameraUBOData.fogDensity);
-
-		// Camera forward for world-space fog (second row of view matrix, NeL Y = forward).
-		// When cameraUBO is active, the PP derives this from viewMatrix in the UBO instead.
-		uint camFwdIdx = p->getUniformIndex(CProgramIndex::CameraForward);
-		if (camFwdIdx != ~0)
-		{
-			const float *v = _ViewMtx.get();
-			nglProgramUniform3f(progId, camFwdIdx, v[1], v[5], v[9]);
-		}
 	}
 
 	if (!m_ProgramUsesMaterialUBO[program])
