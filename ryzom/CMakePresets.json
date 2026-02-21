@@ -52,40 +52,40 @@
       }
     },
     {
+      "name": "linux-ryzom",
       "inherits": [
         "linux",
         "ryzom"
-      ],
-      "name": "linux-ryzom"
+      ]
     },
     {
+      "name": "ci-linux-ryzom-static",
       "inherits": [
         "linux",
         "ci-ryzom",
         "ryzom"
       ],
-      "name": "ci-linux-ryzom-static",
       "cacheVariables": {
         "WITH_STATIC": true
       }
     },
     {
+      "name": "ci-linux-ryzom-dynamic",
       "inherits": [
         "linux",
         "ci-ryzom",
         "ryzom"
       ],
-      "name": "ci-linux-ryzom-dynamic",
       "cacheVariables": {
         "WITH_STATIC": false
       }
     },
     {
+      "name": "windows-ryzom",
       "inherits": [
         "windows",
         "ryzom"
-      ],
-      "name": "windows-ryzom"
+      ]
     },
     {
       "name": "ci-linux-ryzom-client-hunter",
@@ -121,27 +121,32 @@
   ],
   "buildPresets": [
     {
-      "inherits": "release",
       "name": "ryzom",
+      "inherits": "release",
       "configurePreset": "ryzom"
     },
     {
-      "inherits": "ryzom",
       "name": "ci-linux-ryzom",
+      "inherits": "ryzom",
       "configurePreset": "ci-linux-ryzom-dynamic"
     },
     {
-      "inherits": "ci-linux-ryzom",
       "name": "ci-linux-ryzom/install",
+      "inherits": "ci-linux-ryzom",
       "targets": [
         "ryzom/install"
       ]
+    },
+    {
+      "name": "ci-ryzom-client",
+      "configurePreset": "ryzom-client",
+      "configuration": "Release"
     }
   ],
   "testPresets": [
     {
-      "inherits": "default",
       "name": "ryzom",
+      "inherits": "default",
       "configurePreset": "ryzom"
     }
   ],
@@ -149,6 +154,10 @@
     {
       "name": "ryzom",
       "configurePreset": "ryzom"
+    },
+    {
+      "name": "ci-ryzom-client",
+      "configurePreset": "ryzom-client"
     }
   ],
   "workflowPresets": [
