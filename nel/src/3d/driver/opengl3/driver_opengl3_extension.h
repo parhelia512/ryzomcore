@@ -277,10 +277,29 @@ namespace NLDRIVERGL3 {
 #define nglGetSynciv glGetSynciv
 
 // GL_ARB_separate_shader_objects not available in GLES 3.0 core
-// Provide no-op stubs so code compiles; runtime checks disable SSO usage
+// Provide functional stubs using core GLES 3.0 calls where possible
 inline void _nglUseProgramStages(GLuint, GLbitfield, GLuint) { }
 inline void _nglActiveShaderProgram(GLuint, GLuint) { }
-inline GLuint _nglCreateShaderProgramv(GLenum, GLsizei, const GLchar *const*) { return 0; }
+inline GLuint _nglCreateShaderProgramv(GLenum type, GLsizei count, const GLchar *const* strings)
+{
+	GLuint shader = glCreateShader(type);
+	if (!shader) return 0;
+	glShaderSource(shader, count, strings, NULL);
+	glCompileShader(shader);
+	GLuint program = glCreateProgram();
+	if (program)
+	{
+		GLint compiled = GL_FALSE;
+		glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+		glAttachShader(program, shader);
+		if (compiled)
+		{
+			glLinkProgram(program);
+		}
+	}
+	glDeleteShader(shader);
+	return program;
+}
 inline void _nglProgramParameteri(GLuint, GLenum, GLint) { }
 inline void _nglBindProgramPipeline(GLuint) { }
 inline void _nglDeleteProgramPipelines(GLsizei, const GLuint *) { }

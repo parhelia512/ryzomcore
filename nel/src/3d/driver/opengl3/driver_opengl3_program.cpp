@@ -298,6 +298,7 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 		// the final link happens in linkPrograms() which combines VP + PP.
 		// Under desktop GL 3.3, we can link single-stage programs and use the
 		// result for uniform introspection.
+#ifndef USE_OPENGLES3
 		if (m_SupportSSO)
 		{
 			nglLinkProgram(id);
@@ -318,6 +319,7 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 				return false;
 			}
 		}
+#endif
 		// NOTE: do NOT detach/delete the shader — keep it attached for later extraction
 	}
 	else
@@ -351,7 +353,13 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 
 	// Override OnlyUBOs based on actual program introspection.
 	// This requires a linked program — skip when not linked (GL ES pipeline stages).
+#ifdef USE_OPENGLES3
+	// On GLES 3.0, linked-profile programs are not yet linked at this point
+	// (single-stage link is skipped); introspection is deferred to linkPrograms().
+	if (src->Profile != linkedProfile)
+#else
 	if (src->Profile != linkedProfile || m_SupportSSO)
+#endif
 	{
 		bool hasNonUBO = programHasNonUBOUniforms(id);
 		if (src->Features.OnlyUBOs && hasNonUBO)
@@ -1133,6 +1141,11 @@ bool CDriverGL3::setupBuiltinPrograms()
 
 bool CDriverGL3::setupBuiltinVertexProgram(CVertexProgram *effectiveVP, CPixelProgram *effectivePP)
 {
+#ifdef USE_OPENGLES3
+	// Builtin non-mega shaders are not supported under GLES 3.0;
+	// they generate #version 330 which cannot compile on this target.
+	return false;
+#endif
 	touchVertexFormatVP(); // Always update — PP builtin depends on vertex format
 
 	// Resolve PPL support: both VP and PP must support it

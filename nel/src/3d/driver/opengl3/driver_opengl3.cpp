@@ -362,7 +362,7 @@ CDriverGL3::CDriverGL3()
 #ifdef USE_OPENGLES3
 	m_PPClipPlanes = true; // GL ES 3.0: use PP-based clip plane discard, no native gl_ClipDistance
 	m_LinkedMegaShaders = true; // GL ES 3.0: always use linked VP+PP programs, SSO not available
-	m_SupportSSO = false; // GL ES 3.0: SSO not available in WebGL 2.0 / GLES 3.0
+	m_SupportSSO = true; // GL ES 3.0: SSO code path (stubs handle missing functions)
 #else
 	m_PPClipPlanes = false; // GL 3.3: use native gl_ClipDistance
 	m_LinkedMegaShaders = true; // GL 3.3: also useful, set true for both
@@ -543,6 +543,31 @@ bool CDriverGL3::setupDisplay()
 	nglGenBuffers(1, &_ObjectUBOId);
 	// nglGenBuffers(1, &_OverrideMaterialUBOId); // Replaced by per-material UBO slots
 	nglGenBuffers(1, &_PixelUploadPBO);
+
+	// Pre-allocate UBOs to their full declared sizes.
+	// WebGL 2.0 requires bound UBOs to be at least as large as the
+	// corresponding uniform block in the shader, even before first use.
+	{
+		// NlLightTable: 128 × NlLightInfo (96 bytes each) = 12288 bytes
+		_DriverGLStates.forceBindUniformBuffer(_LightTableUBOId);
+		nglBufferData(GL_UNIFORM_BUFFER, 128 * sizeof(CLightTableUBOEntry), NULL, GL_STREAM_DRAW);
+		_LightTableUBOCapacity = 128;
+
+		// NlLightTable binding for lightmap dynamic UBO (1 entry)
+		_DriverGLStates.forceBindUniformBuffer(_LightMapDynUBOId);
+		nglBufferData(GL_UNIFORM_BUFFER, sizeof(CLightTableUBOEntry), NULL, GL_STREAM_DRAW);
+
+		// NlCamera UBO
+		_DriverGLStates.forceBindUniformBuffer(_CameraUBOId);
+		nglBufferData(GL_UNIFORM_BUFFER, sizeof(CCameraUBOData), NULL, GL_STREAM_DRAW);
+		_CameraUBOCapacity = sizeof(CCameraUBOData);
+
+		// NlModel (object) UBO
+		_DriverGLStates.forceBindUniformBuffer(_ObjectUBOId);
+		nglBufferData(GL_UNIFORM_BUFFER, sizeof(CObjectUBOData), NULL, GL_STREAM_DRAW);
+
+		_DriverGLStates.forceBindUniformBuffer(0);
+	}
 
 	if (m_UseMegaShaders)
 	{
