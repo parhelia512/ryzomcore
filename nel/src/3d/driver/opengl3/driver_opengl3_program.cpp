@@ -362,7 +362,12 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 		{ isNelvp = true; break; }
 	}
 
-	// Override OnlyUBOs based on actual program introspection
+	// Override OnlyUBOs based on actual program introspection.
+	// On GLES3, linked-profile programs aren't linked yet at this point
+	// (single-stage link is skipped at line ~301); they are combined and
+	// linked later in linkPrograms(). programHasNonUBOUniforms returns
+	// false trivially for unlinked programs — correct since the linked
+	// path only uses UBOs.
 	bool hasNonUBO = programHasNonUBOUniforms(id);
 	if (src->Features.OnlyUBOs && hasNonUBO)
 	{
@@ -377,28 +382,13 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 	// the engine, so reject the program.
 	if (src->Profile == linkedProfile && hasNonUBO)
 	{
-		bool hasNonUBO = programHasNonUBOUniforms(id);
-		if (src->Features.OnlyUBOs && hasNonUBO)
-		{
-			nlwarning("GL3: %s '%s' claims OnlyUBOs but has non-UBO uniforms", stageName, src->DisplayName.c_str());
-			src->Features.OnlyUBOs = false;
-		}
-		else if (!src->Features.OnlyUBOs && !hasNonUBO)
-		{
-			src->Features.OnlyUBOs = true;
-		}
-		// Linked profiles only support UBOs; non-UBO uniforms won't be set by
-		// the engine, so reject the program.
-		if (src->Profile == linkedProfile && hasNonUBO)
-		{
-			nlwarning("GL3: %s '%s' has non-UBO uniforms (linked path requires UBOs only)", stageName, src->DisplayName.c_str());
-			nglDeleteProgram(id);
-			program->m_CompileFailed = true;
+		nlwarning("GL3: %s '%s' has non-UBO uniforms (linked path requires UBOs only)", stageName, src->DisplayName.c_str());
+		nglDeleteProgram(id);
+		program->m_CompileFailed = true;
 #ifdef NL_DEBUG
-			nlerror("GL3: %s program has non-UBO uniforms (linked path)", stageName);
+		nlerror("GL3: %s program has non-UBO uniforms (linked path)", stageName);
 #endif
-			return false;
-		}
+		return false;
 	}
 
 	ItGPUPrgDrvInfoPtrList it = _GPUPrgDrvInfos.insert(_GPUPrgDrvInfos.end(), (NL3D::IProgramDrvInfos*)NULL);

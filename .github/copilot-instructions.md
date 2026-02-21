@@ -81,6 +81,10 @@ Then navigate Playwright to `http://localhost:8888/SAMPLE_NAME.html`.
 - Builtin (non-mega) shaders are never used under GLES 3.0; only linked mega shaders
 - `CTime::getPerformanceTime()` uses `clock_gettime(CLOCK_MONOTONIC)` on Emscripten; without this, `ticksToSecond()` returns NaN and all matrices become invalid
 - Non-UBO uniforms are not used in the linked shader path; everything uses UBOs
+- The linked mega shader path always has priority even when SSO is enabled; SSO is just a fallback
+- Client-side index arrays (glDrawElements with CPU pointers) work on desktop GL but NOT on WebGL 2.0; the driver uses a scratch element buffer for GLES3
+- Nelvp-converted vertex programs use a transparent UBO for constant registers; callers still use setUniform* which the driver routes through the UBO internally
+- The nelvp sample has link warnings on WebGL 2.0 due to interface mismatches between nelvp-converted VP outputs and mega PP inputs; clip_plane, ppl, and planar_reflection all render correctly
 
 ## Desktop OpenGL 3.3 Build
 
