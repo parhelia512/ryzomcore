@@ -43,7 +43,7 @@ emcmake cmake /path/to/ryzomcore \
 
 ```bash
 cd /tmp/embuild
-emmake make -j$(nproc) nl_sample_clip_plane nl_sample_nelvp nl_sample_planar_reflection
+emmake make -j$(nproc) nl_sample_clip_plane nl_sample_nelvp nl_sample_planar_reflection nl_sample_ppl
 ```
 
 ### Serve and test in browser
@@ -79,6 +79,8 @@ Then navigate Playwright to `http://localhost:8888/SAMPLE_NAME.html`.
 - UBOs must be pre-allocated to full declared size before first draw call
 - SSO (Separate Shader Objects) is not available in WebGL 2.0 / GLES 3.0
 - Builtin (non-mega) shaders are never used under GLES 3.0; only linked mega shaders
+- `CTime::getPerformanceTime()` uses `clock_gettime(CLOCK_MONOTONIC)` on Emscripten; without this, `ticksToSecond()` returns NaN and all matrices become invalid
+- Non-UBO uniforms are not used in the linked shader path; everything uses UBOs
 
 ## Desktop OpenGL 3.3 Build
 
@@ -107,5 +109,5 @@ cmake /path/to/ryzomcore \
   -DWITH_WEB=OFF \
   -DCMAKE_BUILD_TYPE=Release
 
-make -j$(nproc) nl_sample_clip_plane nl_sample_nelvp nl_sample_planar_reflection
+make -j$(nproc) nl_sample_clip_plane nl_sample_nelvp nl_sample_planar_reflection nl_sample_ppl
 ```
