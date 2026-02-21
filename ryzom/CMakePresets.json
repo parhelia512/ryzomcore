@@ -27,7 +27,6 @@
     },
     {
       "name": "ryzom-client",
-      "hidden": true,
       "binaryDir": "${sourceDir}/build/ryzom-client",
       "installDir": "${sourceDir}/build/install/ryzom-client",
       "cacheVariables": {
