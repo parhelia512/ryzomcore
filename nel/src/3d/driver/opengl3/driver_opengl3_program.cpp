@@ -698,6 +698,7 @@ int CDriverGL3::getUniformLocation(TProgram program, const char *name)
 
 void CDriverGL3::setUniform1f(TProgram program, uint index, float f0)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub) { ub->lock(); ub->set(index * 16, f0, 0.0f, 0.0f, 0.0f); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
@@ -706,6 +707,7 @@ void CDriverGL3::setUniform1f(TProgram program, uint index, float f0)
 
 void CDriverGL3::setUniform2f(TProgram program, uint index, float f0, float f1)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub) { ub->lock(); ub->set(index * 16, f0, f1, 0.0f, 0.0f); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
@@ -714,6 +716,7 @@ void CDriverGL3::setUniform2f(TProgram program, uint index, float f0, float f1)
 
 void CDriverGL3::setUniform3f(TProgram program, uint index, float f0, float f1, float f2)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub) { ub->lock(); ub->set(index * 16, f0, f1, f2, 0.0f); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
@@ -722,6 +725,7 @@ void CDriverGL3::setUniform3f(TProgram program, uint index, float f0, float f1, 
 
 void CDriverGL3::setUniform4f(TProgram program, uint index, float f0, float f1, float f2, float f3)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub) { ub->lock(); ub->set(index * 16, f0, f1, f2, f3); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
@@ -730,54 +734,63 @@ void CDriverGL3::setUniform4f(TProgram program, uint index, float f0, float f1, 
 
 void CDriverGL3::setUniform1i(TProgram program, uint index, sint32 i0)
 {
+	if (index == ~0u) return;
 	uint32 id = getProgramId(program);
 	nglProgramUniform1i(id, index, i0);
 }
 
 void CDriverGL3::setUniform2i(TProgram program, uint index, sint32 i0, sint32 i1)
 {
+	if (index == ~0u) return;
 	uint32 id = getProgramId(program);
 	nglProgramUniform2i(id, index, i0, i1);
 }
 
 void CDriverGL3::setUniform3i(TProgram program, uint index, sint32 i0, sint32 i1, sint32 i2)
 {
+	if (index == ~0u) return;
 	uint32 id = getProgramId(program);
 	nglProgramUniform3i(id, index, i0, i1, i2);
 }
 
 void CDriverGL3::setUniform4i(TProgram program, uint index, sint32 i0, sint32 i1, sint32 i2, sint32 i3)
 {
+	if (index == ~0u) return;
 	uint32 id = getProgramId(program);
 	nglProgramUniform4i(id, index, i0, i1, i2, i3);
 }
 
 void CDriverGL3::setUniform1ui(TProgram program, uint index, uint32 ui0)
 {
+	if (index == ~0u) return;
 	uint32 id = getProgramId(program);
 	nglProgramUniform1ui(id, index, ui0);
 }
 
 void CDriverGL3::setUniform2ui(TProgram program, uint index, uint32 ui0, uint32 ui1)
 {
+	if (index == ~0u) return;
 	uint32 id = getProgramId(program);
 	nglProgramUniform2ui(id, index, ui0, ui1);
 }
 
 void CDriverGL3::setUniform3ui(TProgram program, uint index, uint32 ui0, uint32 ui1, uint32 ui2)
 {
+	if (index == ~0u) return;
 	uint32 id = getProgramId(program);
 	nglProgramUniform3ui(id, index, ui0, ui1, ui2);
 }
 
 void CDriverGL3::setUniform4ui(TProgram program, uint index, uint32 ui0, uint32 ui1, uint32 ui2, uint32 ui3)
 {
+	if (index == ~0u) return;
 	uint32 id = getProgramId(program);
 	nglProgramUniform4ui(id, index, ui0, ui1, ui2, ui3);
 }
 
 void CDriverGL3::setUniform3f(TProgram program, uint index, const CVector &v)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub) { ub->lock(); ub->set(index * 16, v.x, v.y, v.z, 0.0f); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
@@ -786,6 +799,7 @@ void CDriverGL3::setUniform3f(TProgram program, uint index, const CVector &v)
 
 void CDriverGL3::setUniform4f(TProgram program, uint index, const CVector &v, float f3)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub) { ub->lock(); ub->set(index * 16, v.x, v.y, v.z, f3); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
@@ -794,6 +808,7 @@ void CDriverGL3::setUniform4f(TProgram program, uint index, const CVector &v, fl
 
 void CDriverGL3::setUniform4f(TProgram program, uint index, const NLMISC::CRGBAF& rgba)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub) { ub->lock(); ub->set(index * 16, rgba.R, rgba.G, rgba.B, rgba.A); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
@@ -802,6 +817,7 @@ void CDriverGL3::setUniform4f(TProgram program, uint index, const NLMISC::CRGBAF
 
 void CDriverGL3::setUniform3x3f(TProgram program, uint index, const float *src)
 {
+	if (index == ~0u) return;
 	// nelvp: 3x3 matrix not used by nelvp programs, no interception needed
 	uint32 id = getProgramId(program);
 	nglProgramUniformMatrix3fv(id, index, 1, false, src);
@@ -809,6 +825,7 @@ void CDriverGL3::setUniform3x3f(TProgram program, uint index, const float *src)
 
 void CDriverGL3::setUniform4x4f(TProgram program, uint index, const CMatrix &m)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub)
 	{
@@ -826,6 +843,7 @@ void CDriverGL3::setUniform4x4f(TProgram program, uint index, const CMatrix &m)
 
 void CDriverGL3::setUniform4x4f(TProgram program, uint index, const float *src)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub)
 	{
@@ -844,6 +862,7 @@ void CDriverGL3::setUniform4x4f(TProgram program, uint index, const float *src)
 
 void CDriverGL3::setUniform4fv(TProgram program, uint index, size_t num, const float *src)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub)
 	{
@@ -859,18 +878,21 @@ void CDriverGL3::setUniform4fv(TProgram program, uint index, size_t num, const f
 
 void CDriverGL3::setUniform4iv(TProgram program, uint index, size_t num, const sint32 *src)
 {
+	if (index == ~0u) return;
 	uint32 id = getProgramId(program);
 	nglProgramUniform4iv(id, index, num, src);
 }
 
 void CDriverGL3::setUniform4uiv(TProgram program, uint index, size_t num, const uint32 *src)
 {
+	if (index == ~0u) return;
 	uint32 id = getProgramId(program);
 	nglProgramUniform4uiv(id, index, num, src);
 }
 
 void CDriverGL3::setUniformMatrix(TProgram program, uint index, TMatrix matrix, TTransform transform)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	CMatrix mat;
 
@@ -939,6 +961,7 @@ void CDriverGL3::setUniformMatrix(TProgram program, uint index, TMatrix matrix, 
 
 void CDriverGL3::setUniformFog(TProgram program, uint index)
 {
+	if (index == ~0u) return;
 	CUniformBuffer *ub = getNelvpUB(program);
 	if (ub)
 	{

@@ -17,6 +17,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// Define to enable hand-written UBO-based GLSL wind tree VP (GL3-only).
+// When disabled, GL3 uses the nelvp source auto-converted to GLSL.
+#define NL_WINDTREE_VP_UBO
+
 #include "std3d.h"
 
 #include "nel/3d/meshvp_wind_tree.h"
@@ -425,6 +429,7 @@ private:
 };
 
 // UBO-based wind tree VP (extends CVertexProgram, not CVertexProgramLighted)
+#ifdef NL_WINDTREE_VP_UBO
 class CVertexProgramWindTreeUBO : public CVertexProgram
 {
 public:
@@ -438,6 +443,7 @@ private:
 	CIdx m_Idx;
 
 };
+#endif // NL_WINDTREE_VP_UBO
 
 CVertexProgramWindTree::CVertexProgramWindTree(uint numPls, bool specular, bool normalize)
 {
@@ -453,6 +459,7 @@ CVertexProgramWindTree::CVertexProgramWindTree(uint numPls, bool specular, bool 
 	// Variant index: numPls * 4 + (specular ? 2 : 0) + (normalize ? 1 : 0)
 	uint vpIdx = numPls * 4 + (specular ? 2 : 0) + (normalize ? 1 : 0);
 
+#ifdef NL_WINDTREE_VP_GLSL
 	// glsl330v source (for GL3 driver — single source with runtime #defines)
 	{
 		std::string defines;
@@ -469,7 +476,9 @@ CVertexProgramWindTree::CVertexProgramWindTree(uint numPls, bool specular, bool 
 		source->setSource(std::string(WindTreeVPCodeGLSL_Header) + defines + WindTreeVPCodeGLSL_Body);
 		addSource(source);
 	}
+#endif // NL_WINDTREE_VP_GLSL
 
+#ifdef NL_WINDTREE_VP_ARB
 	// arbvp1 source (preferred by GL ARB path)
 	{
 		CSource *source = new CSource();
@@ -491,6 +500,7 @@ CVertexProgramWindTree::CVertexProgramWindTree(uint numPls, bool specular, bool 
 		source->ParamIndices["fog"] = 6;
 		addSource(source);
 	}
+#endif // NL_WINDTREE_VP_ARB
 
 	// nelvp source (fallback for NV VP / EXT vertex shader paths)
 	{
@@ -552,6 +562,7 @@ void CVertexProgramWindTree::buildInfo()
 	}
 }
 
+#ifdef NL_WINDTREE_VP_UBO
 CVertexProgramWindTreeUBO::CVertexProgramWindTreeUBO()
 {
 	// Build UBO format (static, shared across all wind tree instances)
@@ -598,7 +609,9 @@ CVertexProgramWindTreeUBO::CVertexProgramWindTreeUBO()
 		addSource(source);
 	}
 }
+#endif // NL_WINDTREE_VP_UBO
 
+#ifdef NL_WINDTREE_VP_UBO
 void CVertexProgramWindTreeUBO::buildInfo()
 {
 	// All uniforms now in NlWindTree UBO — no individual uniform indices needed
@@ -612,6 +625,7 @@ void CVertexProgramWindTreeUBO::buildInfo()
 	m_Idx.MaterialSpecular = ~0;
 	m_Idx.MaterialShininess = ~0;
 }
+#endif // NL_WINDTREE_VP_UBO
 
 
 // ***************************************************************************
@@ -702,6 +716,7 @@ void CMeshVPWindTree::initVertexPrograms()
 			_VertexProgram[i] = new CVertexProgramWindTree(numPls, specular, normalize);
 		}
 
+#ifdef NL_WINDTREE_VP_UBO
 		// Single UBO-based VP (all light/specular/normalize folded, GL3-only)
 		_VertexProgramUBO = new CVertexProgramWindTreeUBO();
 
@@ -711,6 +726,7 @@ void CMeshVPWindTree::initVertexPrograms()
 			_WindTreeUB = new CUniformBuffer();
 			_WindTreeUB->Format = *_WindTreeUBFormat;
 		}
+#endif // NL_WINDTREE_VP_UBO
 	}
 }
 
