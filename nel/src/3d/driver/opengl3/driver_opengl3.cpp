@@ -873,10 +873,10 @@ bool CDriverGL3::release()
 	m_UserPixelProgram = NULL;
 
 	// Delete all cached programs
-	for (std::unordered_set<CVPBuiltin>::iterator it(m_VPBuiltinCache.begin()), end(m_VPBuiltinCache.end()); it != end; ++it)
+	for (CHashSet<CVPBuiltin, CVPBuiltinHashTraits>::iterator it(m_VPBuiltinCache.begin()), end(m_VPBuiltinCache.end()); it != end; ++it)
 		delete it->VertexProgram;
 	m_VPBuiltinCache.clear();
-	for (std::unordered_set<CPPBuiltin>::iterator it(m_PPBuiltinCache.begin()), end(m_PPBuiltinCache.end()); it != end; ++it)
+	for (CHashSet<CPPBuiltin, CPPBuiltinHashTraits>::iterator it(m_PPBuiltinCache.begin()), end(m_PPBuiltinCache.end()); it != end; ++it)
 		delete it->PixelProgram;
 	m_PPBuiltinCache.clear();
 
@@ -1510,7 +1510,7 @@ void	CDriverGL3::endProfileVBHardLock(vector<std::string> &result)
 	// clear.
 	_VBHardProfiling= false;
 	_VBHardProfiles.clear();
-	_VBHardProfiles.shrink_to_fit();
+	std::vector<CVBHardProfile>().swap(_VBHardProfiles);
 }
 
 // ***************************************************************************

@@ -2355,7 +2355,7 @@ bool CDriverGL3::setupUserLinkedPrograms(CVertexProgram *vpProg, CPixelProgram *
 		// Case C: User/Material VP + User/Material PP
 		CProgramDrvInfosGL3 *vpDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)vpProg->m_DrvInfo);
 		CProgramDrvInfosGL3 *ppDrv = static_cast<CProgramDrvInfosGL3 *>((IProgramDrvInfos *)ppProg->m_DrvInfo);
-		auto it = vpDrv->LinkedUserVPPP.find(ppDrv);
+		std::map<CProgramDrvInfosGL3*, NLMISC::CSmartPtr<CShaderProgram> >::iterator it = vpDrv->LinkedUserVPPP.find(ppDrv);
 		if (it != vpDrv->LinkedUserVPPP.end())
 		{
 			sp = it->second;
