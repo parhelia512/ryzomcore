@@ -582,14 +582,13 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		ss << "uniform int nlClipPlaneMask;" << std::endl;
 		for (int i = 0; i < 6; ++i)
 			ss << "uniform vec4 clipPlane" << i << ";" << std::endl;
-		if (desc.WorldSpacePosition)
-			ss << "uniform mat4 viewMatrix;" << std::endl;
 		ss << std::endl;
 	}
 
 	// PPL varyings and uniforms
 	if (desc.PPL)
 	{
+		ss << "layout(location = " << VaryingLocationWorldPos << ") smooth in vec4 worldPos;" << std::endl;
 		ss << "layout(location = " << VaryingLocationNormal << ") smooth in vec4 normal;" << std::endl;
 		if (desc.PPLVertexColor)
 			ss << "layout(location = " << VaryingLocationVertexColor << ") smooth in vec4 vertexColor;" << std::endl;
@@ -654,15 +653,10 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 		ss << "uniform vec4 fogColor;" << std::endl;
 		if (desc.FogMode != 0) // Exp or Exp2
 			ss << "uniform float fogDensity;" << std::endl;
-		if (desc.WorldSpacePosition)
-			ss << "uniform vec3 cameraForward;" << std::endl;
 
 		ss << "vec4 applyFog(vec4 col)" << std::endl;
 		ss << "{" << std::endl;
-		if (desc.WorldSpacePosition)
-			ss << "  float z = abs(dot(ecPos.xyz / ecPos.w - cameraWorldPos, cameraForward));" << std::endl;
-		else
-			ss << "  float z = abs(ecPos.y / ecPos.w);" << std::endl;
+		ss << "  float z = abs(ecPos.y / ecPos.w);" << std::endl;
 		switch (desc.FogMode)
 		{
 		default: // Linear
@@ -694,15 +688,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 	if (desc.PPClipPlane)
 	{
 		ss << "{" << std::endl;
-		ss << "  vec4 clipPos;" << std::endl;
-		if (desc.WorldSpacePosition)
-		{
-			ss << "  clipPos = viewMatrix * vec4(ecPos.xyz / ecPos.w, 1.0);" << std::endl;
-		}
-		else
-		{
-			ss << "  clipPos = vec4(ecPos.xyz / ecPos.w, 1.0);" << std::endl;
-		}
+		ss << "  vec4 clipPos = vec4(ecPos.xyz / ecPos.w, 1.0);" << std::endl;
 		for (int i = 0; i < 6; ++i)
 			ss << "  if ((nlClipPlaneMask & " << (1 << i) << ") != 0 && dot(clipPlane" << i << ", clipPos) < 0.0) discard;" << std::endl;
 		ss << "}" << std::endl;
@@ -716,7 +702,7 @@ void ppGenerate(std::string &result, const CPPBuiltin &desc, CGlExtensions &glex
 	{
 		ss << "vec4 pplSpecAccum = vec4(0.0);" << std::endl;
 		ss << "if (nlNumPerPixelLights > 0) {" << std::endl;
-		ss << "  vec3 wsPos = ecPos.xyz / ecPos.w;" << std::endl;
+		ss << "  vec3 wsPos = worldPos.xyz / worldPos.w;" << std::endl;
 		ss << "  vec3 wsNormal = normalize(normal.xyz);" << std::endl;
 		ss << "  vec3 eyeDir = normalize(cameraWorldPos - wsPos);" << std::endl;
 		ss << "  vec4 pplDiff = vec4(0.0);" << std::endl;

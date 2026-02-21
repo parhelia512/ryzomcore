@@ -78,7 +78,7 @@ public:
 // Note: May need additional flags related to scene sorting, etcetera.
 struct CProgramFeatures
 {
-	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), OutputsSpecularColor(false), OutputsWorldSpacePosition(false), InputsWorldSpaceNormal(false), InputsWorldSpacePosition(false), SupportPPL(false), NoUniforms(false), NoBuiltinUniforms(false), OnlyUBOs(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
+	CProgramFeatures() : DriverFlags(0), MaterialFlags(0), VPVertexFormat(0), NelvpRegisterCount(0), OutputsSpecularColor(false), OutputsWorldSpacePosition(false), InputsWorldSpaceNormal(false), InputsWorldSpacePosition(false), SupportPPL(false), NoUniforms(false), NoBuiltinUniforms(false), OnlyUBOs(false), UsesLightTableUBO(false), UsesCameraUBO(false), UsesObjectUBO(false), UsesMaterialUBO(false) { }
 
 	// Driver builtin parameters
 	enum TDriverFlags
@@ -103,6 +103,10 @@ struct CProgramFeatures
 	/// VP output varyings as CVertexBuffer vertex format flags.
 	/// When a user VP is active, the builtin PP uses this to declare matching inputs.
 	uint16 VPVertexFormat;
+
+	/// Number of nelvp constant registers used by a converted nelvp program.
+	/// Determines the UBO size (N * 16 bytes). 0 means not a nelvp-converted program.
+	uint16 NelvpRegisterCount;
 
 	/// Whether this VP outputs a separate specular color varying (for post-texture addition).
 	bool OutputsSpecularColor;

@@ -193,7 +193,7 @@ static bool programHasNonUBOUniforms(GLuint programId)
 
 bool CDriverGL3::supportVertexProgram(CVertexProgram::TProfile profile) const
 {
-	return (profile == IProgram::glsl330v) || (profile == IProgram::glsl300esv);
+	return (profile == IProgram::glsl330v) || (profile == IProgram::glsl300esv) || (profile == IProgram::nelvp);
 }
 
 bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
@@ -369,6 +369,19 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 	program->m_DrvInfo = drvInfo;
 	drvInfo->setProgramId(id);
 
+	// Detect nelvp-converted source before buildInfo so getUniformIndex returns
+	// constant register indices instead of querying GL uniform locations.
+	for (std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> >::const_iterator
+		ubIt = src->UniformBufferFormats.begin(); ubIt != src->UniformBufferFormats.end(); ++ubIt)
+	{
+		if (ubIt->second && ubIt->second->Name == "NlNelvpConstants")
+		{
+			drvInfo->isNelvpConverted = true;
+			drvInfo->NelvpParamIndices = src->ParamIndices;
+			break;
+		}
+	}
+
 	program->buildInfo(src);
 
 	setupInitialUniforms(program);
@@ -378,8 +391,54 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 
 bool CDriverGL3::compileVertexProgram(CVertexProgram *program)
 {
-	return compileProgram(program, GL_VERTEX_SHADER,
-		IProgram::glsl300esv, IProgram::glsl330v, "VP");
+	// If the program has nelvp source but no GLSL source, convert nelvp to GLSL
+	bool hasGLSL = false;
+	bool hasNelvp = false;
+	for (int i = 0; i < program->getSourceNb(); i++)
+	{
+		IProgram::CSource *s = program->getSource(i);
+		if (s->Profile == IProgram::glsl330v || s->Profile == IProgram::glsl300esv)
+			hasGLSL = true;
+		if (s->Profile == IProgram::nelvp)
+			hasNelvp = true;
+	}
+	if (hasNelvp && !hasGLSL)
+	{
+		bool linked = m_LinkedMegaShaders;
+		if (!convertNelvpToGLSL(program, linked))
+		{
+			nlwarning("GL3: Failed to convert nelvp to GLSL");
+			program->m_CompileFailed = true;
+			return false;
+		}
+	}
+
+	if (!compileProgram(program, GL_VERTEX_SHADER,
+		IProgram::glsl300esv, IProgram::glsl330v, "VP"))
+		return false;
+
+	// Post-compilation setup for nelvp-converted programs
+	if (hasNelvp && !hasGLSL)
+	{
+		CProgramDrvInfosGL3 *drvInfo = static_cast<CProgramDrvInfosGL3 *>(
+			(IProgramDrvInfos *)program->m_DrvInfo);
+		if (drvInfo && drvInfo->isNelvpConverted)
+		{
+			// Create the UBO for constant registers, sized by NelvpRegisterCount
+			uint16 regCount = program->features().NelvpRegisterCount;
+			nlassert(regCount > 0);
+			drvInfo->NelvpConstantUB = new CUniformBuffer();
+			drvInfo->NelvpConstantUB->Format.Name = "NlNelvpConstants";
+			drvInfo->NelvpConstantUB->Format.push("c", CUniformBufferFormat::FloatVec4, regCount);
+			drvInfo->NelvpConstantUB->UsageHint = CUniformBuffer::StreamDraw;
+			// Initialize UBO host memory by locking/unlocking
+			void *p = drvInfo->NelvpConstantUB->lock();
+			memset(p, 0, regCount * 16);
+			drvInfo->NelvpConstantUB->unlock();
+		}
+	}
+
+	return true;
 }
 
 bool CDriverGL3::activeVertexProgram(CVertexProgram *program)
@@ -407,11 +466,16 @@ bool CDriverGL3::activeVertexProgram(CVertexProgram *program, bool driver)
 		m_DriverShaderProgram = NULL;
 	}
 
+	// TODO: If !m_SupportSSO
+	// -> defer until actual setup; direct GL Uniforms not supported in that case, 
+	// or nelvp Uniforms go through the UBO staging area so not a problem
+
 	if (program == NULL)
 	{
 		nglUseProgramStages(ppoId, GL_VERTEX_SHADER_BIT, 0);
 		m_UserVertexProgram = NULL;
 		m_DriverVertexProgram = NULL;
+		m_NelvpActiveUB = NULL;
 		return true;
 	}
 
@@ -422,6 +486,7 @@ bool CDriverGL3::activeVertexProgram(CVertexProgram *program, bool driver)
 		{
 			m_UserVertexProgram = NULL;
 			m_DriverVertexProgram = NULL;
+			m_NelvpActiveUB = NULL;
 			return false;
 		}
 		di = program->m_DrvInfo;
@@ -432,6 +497,13 @@ bool CDriverGL3::activeVertexProgram(CVertexProgram *program, bool driver)
 
 	if (!driver) m_UserVertexProgram = program;
 	m_DriverVertexProgram = program;
+
+	// Make nelvp UBO immediately available for setUniform* calls
+	if (drvInfo->isNelvpConverted && drvInfo->NelvpConstantUB)
+		m_NelvpActiveUB = drvInfo->NelvpConstantUB;
+	else
+		m_NelvpActiveUB = NULL;
+
 	return true;
 }
 
@@ -562,6 +634,37 @@ uint32 CDriverGL3::getProgramId(TProgram program) const
 	return drvInfo->getProgramId();
 }
 
+// Check if a nelvp-converted UBO should intercept this setUniform call.
+// Returns the NelvpConstantUB if so, NULL otherwise.
+// m_NelvpActiveUB is set immediately in activeVertexProgram, so it's
+// available for setUniform* calls before any render happens.
+CUniformBuffer *CDriverGL3::getNelvpUB(TProgram program) const
+{
+	if (program != VertexProgram)
+		return NULL;
+	return m_NelvpActiveUB;
+}
+
+void CDriverGL3::flushNelvpUserVP()
+{
+	if (!m_UserVertexProgram)
+		return;
+
+	CProgramDrvInfosGL3 *di = static_cast<CProgramDrvInfosGL3 *>(
+		(IProgramDrvInfos *)m_UserVertexProgram->m_DrvInfo);
+	if (!di || !di->isNelvpConverted || !di->NelvpConstantUB)
+		return;
+
+	CUniformBuffer *ub = di->NelvpConstantUB;
+
+	// Ensure UBO is bound to the VP slot (state manager deduplicates)
+	bindUniformBuffer(UBBindingVertexProgram, ub);
+	m_NelvpActiveUB = ub;
+
+	// Upload dirty data to GL and bind to GL binding point
+	flushUserUBOs();
+}
+
 IProgram* CDriverGL3::getProgram(TProgram program) const
 {
 	// When a linked shader program is active, both VP and PP resolve against the same program
@@ -589,24 +692,32 @@ int CDriverGL3::getUniformLocation(TProgram program, const char *name)
 
 void CDriverGL3::setUniform1f(TProgram program, uint index, float f0)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub) { ub->lock(); ub->set(index * 16, f0, 0.0f, 0.0f, 0.0f); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
 	nglProgramUniform1f(id, index, f0);
 }
 
 void CDriverGL3::setUniform2f(TProgram program, uint index, float f0, float f1)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub) { ub->lock(); ub->set(index * 16, f0, f1, 0.0f, 0.0f); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
 	nglProgramUniform2f(id, index, f0, f1);
 }
 
 void CDriverGL3::setUniform3f(TProgram program, uint index, float f0, float f1, float f2)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub) { ub->lock(); ub->set(index * 16, f0, f1, f2, 0.0f); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
 	nglProgramUniform3f(id, index, f0, f1, f2);
 }
 
 void CDriverGL3::setUniform4f(TProgram program, uint index, float f0, float f1, float f2, float f3)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub) { ub->lock(); ub->set(index * 16, f0, f1, f2, f3); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
 	nglProgramUniform4f(id, index, f0, f1, f2, f3);
 }
@@ -661,42 +772,81 @@ void CDriverGL3::setUniform4ui(TProgram program, uint index, uint32 ui0, uint32 
 
 void CDriverGL3::setUniform3f(TProgram program, uint index, const CVector &v)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub) { ub->lock(); ub->set(index * 16, v.x, v.y, v.z, 0.0f); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
 	nglProgramUniform3f(id, index, v.x, v.y, v.z);
 }
 
 void CDriverGL3::setUniform4f(TProgram program, uint index, const CVector &v, float f3)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub) { ub->lock(); ub->set(index * 16, v.x, v.y, v.z, f3); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
 	nglProgramUniform4f(id, index, v.x, v.y, v.z, f3);
 }
 
 void CDriverGL3::setUniform4f(TProgram program, uint index, const NLMISC::CRGBAF& rgba)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub) { ub->lock(); ub->set(index * 16, rgba.R, rgba.G, rgba.B, rgba.A); ub->unlock(); return; }
 	uint32 id = getProgramId(program);
 	nglProgramUniform4f(id, index, rgba.R, rgba.G, rgba.B, rgba.A);
 }
 
 void CDriverGL3::setUniform3x3f(TProgram program, uint index, const float *src)
 {
+	// nelvp: 3x3 matrix not used by nelvp programs, no interception needed
 	uint32 id = getProgramId(program);
 	nglProgramUniformMatrix3fv(id, index, 1, false, src);
 }
 
 void CDriverGL3::setUniform4x4f(TProgram program, uint index, const CMatrix &m)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub)
+	{
+		// nelvp: rows in consecutive registers, CMatrix is column-major → transpose
+		CMatrix mt = m;
+		mt.transpose();
+		ub->lock();
+		ub->set(index * 16, mt);
+		ub->unlock();
+		return;
+	}
 	uint32 id = getProgramId(program);
 	nglProgramUniformMatrix4fv(id, index, 1, false, m.get());
 }
 
 void CDriverGL3::setUniform4x4f(TProgram program, uint index, const float *src)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub)
+	{
+		// nelvp: rows in consecutive registers, input is column-major → transpose
+		CMatrix mt;
+		mt.set(src);
+		mt.transpose();
+		ub->lock();
+		ub->set(index * 16, mt);
+		ub->unlock();
+		return;
+	}
 	uint32 id = getProgramId(program);
 	nglProgramUniformMatrix4fv(id, index, 1, false, src);
 }
 
 void CDriverGL3::setUniform4fv(TProgram program, uint index, size_t num, const float *src)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub)
+	{
+		ub->lock();
+		for (size_t i = 0; i < num; i++)
+			ub->set((int)((index + i) * 16), src[i * 4], src[i * 4 + 1], src[i * 4 + 2], src[i * 4 + 3]);
+		ub->unlock();
+		return;
+	}
 	uint32 id = getProgramId(program);
 	nglProgramUniform4fv(id, index, num, src);
 }
@@ -715,21 +865,41 @@ void CDriverGL3::setUniform4uiv(TProgram program, uint index, size_t num, const 
 
 void CDriverGL3::setUniformMatrix(TProgram program, uint index, TMatrix matrix, TTransform transform)
 {
-	uint32 id = getProgramId(program);
+	CUniformBuffer *ub = getNelvpUB(program);
 	CMatrix mat;
-	
 
-	switch(matrix)
+	if (ub)
 	{
-	case IDriver::ModelView:
-		mat = _ModelViewMatrix;
-		break;
-	case IDriver::Projection:
-		mat = _GLProjMat * _ChangeBasis;
-		break;
-	case IDriver::ModelViewProjection:
-		mat = _GLProjMat * _ChangeBasis * _ModelViewMatrix;
-		break;
+		// nelvp programs expect old-GL-style matrices where _ModelViewMatrix
+		// already includes the basis change (NeL space → GL eye space).
+		// In GL3, _ModelViewMatrix is pure NeL space, so prepend _ChangeBasis.
+		switch(matrix)
+		{
+		case IDriver::ModelView:
+			mat = _ChangeBasis * _ModelViewMatrix;
+			break;
+		case IDriver::Projection:
+			mat = _GLProjMat; // No basis here; MV already has it
+			break;
+		case IDriver::ModelViewProjection:
+			mat = _GLProjMat * _ChangeBasis * _ModelViewMatrix;
+			break;
+		}
+	}
+	else
+	{
+		switch(matrix)
+		{
+		case IDriver::ModelView:
+			mat = _ModelViewMatrix;
+			break;
+		case IDriver::Projection:
+			mat = _GLProjMat * _ChangeBasis;
+			break;
+		case IDriver::ModelViewProjection:
+			mat = _GLProjMat * _ChangeBasis * _ModelViewMatrix;
+			break;
+		}
 	}
 
 	switch(transform)
@@ -746,12 +916,34 @@ void CDriverGL3::setUniformMatrix(TProgram program, uint index, TMatrix matrix, 
 		break;
 	}
 
+	if (ub)
+	{
+		// nelvp stores matrix rows in consecutive constant registers (c[i]..c[i+3]).
+		// CMatrix is column-major, so transpose to get rows as consecutive vec4s.
+		mat.transpose();
+		ub->lock();
+		ub->set(index * 16, mat);
+		ub->unlock();
+		return;
+	}
 
+	uint32 id = getProgramId(program);
 	nglProgramUniformMatrix4fv(id, index, 1, false, mat.get());
 }
 
 void CDriverGL3::setUniformFog(TProgram program, uint index)
 {
+	CUniformBuffer *ub = getNelvpUB(program);
+	if (ub)
+	{
+		// nelvp fog needs basis-changed ModelView (GL eye space)
+		CMatrix nelvpMV = _ChangeBasis * _ModelViewMatrix;
+		const float *v = nelvpMV.get();
+		ub->lock();
+		ub->set(index * 16, -v[2], -v[6], -v[10], -v[4]);
+		ub->unlock();
+		return;
+	}
 	uint32 id = getProgramId(program);
 	const float *v = _ModelViewMatrix.get();
 	nglProgramUniform4f(id, index, -v[ 2 ], -v[ 6 ], -v[ 10 ], -v[ 4 ]);
@@ -868,6 +1060,9 @@ void CDriverGL3::generateShaderDesc(CShaderDesc &desc, CMaterial &mat)
 
 bool CDriverGL3::setupBuiltinPrograms()
 {
+	// Bind and flush the nelvp constant UBO if the active VP is a converted nelvp program.
+	flushNelvpUserVP();
+
 	// Effective programs: user > material > NULL
 	CVertexProgram *effectiveVP = m_UserVertexProgram ? m_UserVertexProgram : m_MaterialVertexProgram;
 	CPixelProgram *effectivePP = m_UserPixelProgram ? m_UserPixelProgram : m_MaterialPixelProgram;
@@ -891,8 +1086,11 @@ bool CDriverGL3::setupBuiltinPrograms()
 
 	// Pure mega linked path (no user/material programs)
 	if (m_LinkedMegaShaders && m_UseMegaShaders && !effectiveVP && !effectivePP)
+	{
+		m_NelvpActiveUB = NULL;
 		return setupMegaLinkedPrograms()
 			&& setupUniforms();
+	}
 
 	// Try user/material linked path when at least one non-builtin program is set
 	if (m_LinkedMegaShaders && m_UseMegaShaders)
@@ -952,9 +1150,23 @@ bool CDriverGL3::setupBuiltinVertexProgram(CVertexProgram *effectiveVP, CPixelPr
 			m_VPWorldSpacePositionOutput = true;
 			m_VPNormalOutput = true;
 		}
+
+		// Bind nelvp constant UBO if this is a converted nelvp program
+		m_NelvpActiveUB = NULL;
+		{
+			CProgramDrvInfosGL3 *di = static_cast<CProgramDrvInfosGL3 *>(
+				(IProgramDrvInfos *)effectiveVP->m_DrvInfo);
+			if (di && di->isNelvpConverted && di->NelvpConstantUB)
+			{
+				bindUniformBuffer(UBBindingVertexProgram, di->NelvpConstantUB);
+				m_NelvpActiveUB = di->NelvpConstantUB;
+			}
+		}
+
 		return true;
 	}
 
+	m_NelvpActiveUB = NULL;
 	if (m_UseMegaShaders) return setupMegaVertexProgram();
 
 	if (!m_SupportSSO) return false;
@@ -1198,15 +1410,6 @@ void CDriverGL3::setupUniforms(TProgram program)
 		uint fogDensityIdx = p->getUniformIndex(CProgramIndex::FogDensity);
 		if (fogDensityIdx != ~0)
 			nglProgramUniform1f(progId, fogDensityIdx, _CameraUBOData.fogDensity);
-
-		// Camera forward for world-space fog (second row of view matrix, NeL Y = forward).
-		// When cameraUBO is active, the PP derives this from viewMatrix in the UBO instead.
-		uint camFwdIdx = p->getUniformIndex(CProgramIndex::CameraForward);
-		if (camFwdIdx != ~0)
-		{
-			const float *v = _ViewMtx.get();
-			nglProgramUniform3f(progId, camFwdIdx, v[1], v[5], v[9]);
-		}
 	}
 
 	if (!m_ProgramUsesMaterialUBO[program])
@@ -2167,6 +2370,19 @@ bool CDriverGL3::setupUserLinkedPrograms(CVertexProgram *vpProg, CPixelProgram *
 	m_ProgramUsesObjectUBO[PixelProgram] = sp->PPFeatures.UsesObjectUBO;
 	m_ProgramUsesMaterialUBO[PixelProgram] = sp->PPFeatures.UsesMaterialUBO;
 
+	// Track nelvp UBO for the linked path
+	m_NelvpActiveUB = NULL;
+	if (vpProg && vpProg->m_DrvInfo)
+	{
+		CProgramDrvInfosGL3 *vpDi = static_cast<CProgramDrvInfosGL3 *>(
+			(IProgramDrvInfos *)vpProg->m_DrvInfo);
+		if (vpDi->isNelvpConverted && vpDi->NelvpConstantUB)
+		{
+			bindUniformBuffer(UBBindingVertexProgram, vpDi->NelvpConstantUB);
+			m_NelvpActiveUB = vpDi->NelvpConstantUB;
+		}
+	}
+
 	return true;
 }
 
@@ -2337,6 +2553,7 @@ IProgramDrvInfos(drv, it)
 	cameraBlockIndex = GL_INVALID_INDEX;
 	objectBlockIndex = GL_INVALID_INDEX;
 	materialBlockIndex = GL_INVALID_INDEX;
+	isNelvpConverted = false;
 }
 
 CProgramDrvInfosGL3::~CProgramDrvInfosGL3()
@@ -2347,6 +2564,26 @@ CProgramDrvInfosGL3::~CProgramDrvInfosGL3()
 
 uint CProgramDrvInfosGL3::getUniformIndex(const char *name) const
 {
+	if (isNelvpConverted)
+	{
+		// Check ParamIndices first (maps friendly names like "viewCenter" to register indices)
+		std::map<std::string, uint>::const_iterator it = NelvpParamIndices.find(name);
+		if (it != NelvpParamIndices.end())
+			return it->second;
+
+		// Fall back to "constantN" pattern for generic constant register access
+		if (strncmp(name, "constant", 8) == 0)
+		{
+			const char *num = name + 8;
+			if (*num >= '0' && *num <= '9')
+			{
+				int idx = atoi(num);
+				if (idx >= 0 && idx < 96)
+					return (uint)idx;
+			}
+		}
+	}
+
 	int idx = nglGetUniformLocation(programId, name);
 	if (idx == -1)
 		return ~0;

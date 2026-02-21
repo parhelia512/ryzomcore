@@ -501,6 +501,7 @@ CVertexProgramWindTree::CVertexProgramWindTree(uint numPls, bool specular, bool 
 		CSource *source = new CSource();
 		source->DisplayName = NLMISC::toString("nelvp/MeshVPWindTree/%i/%s/%s", numPls, specular ? "spec" : "nospec", normalize ? "normalize" : "nonormalize");
 		source->Profile = CVertexProgram::nelvp;
+		source->Features.NelvpRegisterCount = 40; // c[0..23] base + c[24..38] lighting (CTS+0..14)
 		source->setSource(vpCode);
 		source->ParamIndices["modelViewProjection"] = 0;
 		source->ParamIndices["fog"] = 6;

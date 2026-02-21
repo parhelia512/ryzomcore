@@ -41,7 +41,8 @@ SOURCE_GROUP(program FILES
 		driver_opengl3_vertex_program.cpp
 		driver_opengl3_pixel_program.cpp
 		driver_opengl3_vertex_mega_program.cpp
-		driver_opengl3_pixel_mega_program.cpp)
+		driver_opengl3_pixel_mega_program.cpp
+		driver_opengl3_nelvp.cpp)
 
 SOURCE_GROUP(vertex FILES
 		driver_opengl3_vertex.cpp

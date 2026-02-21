@@ -249,6 +249,8 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 			continue;
 		if (fogOrPpl && i == VaryingLocationVertexColor)
 			continue; // Slot used by vertexColor
+		if (fogOrPpl && i == VaryingLocationWorldPos)
+			continue; // Slot used by worldPos
 		if (!linked)
 			ss << "layout(location = " << i << ") ";
 		ss << "smooth out vec4 " << g_AttribNames[i] << ";" << std::endl;
@@ -261,6 +263,9 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 		if (!linked)
 			ss << "layout(location = " << VaryingLocationVertexColor << ") ";
 		ss << "smooth out vec4 vertexColor;" << std::endl;
+		if (!linked)
+			ss << "layout(location = " << VaryingLocationWorldPos << ") ";
+		ss << "smooth out vec4 worldPos;" << std::endl;
 	}
 	if (!linked)
 		ss << "layout(location = " << VaryingLocationDiffuseColor << ") ";
@@ -320,10 +325,11 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 	ss << "  vec4 ecPos4 = modelView * vposition;" << std::endl;
 	if (fogOrPpl)
 	{
+		ss << "  ecPos = ecPos4;" << std::endl;
 		ss << "  if (nlWorldSpacePosition != 0)" << std::endl;
-		ss << "    ecPos = vec4(transpose(mat3(viewMatrix)) * (ecPos4.xyz - viewMatrix[3].xyz * ecPos4.w), ecPos4.w);" << std::endl;
+		ss << "    worldPos = vec4(transpose(mat3(viewMatrix)) * (ecPos4.xyz - viewMatrix[3].xyz * ecPos4.w), ecPos4.w);" << std::endl;
 		ss << "  else" << std::endl;
-		ss << "    ecPos = ecPos4;" << std::endl;
+		ss << "    worldPos = vec4(0.0);" << std::endl;
 		// Default vertexColor to identity; overwritten when VertexColorLighted + PPL
 		ss << "  vertexColor = vec4(1.0);" << std::endl;
 	}
@@ -342,6 +348,8 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 			continue;
 		if (fogOrPpl && i == VaryingLocationVertexColor)
 			continue; // Slot used by vertexColor
+		if (fogOrPpl && i == VaryingLocationWorldPos)
+			continue; // Slot used by worldPos
 		if (i == Normal)
 		{
 			ss << "  if ((nlVertexFormat & NL_VP_NORMAL_FLAG) != 0) {" << std::endl;
