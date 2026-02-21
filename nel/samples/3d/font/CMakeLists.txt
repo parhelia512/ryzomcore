@@ -6,10 +6,10 @@ ADD_EXECUTABLE(nl_sample_font WIN32 ${SRC})
 IF(EMSCRIPTEN)
   TARGET_COMPILE_DEFINITIONS(nl_sample_font PRIVATE "FONT_DIR=\"/share/nl_sample_font/\"")
   TARGET_LINK_LIBRARIES(nl_sample_font
-    -Wl,--whole-archive nelmisc nel3d nel_drv_opengles3_static -Wl,--no-whole-archive
+    -Wl,--whole-archive nelmisc nel3d nel_drv_opengles3 -Wl,--no-whole-archive
   )
   SET_TARGET_PROPERTIES(nl_sample_font PROPERTIES
-    SUFFIX ".html"
+    SUFFIX ".js"
     LINK_FLAGS "-s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2 -s FULL_ES3=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s ALLOW_MEMORY_GROWTH=1 -Wl,--no-gc-sections -Wl,--export=__main_argc_argv --embed-file ${CMAKE_CURRENT_SOURCE_DIR}/beteckna.ttf@/share/nl_sample_font/beteckna.ttf -sUSE_FREETYPE=1"
   )
 ELSE()
