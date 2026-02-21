@@ -225,6 +225,7 @@ namespace NLDRIVERGL3 {
 
 #define nglMapBufferRange glMapBufferRange
 #define nglFlushMappedBufferRange glFlushMappedBufferRange
+#define nglCopyBufferSubData glCopyBufferSubData
 
 #define nglGenQueries glGenQueries
 #define nglDeleteQueries glDeleteQueries
