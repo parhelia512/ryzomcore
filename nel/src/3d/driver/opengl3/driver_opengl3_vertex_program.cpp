@@ -127,12 +127,7 @@ bool operator==(const CVPBuiltin &left, const CVPBuiltin &right)
 	return true;
 }
 
-} // NLDRIVERGL3
-} // NL3D
-
-namespace std {
-
-size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::CVPBuiltin & v) const
+size_t CVPBuiltinHashTraits::operator()(const CVPBuiltin & v) const
 {
 	uint32 h;
 
@@ -149,7 +144,8 @@ size_t hash<NL3D::NLDRIVERGL3::CVPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 	return (size_t)h;
 }
 
-}
+} // NLDRIVERGL3
+} // NL3D
 
 namespace NL3D {
 namespace NLDRIVERGL3 {
@@ -633,7 +629,7 @@ void vpGenerate(std::string &result, const CVPBuiltin &desc)
 
 void CDriverGL3::generateBuiltinVertexProgram()
 {
-	std::unordered_set<CVPBuiltin>::iterator it = m_VPBuiltinCache.find(m_VPBuiltinCurrent);
+	CHashSet<CVPBuiltin, CVPBuiltinHashTraits>::iterator it = m_VPBuiltinCache.find(m_VPBuiltinCurrent);
 	if (it != m_VPBuiltinCache.end())
 	{
 		m_VPBuiltinCurrent.VertexProgram = it->VertexProgram;

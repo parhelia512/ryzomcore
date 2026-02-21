@@ -149,24 +149,24 @@ inline bool hasFlag(uint32 data, uint32 flag)
 
 } /* anonymous namespace */
 
+/// Hash traits for CVPBuiltin (compatible with CHashSet across all compilers)
+struct CVPBuiltinHashTraits
+{
+	enum { bucket_size = 4, min_buckets = 8 };
+	size_t operator()(const CVPBuiltin &v) const;
+	bool operator()(const CVPBuiltin &a, const CVPBuiltin &b) const { return a < b; }
+};
+
+/// Hash traits for CPPBuiltin (compatible with CHashSet across all compilers)
+struct CPPBuiltinHashTraits
+{
+	enum { bucket_size = 4, min_buckets = 8 };
+	size_t operator()(const CPPBuiltin &v) const;
+	bool operator()(const CPPBuiltin &a, const CPPBuiltin &b) const { return a < b; }
+};
+
 } // NLDRIVERGL3
 } // NL3D
-
-namespace std {
-
-template <>
-struct hash<NL3D::NLDRIVERGL3::CVPBuiltin>
-{
-	size_t operator()(const NL3D::NLDRIVERGL3::CVPBuiltin & v) const;
-};
-
-template <>
-struct hash<NL3D::NLDRIVERGL3::CPPBuiltin>
-{
-	size_t operator()(const NL3D::NLDRIVERGL3::CPPBuiltin & v) const;
-};
-
-}
 
 #endif // NL_DRIVER_OPENGL3_PROGRAM_H
 

@@ -39,7 +39,6 @@
 #	endif //XF86VIDMODE
 #endif // NL_OS_UNIX
 
-#include <unordered_set>
 
 #include "nel/misc/matrix.h"
 #include "nel/misc/smart_ptr.h"
@@ -238,7 +237,7 @@ struct CCameraUBOData
 	float specularTexMtx[16]; // 64  (inverse view rotation: eye-space reflection → world-space cubemap lookup)
 	float inverseProjectionBasis[16]; // 64  inv(Projection * ChangeBasis): clip-space → NeL eye-space for nelvp ecPos
 };                           // 352
-static_assert(sizeof(CCameraUBOData) == 352, "Camera UBO layout mismatch");
+nlctassert(sizeof(CCameraUBOData) == 352);
 
 // ***************************************************************************
 // CPU-side struct matching the std140 NlLightInfo layout (96 bytes)
@@ -256,7 +255,7 @@ struct CLightTableUBOEntry
 	float spotCutoff;      // 76
 	float ambient[4];      // 80
 };                         // 96 bytes
-static_assert(sizeof(CLightTableUBOEntry) == 96, "CLightTableUBOEntry must match std140 NlLightInfo layout");
+nlctassert(sizeof(CLightTableUBOEntry) == 96);
 
 // ***************************************************************************
 // Per-Object UBO data layout (std140, 304 bytes, matches GLSL NlModel block)
@@ -281,7 +280,7 @@ struct CObjectUBOData
 	sint32 fogEnabled;             // 4
 	sint32 _pad[1];                // 4
 };                                 // 320
-static_assert(sizeof(CObjectUBOData) == 320, "Object UBO layout mismatch");
+nlctassert(sizeof(CObjectUBOData) == 320);
 
 // ***************************************************************************
 // Per-Material UBO data layout (std140, 96 bytes, matches GLSL NlMaterial block)
@@ -305,7 +304,7 @@ struct CMaterialUBOData
 	float constant[IDRV_PROGRAM_MAXSAMPLERS][4]; // 128
 	float texMatrix[4][16];        // 256 (texture matrices, VP — mat4 stored column-major)
 };                                 // 480
-static_assert(sizeof(CMaterialUBOData) == 480, "Material UBO layout mismatch");
+nlctassert(sizeof(CMaterialUBOData) == 480);
 
 // ***************************************************************************
 namespace /* anonymous */ {
@@ -1525,9 +1524,8 @@ private:
 	NLMISC::CRefPtr<CShaderProgram> m_DriverShaderProgram; // Combined linked VP+PP program (non-SSO path)
 
 	friend class CPPBuiltin;
-	std::unordered_set<CPPBuiltin> m_PPBuiltinCache;
-
-	std::unordered_set<CVPBuiltin> m_VPBuiltinCache;
+	CHashSet<CPPBuiltin, CPPBuiltinHashTraits> m_PPBuiltinCache;
+	CHashSet<CVPBuiltin, CVPBuiltinHashTraits> m_VPBuiltinCache;
 	CVPBuiltin m_VPBuiltinCurrent;
 	bool m_VPBuiltinTouched;
 
@@ -1698,7 +1696,7 @@ public:
 
 	// Linked program cache for user VP + user PP combinations
 	// Keyed by the other program's drvinfo pointer
-	std::map<CProgramDrvInfosGL3*, NLMISC::CSmartPtr<CShaderProgram>> LinkedUserVPPP;
+	std::map<CProgramDrvInfosGL3*, NLMISC::CSmartPtr<CShaderProgram> > LinkedUserVPPP;
 
 	// nelvp-converted program state
 	bool isNelvpConverted;                                // True if this VP was converted from nelvp
