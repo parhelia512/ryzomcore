@@ -591,9 +591,9 @@ uint8 *CFontGenerator::getBitmap (u32char c, uint32 size, bool embolden, bool ob
 
 	// prevent outputing white glyph if char is not available in font
 	{
-		wchar_t wcc = (wchar_t)cc;
+		wchar_t wc = (wchar_t)cc;
 		DWORD gi;
-		if (GetGlyphIndicesW(hdcDib, &wcc, 1, (LPWORD)&gi, GGI_MARK_NONEXISTING_GLYPHS) == 1)
+		if (GetGlyphIndicesW(hdcDib, &wc, 1, (LPWORD)&gi, GGI_MARK_NONEXISTING_GLYPHS) == 1)
 		{
 			if (gi == 0xffff)
 			{
