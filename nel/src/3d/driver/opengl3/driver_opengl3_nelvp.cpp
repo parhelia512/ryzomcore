@@ -697,6 +697,13 @@ bool CDriverGL3::convertNelvpToGLSL(CVertexProgram *program, bool linked)
 		}
 	}
 
+	// Clamp color outputs to [0,1] per ARB VP1.0 spec.
+	// BFC0/BFC1 (back-face colors) would also need clamping, but are unsupported in this converter.
+	if (outputUsed[CVPOperand::OPrimaryColor])
+		ss << "diffuseColor = clamp(diffuseColor, 0.0, 1.0);\n";
+	if (outputUsed[CVPOperand::OSecondaryColor])
+		ss << "specularColor = clamp(specularColor, 0.0, 1.0);\n";
+
 	// Epilogue: synthesize ecPos from gl_Position via inverseProjectionBasis from camera UBO.
 	// inv(P * CB) * gl_Position = ModelView * adjustedPos = NeL-space position.
 	// Must be NeL space (not GL eye space) because builtin PP fog uses ecPos.y as forward depth.
