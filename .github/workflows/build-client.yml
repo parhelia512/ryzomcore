@@ -130,7 +130,7 @@ jobs:
       run: cmake --build --preset ci-ryzom-client
 
     - name: Package
-      run: cmake --build --preset ci-ryzom-client --target package
+      run: cpack --preset ci-ryzom-client
 
     - uses: actions/upload-artifact@v4
       if: ${{ failure() }}
