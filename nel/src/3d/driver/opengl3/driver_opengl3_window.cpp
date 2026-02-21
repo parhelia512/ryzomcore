@@ -620,7 +620,7 @@ bool CDriverGL3::setDisplay(nlWindow wnd, const GfxMode &mode, bool show, bool r
 		attrs.depth = true;
 		attrs.stencil = true;
 		attrs.antialias = true;
-		attrs.preserveDrawingBuffer = false;
+		attrs.preserveDrawingBuffer = true;
 
 		_ctx = emscripten_webgl_create_context(NL_EMSCRIPTEN_CANVAS, &attrs);
 		if (_ctx <= 0)

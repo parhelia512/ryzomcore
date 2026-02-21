@@ -1359,6 +1359,13 @@ private:
 	CVertexBufferInfo		_LastVB;
 	CIndexBufferInfo		_LastIB;
 
+#ifdef USE_OPENGLES3
+	/// Scratch element buffer for WebGL 2.0 (client-side index arrays not supported)
+	GLuint					_ScratchElementBuffer;
+	GLsizeiptr				_ScratchElementBufferSize;
+	void					drawElementsWebGL(GLenum mode, GLsizei count, GLenum type, const void *indices);
+#endif
+
 	/// Sets up the rendering parameters for the normal shader
 	void setupNormalMaterial();
 	/// Sets up the rendering parameters for the specular shader

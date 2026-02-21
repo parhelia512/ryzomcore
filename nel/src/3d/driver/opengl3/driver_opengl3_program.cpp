@@ -2060,7 +2060,17 @@ void CDriverGL3::setupInitialUniforms(IProgram *program)
 		{
 			uint samplerIdx = program->getUniformIndex((CProgramIndex::TName)(CProgramIndex::Sampler0 + i));
 			if (samplerIdx >= 0)
+			{
+#ifdef USE_OPENGLES3
+				// GLES 3.0: nglProgramUniform1i is a no-op (SSO not available).
+				// Use glUseProgram + glUniform1i instead.
+				nglUseProgram(id);
+				glUniform1i(samplerIdx, i);
+				nglUseProgram(0);
+#else
 				nglProgramUniform1i(id, samplerIdx, i);
+#endif
+			}
 		}
 
 		// Resolve and cache NlLightTable UBO block index, bind to its binding point

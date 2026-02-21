@@ -318,6 +318,11 @@ CDriverGL3::CDriverGL3()
 		_SwapBufferSync[i] = 0;
 	_PixelUploadPBO = 0;
 
+#ifdef USE_OPENGLES3
+	_ScratchElementBuffer = 0;
+	_ScratchElementBufferSize = 0;
+#endif
+
 	_LightMapDynamicLightEnabled = false;
 	_LightMapDynamicLightDirty= false;
 	_LightMapDynUBOId = 0;
@@ -543,6 +548,12 @@ bool CDriverGL3::setupDisplay()
 	nglGenBuffers(1, &_ObjectUBOId);
 	// nglGenBuffers(1, &_OverrideMaterialUBOId); // Replaced by per-material UBO slots
 	nglGenBuffers(1, &_PixelUploadPBO);
+
+#ifdef USE_OPENGLES3
+	// WebGL 2.0 does not support client-side index arrays.
+	// Create a scratch element buffer for uploading index data before draw calls.
+	nglGenBuffers(1, &_ScratchElementBuffer);
+#endif
 
 	// Pre-allocate UBOs to their full declared sizes.
 	// WebGL 2.0 requires bound UBOs to be at least as large as the
@@ -951,6 +962,14 @@ bool CDriverGL3::release()
 		nglDeleteBuffers(1, &_PixelUploadPBO);
 		_PixelUploadPBO = 0;
 	}
+
+#ifdef USE_OPENGLES3
+	if (_ScratchElementBuffer)
+	{
+		nglDeleteBuffers(1, &_ScratchElementBuffer);
+		_ScratchElementBuffer = 0;
+	}
+#endif
 
 	// Call IDriver::release() before, to destroy textures, shaders and VBs...
 	IDriver::release();
