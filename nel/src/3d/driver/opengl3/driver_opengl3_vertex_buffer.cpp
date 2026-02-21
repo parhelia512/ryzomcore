@@ -156,7 +156,7 @@ void *CVertexBufferGL3::lock()
 			// Not yet resident — shadow is always valid if available
 			if (!m_ShadowData.empty())
 			{
-				m_VertexPtr = m_ShadowData.data();
+				m_VertexPtr = &m_ShadowData[0];
 				return m_VertexPtr;
 			}
 			nlassert(!m_DummyVB.empty());
@@ -173,7 +173,7 @@ void *CVertexBufferGL3::lock()
 			m_Driver->incrementResetCounter();
 			if (!m_ShadowData.empty())
 			{
-				m_VertexPtr = m_ShadowData.data();
+				m_VertexPtr = &m_ShadowData[0];
 				return m_VertexPtr;
 			}
 			return &m_DummyVB[0];
@@ -190,7 +190,7 @@ void *CVertexBufferGL3::lock()
 				nglDeleteBuffers(1, &m_VertexObjectId[i]);
 				if (!m_ShadowData.empty())
 				{
-					m_VertexPtr = m_ShadowData.data();
+					m_VertexPtr = &m_ShadowData[0];
 					return m_VertexPtr;
 				}
 				return &m_DummyVB[0];
@@ -210,7 +210,7 @@ void *CVertexBufferGL3::lock()
 	// Shadow buffer fast path: no GL interaction needed
 	if (!m_ShadowData.empty())
 	{
-		m_VertexPtr = m_ShadowData.data();
+		m_VertexPtr = &m_ShadowData[0];
 		return m_VertexPtr;
 	}
 
@@ -403,7 +403,7 @@ void CVertexBufferGL3::flush()
 	// keeps reading from the old allocation while we upload new data.
 	const uint size = VB->getNumVertices() * VB->getVertexSize();
 	m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
-	nglBufferData(GL_ARRAY_BUFFER, size, m_ShadowData.data(), GL_STREAM_DRAW);
+	nglBufferData(GL_ARRAY_BUFFER, size, &m_ShadowData[0], GL_STREAM_DRAW);
 	m_Driver->_DriverGLStates.forceBindArrayBuffer(0);
 	m_ShadowDirty = false;
 }

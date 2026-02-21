@@ -638,7 +638,7 @@ public:
 	// Get feature information of the current program
 	inline CSource *source() const { return m_Source; };
 	inline const CProgramFeatures &features() const { return m_Source->Features; };
-	inline TProfile profile() const { return m_Source->Profile; }
+	inline TProfile profile() const { return m_Source->Features.NelvpRegisterCount > 0 ? nelvp : m_Source->Profile; }
 
 	// Build feature info, called automatically by the driver after compile succeeds
 	void buildInfo(CSource *source);

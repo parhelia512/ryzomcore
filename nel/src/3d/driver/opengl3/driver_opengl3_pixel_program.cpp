@@ -110,12 +110,7 @@ bool operator==(const CPPBuiltin &left, const CPPBuiltin &right)
 	return true;
 }
 
-} // NLDRIVERGL3
-} // NL3D
-
-namespace std {
-
-size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::CPPBuiltin & v) const
+size_t CPPBuiltinHashTraits::operator()(const CPPBuiltin & v) const
 {
 #if defined(_WIN64) || (defined(HAVE_X86_64) && !defined(_WIN32))
 	uint32 h32;
@@ -158,7 +153,8 @@ size_t hash<NL3D::NLDRIVERGL3::CPPBuiltin>::operator()(const NL3D::NLDRIVERGL3::
 #endif
 }
 
-}
+} // NLDRIVERGL3
+} // NL3D
 
 namespace NL3D {
 namespace NLDRIVERGL3 {
@@ -807,7 +803,7 @@ void CDriverGL3::generateBuiltinPixelProgram(CMaterial &mat)
 	CMaterialDrvInfosGL3 *matDrv = static_cast<CMaterialDrvInfosGL3 *>((IMaterialDrvInfos *)(mat._MatDrvInfo));
 	nlassert(matDrv);
 
-	std::unordered_set<CPPBuiltin>::iterator it = m_PPBuiltinCache.find(matDrv->PPBuiltin);
+	CHashSet<CPPBuiltin, CPPBuiltinHashTraits>::iterator it = m_PPBuiltinCache.find(matDrv->PPBuiltin);
 	if (it != m_PPBuiltinCache.end())
 	{
 		matDrv->PPBuiltin.PixelProgram = it->PixelProgram;
