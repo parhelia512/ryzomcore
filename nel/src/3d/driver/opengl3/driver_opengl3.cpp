@@ -362,7 +362,7 @@ CDriverGL3::CDriverGL3()
 #ifdef USE_OPENGLES3
 	m_PPClipPlanes = true; // GL ES 3.0: use PP-based clip plane discard, no native gl_ClipDistance
 	m_LinkedMegaShaders = true; // GL ES 3.0: always use linked VP+PP programs, SSO not available
-	m_SupportSSO = true; // GL ES 3.0: SSO code path (stubs handle missing functions)
+	m_SupportSSO = false; // GL ES 3.0: SSO not available (no GL_ARB_separate_shader_objects)
 #else
 	m_PPClipPlanes = false; // GL 3.3: use native gl_ClipDistance
 	m_LinkedMegaShaders = true; // GL 3.3: also useful, set true for both

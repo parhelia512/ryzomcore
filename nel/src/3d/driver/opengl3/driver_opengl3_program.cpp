@@ -1132,6 +1132,9 @@ bool CDriverGL3::setupBuiltinPrograms()
 		if (setupUserLinkedPrograms(effectiveVP, effectivePP))
 			return setupUniforms();
 		// Fall through to SSO if linking not possible
+#ifdef USE_OPENGLES3
+		nlwarning("GL3: GLES3 unreachable: setupUserLinkedPrograms failed, no SSO fallback available");
+#endif
 	}
 
 	return setupBuiltinVertexProgram(effectiveVP, effectivePP)
@@ -1144,6 +1147,8 @@ bool CDriverGL3::setupBuiltinVertexProgram(CVertexProgram *effectiveVP, CPixelPr
 #ifdef USE_OPENGLES3
 	// Builtin non-mega shaders are not supported under GLES 3.0;
 	// they generate #version 330 which cannot compile on this target.
+	// This path should be unreachable when m_LinkedMegaShaders is true.
+	nlwarning("GL3: GLES3 unreachable: setupBuiltinVertexProgram called (effectiveVP=%p, effectivePP=%p)", (void *)effectiveVP, (void *)effectivePP);
 	return false;
 #endif
 	touchVertexFormatVP(); // Always update — PP builtin depends on vertex format

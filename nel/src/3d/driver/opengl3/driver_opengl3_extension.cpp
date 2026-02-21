@@ -878,9 +878,8 @@ bool	registerGlExtensions(CGlExtensions &ext)
 	// All core GLES 3.0 functions are directly linked
 	ext.GLCore = true;
 
-	// SSO not natively available in GLES 3.0 core, but report as available
-	// so the driver uses the SSO code path (stubs handle the actual calls)
-	ext.ARBSeparateShaderObjects = true;
+	// SSO not available in GLES 3.0 core
+	ext.ARBSeparateShaderObjects = false;
 
 	// S3TC may be available as extension on some ES implementations
 	ext.EXTTextureCompressionS3TC = false;
