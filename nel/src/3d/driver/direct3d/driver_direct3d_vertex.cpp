@@ -360,10 +360,10 @@ bool CDriverD3D::activeVertexBuffer(CVertexBuffer& VB)
 
 		// Create the vertex buffer
 		const uint size = VB.capacity()*VB.getVertexSize();
-		uint preferredMemory = 0;
+		CVertexBuffer::TLocation location = CVertexBuffer::RAMResident;
 		if (_DisableHardwareVertexArrayAGP)
 		{
-			preferredMemory = CVertexBuffer::RAMResident;
+			location = CVertexBuffer::RAMResident;
 			info->Volatile = false;
 		}
 		else
@@ -371,27 +371,27 @@ bool CDriverD3D::activeVertexBuffer(CVertexBuffer& VB)
 			switch (VB.getBufferUsage ())
 			{
 			case CVertexBuffer::CpuReadWrite:
-				preferredMemory = CVertexBuffer::RAMResident;
+				location = CVertexBuffer::RAMResident;
 				info->Volatile = false;
 				break;
 			case CVertexBuffer::FullRewrite:
 			case CVertexBuffer::PartialWrite:
-				preferredMemory = CVertexBuffer::AGPResident;
+				location = CVertexBuffer::AGPResident;
 				info->Volatile = false;
 				break;
 			case CVertexBuffer::Immutable:
 				if (getStaticMemoryToVRAM())
-					preferredMemory = CVertexBuffer::VRAMResident;
+					location = CVertexBuffer::VRAMResident;
 				else
-					preferredMemory = CVertexBuffer::AGPResident;
+					location = CVertexBuffer::AGPResident;
 				info->Volatile = false;
 				break;
 			case CVertexBuffer::SmallStream:
-				preferredMemory = CVertexBuffer::RAMResident;
+				location = CVertexBuffer::RAMResident;
 				info->Volatile = true;
 				break;
 			case CVertexBuffer::FullStream:
-				preferredMemory = CVertexBuffer::AGPResident;
+				location = CVertexBuffer::AGPResident;
 				info->Volatile = true;
 				break;
 			}
@@ -402,29 +402,32 @@ bool CDriverD3D::activeVertexBuffer(CVertexBuffer& VB)
 		{
 			nlassert (info->VertexBuffer == NULL);
 			info->Hardware = false;
-			info->VolatileRAM = preferredMemory == CVertexBuffer::RAMResident;
+			info->VolatileRAM = location == CVertexBuffer::RAMResident;
 		}
 		else
 		{
 			// Offset will be 0
 			info->Offset = 0;
 
-			bool success;
-			do
+			// Try to allocate at the requested location, falling back toward RAM
+			bool success = false;
+			for (sint loc = (sint)location; loc >= 0; --loc)
 			{
-				success = _DeviceInterface->CreateVertexBuffer(size, RemapVertexBufferUsage[preferredMemory],
-					0, RemapVertexBufferPool[preferredMemory], &(info->VertexBuffer), NULL) == D3D_OK;
+				success = _DeviceInterface->CreateVertexBuffer(size, RemapVertexBufferUsage[loc],
+					0, RemapVertexBufferPool[loc], &(info->VertexBuffer), NULL) == D3D_OK;
 				if (success)
+				{
+					location = (CVertexBuffer::TLocation)loc;
 					break;
+				}
 			}
-			while (preferredMemory--);
 			if (!success)
 				return false;
 
 			++vertexCount;
 
 			// Hardware ?
-			info->Hardware = preferredMemory != CVertexBuffer::RAMResident;
+			info->Hardware = location != CVertexBuffer::RAMResident;
 
 			// Stats
 			if (info->Hardware)
@@ -433,7 +436,7 @@ bool CDriverD3D::activeVertexBuffer(CVertexBuffer& VB)
 
 		// Release the local vertex buffer
 		VB.DrvInfos = info;
-		VB.setLocation ((CVertexBuffer::TLocation)preferredMemory);
+		VB.setLocation (location);
 
 		// Force the vertex buffer update
 		touchRenderVariable (&_VertexDeclCache);

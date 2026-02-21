@@ -147,9 +147,11 @@ bool CDriverGL3::setupVertexBuffer(CVertexBuffer& VB)
 						location = CVertexBuffer::VRAMResident;
 					else
 						location = CVertexBuffer::AGPResident;
+					break;
 				case CVertexBuffer::SmallStream:
 				case CVertexBuffer::CpuReadWrite:
 					location = CVertexBuffer::RAMResident;
+					break;
 				case CVertexBuffer::FullRewrite:
 				case CVertexBuffer::PartialWrite:
 				case CVertexBuffer::FullStream:
