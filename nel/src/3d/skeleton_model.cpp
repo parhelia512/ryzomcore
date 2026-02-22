@@ -1536,13 +1536,19 @@ void			CSkeletonModel::renderSkinList(NLMISC::CObjectVector<CTransform*, false> 
 			CVertexProgram *skinVP = getGPUSkinInsertVP();
 			drv->activeVertexProgram(skinVP);
 
-			// Render each GPU skin
+			// Fill bone UBO once for this skeleton, bind at UBBindingSkeleton
+			CUniformBuffer *boneUB = getGPUSkinBoneUBO();
+			fillGPUSkinBoneUBO(boneUB, this);
+			drv->bindUniformBuffer(UBBindingSkeleton, boneUB);
+
+			// Render each GPU skin (only fills morph UBO per skin)
 			for (uint i = 0; i < gpuSkins.size(); i++)
 			{
 				gpuSkins[i]->renderGPUSkin(alphaMRM, this);
 			}
 
-			// Deactivate the insert VP
+			// Unbind bone UBO and deactivate the insert VP
+			drv->bindUniformBuffer(UBBindingSkeleton, NULL);
 			drv->activeVertexProgram(NULL);
 		}
 	}

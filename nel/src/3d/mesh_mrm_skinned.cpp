@@ -2443,54 +2443,25 @@ void CMeshMRMSkinnedGeom::renderGPUSkin(CMeshMRMSkinnedInstance *mi, float alpha
 	else
 		morphThreshold = (sint32)_Lods[numLod].NWedges; // No morphing for coarsest LOD
 
-	// Build NlSkinning UBO
-	// Format: morphThreshold (sint32, offset 0), morphAlpha (float, offset 4),
-	//         bones (vec4[240], offset 16) — 3 row-vectors per bone
-	// Use a static UBO to avoid heap allocation per draw call.
-	// Entry indices into the UBO format (not byte offsets).
-	enum { EntryMorphThreshold = 0, EntryMorphAlpha = 1, EntryBones = 2 };
-	static NLMISC::CSmartPtr<CUniformBuffer> s_SkinUB;
-	if (!s_SkinUB)
+	// Build NlMorph UBO (bones are already bound by the skeleton at UBBindingSkeleton)
+	enum { EntryMorphThreshold = 0, EntryMorphAlpha = 1 };
+	static NLMISC::CSmartPtr<CUniformBuffer> s_MorphUB;
+	if (!s_MorphUB)
 	{
-		s_SkinUB = new CUniformBuffer();
-		s_SkinUB->Format.Name = "NlSkinning";
-		s_SkinUB->Format.push("morphThreshold", CUniformBufferFormat::SInt, 1);
-		s_SkinUB->Format.push("morphAlpha", CUniformBufferFormat::Float, 1);
-		s_SkinUB->Format.push("bones", CUniformBufferFormat::FloatVec4, NL3D_GPU_SKIN_MAX_BONES * 3);
-		s_SkinUB->UsageHint = CUniformBuffer::StreamDraw;
+		s_MorphUB = new CUniformBuffer();
+		s_MorphUB->Format.Name = "NlMorph";
+		s_MorphUB->Format.push("morphThreshold", CUniformBufferFormat::SInt, 1);
+		s_MorphUB->Format.push("morphAlpha", CUniformBufferFormat::Float, 1);
+		s_MorphUB->UsageHint = CUniformBuffer::StreamDraw;
 	}
 
-	CUniformBuffer *ub = s_SkinUB;
+	CUniformBuffer *ub = s_MorphUB;
 	ub->lock();
 	ub->setSInt(ub->Format.offset(EntryMorphThreshold), morphThreshold);
 	ub->set(ub->Format.offset(EntryMorphAlpha), alphaLod);
-
-	// Fill bone matrices: 3 row-vectors per bone
-	// Only fill bones actually used by this LOD's MatrixInfluences
-	for (uint i = 0; i < lod.MatrixInfluences.size(); i++)
-	{
-		uint boneId = lod.MatrixInfluences[i];
-		if (boneId >= NL3D_GPU_SKIN_MAX_BONES)
-			continue;
-
-		const CMatrix &boneMat = skeleton->getActiveBoneSkinMatrix(boneId);
-		const float *m = boneMat.get(); // column-major float[16]
-
-		// Row 0: (m[0], m[4], m[8], m[12]) = (Xx, Xy, Xz, Tx)
-		sint rowBase = ub->Format.offset(EntryBones, boneId * 3);
-		ub->set(rowBase, m[0], m[4], m[8], m[12]);
-
-		// Row 1: (m[1], m[5], m[9], m[13]) = (Yx, Yy, Yz, Ty)
-		rowBase = ub->Format.offset(EntryBones, boneId * 3 + 1);
-		ub->set(rowBase, m[1], m[5], m[9], m[13]);
-
-		// Row 2: (m[2], m[6], m[10], m[14]) = (Zx, Zy, Zz, Tz)
-		rowBase = ub->Format.offset(EntryBones, boneId * 3 + 2);
-		ub->set(rowBase, m[2], m[6], m[10], m[14]);
-	}
 	ub->unlock();
 
-	// Bind UBO at user VP binding
+	// Bind morph UBO at user VP binding
 	drv->bindUniformBuffer(UBBindingVertexProgram, ub);
 
 	// Activate the static GPU skin VB

@@ -22,16 +22,23 @@
 
 namespace NL3D {
 
+class CUniformBuffer;
+class CSkeletonModel;
+
 /// Maximum bones supported by GPU skinning UBO.
 /// 80 bones * 3 vec4 = 240 vec4 entries = 3840 bytes.
-/// Total UBO: 8 (morphThreshold + morphAlpha) + 3840 = 3848 bytes.
-/// Well within the GL 3.3 minimum of 16KB.
 #define NL3D_GPU_SKIN_MAX_BONES 80
 
 /// Get the singleton GPU skinning VP insert program.
 /// Created lazily on first call. Shared by all skinned meshes.
 /// The returned program uses the glsl3vi profile.
 CVertexProgram *getGPUSkinInsertVP();
+
+/// Get the singleton bone UBO (lazy-created with NlSkeleton format).
+CUniformBuffer *getGPUSkinBoneUBO();
+
+/// Fill the bone UBO with matrices from the given skeleton.
+void fillGPUSkinBoneUBO(CUniformBuffer *ub, CSkeletonModel *skeleton);
 
 } // NL3D
 

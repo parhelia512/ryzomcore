@@ -64,6 +64,7 @@ static std::string insertBuiltinHeaders(const char *source, bool lightTable, boo
 		static const sint s_UBBindingToGLSL[] = {
 			NL_USER_VERTEX_PROGRAM_BINDING,  // UBBindingVertexProgram
 			NL_USER_PIXEL_PROGRAM_BINDING,   // UBBindingPixelProgram
+			NL_USER_SKELETON_BINDING,        // UBBindingSkeleton
 		};
 		std::stringstream ss;
 		for (std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> >::const_iterator it = userUBOs.begin(); it != userUBOs.end(); ++it)
@@ -2259,6 +2260,7 @@ void CDriverGL3::setupInitialUniforms(IProgram *program)
 			static const sint s_UBBindingToGL[] = {
 				NL_USER_VERTEX_PROGRAM_BINDING,  // UBBindingVertexProgram
 				NL_USER_PIXEL_PROGRAM_BINDING,   // UBBindingPixelProgram
+				NL_USER_SKELETON_BINDING,        // UBBindingSkeleton
 			};
 			for (std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> >::const_iterator
 				it = src->UniformBufferFormats.begin(); it != src->UniformBufferFormats.end(); ++it)

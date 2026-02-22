@@ -20,13 +20,15 @@
 #include "nel/3d/program.h"
 #include "nel/3d/uniform_buffer_format.h"
 #include "nel/3d/uniform_buffer.h"
+#include "nel/3d/skeleton_model.h"
 
 namespace NL3D {
 
 // GLSL snippet for the VP insert.
-// This defines the NlSkinning UBO and the nlPreTransform function.
-// The UBO block declaration is handled separately via UniformBufferFormats;
+// The UBO block declarations are handled separately via UniformBufferFormats;
 // this source only contains the function body.
+// morphThreshold and morphAlpha come from the NlMorph UBO (VP binding).
+// bones[] comes from the NlSkeleton UBO (skeleton binding).
 // Bones are stored as 3 row-vectors (vec4) per bone in the UBO:
 //   bones[b+0] = row0 = (Xx, Xy, Xz, Tx)
 //   bones[b+1] = row1 = (Yx, Yy, Yz, Ty)
@@ -82,18 +84,67 @@ CVertexProgram *getGPUSkinInsertVP()
 	src->DisplayName = "GPU Skinning Insert";
 	src->setSource(s_GPUSkinInsertGLSL);
 
-	// Attach NlSkinning UBO format at user VP UBO binding
-	CUniformBufferFormat *fmt = new CUniformBufferFormat();
-	fmt->Name = "NlSkinning";
-	fmt->push("morphThreshold", CUniformBufferFormat::SInt, 1);
-	fmt->push("morphAlpha", CUniformBufferFormat::Float, 1);
-	fmt->push("bones", CUniformBufferFormat::FloatVec4, NL3D_GPU_SKIN_MAX_BONES * 3);
+	// NlMorph UBO at VP binding: morphThreshold + morphAlpha
+	CUniformBufferFormat *morphFmt = new CUniformBufferFormat();
+	morphFmt->Name = "NlMorph";
+	morphFmt->push("morphThreshold", CUniformBufferFormat::SInt, 1);
+	morphFmt->push("morphAlpha", CUniformBufferFormat::Float, 1);
+	src->UniformBufferFormats[UBBindingVertexProgram] = morphFmt;
 
-	src->UniformBufferFormats[UBBindingVertexProgram] = fmt;
+	// NlSkeleton UBO at skeleton binding: bones
+	CUniformBufferFormat *skelFmt = new CUniformBufferFormat();
+	skelFmt->Name = "NlSkeleton";
+	skelFmt->push("bones", CUniformBufferFormat::FloatVec4, NL3D_GPU_SKIN_MAX_BONES * 3);
+	src->UniformBufferFormats[UBBindingSkeleton] = skelFmt;
+
 	vp->addSource(src);
 
 	s_GPUSkinInsertVP = vp;
 	return vp;
+}
+
+// Singleton bone UBO
+static NLMISC::CSmartPtr<CUniformBuffer> s_BoneUB;
+
+CUniformBuffer *getGPUSkinBoneUBO()
+{
+	if (!s_BoneUB)
+	{
+		s_BoneUB = new CUniformBuffer();
+		s_BoneUB->Format.Name = "NlSkeleton";
+		s_BoneUB->Format.push("bones", CUniformBufferFormat::FloatVec4, NL3D_GPU_SKIN_MAX_BONES * 3);
+		s_BoneUB->UsageHint = CUniformBuffer::StreamDraw;
+	}
+	return s_BoneUB;
+}
+
+void fillGPUSkinBoneUBO(CUniformBuffer *ub, CSkeletonModel *skeleton)
+{
+	enum { EntryBones = 0 };
+
+	uint numBones = (uint)skeleton->Bones.size();
+	if (numBones > NL3D_GPU_SKIN_MAX_BONES)
+		numBones = NL3D_GPU_SKIN_MAX_BONES;
+
+	ub->lock();
+	for (uint boneId = 0; boneId < numBones; boneId++)
+	{
+		const CMatrix &boneMat = skeleton->getActiveBoneSkinMatrix(boneId);
+		const float *m = boneMat.get(); // column-major float[16]
+
+		// Row 0: (m[0], m[4], m[8], m[12]) = (Xx, Xy, Xz, Tx)
+		sint rowBase = ub->Format.offset(EntryBones, boneId * 3);
+		ub->set(rowBase, m[0], m[4], m[8], m[12]);
+
+		// Row 1: (m[1], m[5], m[9], m[13]) = (Yx, Yy, Yz, Ty)
+		rowBase = ub->Format.offset(EntryBones, boneId * 3 + 1);
+		ub->set(rowBase, m[1], m[5], m[9], m[13]);
+
+		// Row 2: (m[2], m[6], m[10], m[14]) = (Zx, Zy, Zz, Tz)
+		rowBase = ub->Format.offset(EntryBones, boneId * 3 + 2);
+		ub->set(rowBase, m[2], m[6], m[10], m[14]);
+	}
+	ub->unlock();
 }
 
 } // NL3D
