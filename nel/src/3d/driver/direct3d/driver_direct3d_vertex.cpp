@@ -376,6 +376,7 @@ bool CDriverD3D::activeVertexBuffer(CVertexBuffer& VB)
 				break;
 			case CVertexBuffer::FullRewrite:
 			case CVertexBuffer::PartialWrite:
+			case CVertexBuffer::UnsynchronizedWrite:
 				location = CVertexBuffer::AGPResident;
 				info->Volatile = false;
 				break;

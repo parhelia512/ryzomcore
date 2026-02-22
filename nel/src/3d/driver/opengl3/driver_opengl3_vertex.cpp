@@ -159,6 +159,7 @@ bool CDriverGL3::setupVertexBuffer(CVertexBuffer& VB)
 				case CVertexBuffer::FullRewrite:
 				case CVertexBuffer::PartialWrite:
 				case CVertexBuffer::FullStream:
+				case CVertexBuffer::UnsynchronizedWrite:
 				default:
 					location = CVertexBuffer::AGPResident;
 				}
@@ -270,6 +271,8 @@ GLenum CDriverGL3::vertexBufferUsageGL3(CVertexBuffer::TBufferUsage usage)
 		return GL_DYNAMIC_DRAW; // Shadow buffer: orphan + full upload, drawn from many times
 	case CVertexBuffer::FullRewrite:
 		return GL_DYNAMIC_DRAW;
+	case CVertexBuffer::UnsynchronizedWrite:
+		return GL_DYNAMIC_DRAW; // Caller manages sync via deferred freeing
 	case CVertexBuffer::PartialWrite:
 		return GL_STATIC_DRAW; // Only written by GPU-side CopyBufferSubData from staging
 	case CVertexBuffer::Immutable:

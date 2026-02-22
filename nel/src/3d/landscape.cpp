@@ -589,6 +589,12 @@ void			CLandscape::setDriver(IDriver *drv)
 		// Does the driver has sufficient requirements for Vegetable???
 		// only if VP supported by GPU, and Only if max vertices allowed.
 		_DriverOkForVegetable = _VertexShaderOk && (_Driver->getMaxVerticesByVertexBufferHard()>=(uint)NL3D_LANDSCAPE_VEGETABLE_MAX_AGP_VERTEX_MAX);
+
+		// Enable unsynchronized write mode if VP and triple-buffered frame pipeline are available.
+		bool unsyncMode = _VertexShaderOk && _Driver->isTripleBufferPipelined();
+		_Far0VB.setUnsynchronizedMode(unsyncMode);
+		_Far1VB.setUnsynchronizedMode(unsyncMode);
+		_TileVB.setUnsynchronizedMode(unsyncMode);
 	}
 }
 
@@ -866,6 +872,15 @@ void			CLandscape::lockBuffers ()
 	// Already locked
 	if ((_LockCount++) == 0)
 	{
+		// Process deferred frees before any new allocations.
+		if(_Driver)
+		{
+			uint64 inFlight = _Driver->getSwapBufferInFlight();
+			_Far0VB.processDeferredFrees(inFlight);
+			_Far1VB.processDeferredFrees(inFlight);
+			_TileVB.processDeferredFrees(inFlight);
+		}
+
 		// Must check driver, and create VB infos,locking buffers.
 		if(_Driver)
 		{
@@ -1125,6 +1140,14 @@ void			CLandscape::render(const CVector &refineCenter, const CVector &frontVecto
 	if( _VertexShaderOk && _VPThresholdChange )
 	{
 		_VPThresholdChange= false;
+		// In unsynchronized mode, force reallocation so refill writes to a fresh buffer
+		// (not data that may still be in-flight on the GPU).
+		if( _Far0VB.getUnsynchronizedMode() )
+		{
+			_Far0VB.forceReallocation();
+			_Far1VB.forceReallocation();
+			_TileVB.forceReallocation();
+		}
 		_RenderMustRefillVB= true;
 	}
 

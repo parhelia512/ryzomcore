@@ -863,7 +863,8 @@ public:
 	virtual bool			supportPackedDepthStencil() const;
 
 	virtual uint64			getSwapBufferCounter() const { return _SwapBufferCounter; }
-	inline uint64			getSwapBufferInFlight() const { return _SwapBufferInFlight; }
+	virtual uint64			getSwapBufferInFlight() const { return _SwapBufferInFlight; }
+	virtual bool			isTripleBufferPipelined() const { return NL3D_GL3_FRAME_QUEUE_MAX > 0; }
 
 	virtual void			setCullMode(TCullMode cullMode);
 	virtual	TCullMode       getCullMode() const;

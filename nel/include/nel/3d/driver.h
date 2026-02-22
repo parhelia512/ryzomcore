@@ -595,6 +595,16 @@ public:
 	/** return true if driver support VertexBufferHard, but vbHard->unlock() are slow (ATI-openGL).
 	 */
 	virtual	bool			slowUnlockVertexBufferHard() const = 0;
+
+	/** return true if the driver pipelines multiple frames with fence-based sync,
+	 *  enabling UnsynchronizedWrite buffers with caller-managed deferred freeing.
+	 */
+	virtual bool			isTripleBufferPipelined() const { return false; }
+
+	/** return the counter value of the oldest frame whose GPU work is still in flight.
+	 *  Vertices stamped with a frame counter < this value are safe to reuse.
+	 */
+	virtual uint64			getSwapBufferInFlight() const { return 0; }
 	// @}
 
 
