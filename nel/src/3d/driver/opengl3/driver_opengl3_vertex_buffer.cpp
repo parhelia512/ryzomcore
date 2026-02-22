@@ -29,6 +29,13 @@ using	namespace std;
 using	namespace NLMISC;
 
 namespace NL3D {
+
+namespace {
+static bool dirtyRangeLess(const CVertexBuffer::CDirtyRange &a, const CVertexBuffer::CDirtyRange &b)
+{
+	return a.Begin < b.Begin;
+}
+} // anonymous namespace
 namespace NLDRIVERGL3 {
 
 // ***************************************************************************
@@ -425,9 +432,7 @@ void CVertexBufferGL3::flush()
 		memcpy(&m_MergedRanges[0], &ranges[0], ranges.size() * sizeof(CVertexBuffer::CDirtyRange));
 
 		// Sort by Begin offset
-		std::sort(m_MergedRanges.begin(), m_MergedRanges.end(),
-			[](const CVertexBuffer::CDirtyRange &a, const CVertexBuffer::CDirtyRange &b)
-			{ return a.Begin < b.Begin; });
+		std::sort(m_MergedRanges.begin(), m_MergedRanges.end(), dirtyRangeLess);
 
 		// Merge overlapping/adjacent and ranges within 128 bytes of each other
 		uint writeIdx = 0;
