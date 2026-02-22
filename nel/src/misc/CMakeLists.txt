@@ -248,9 +248,9 @@ TARGET_INCLUDE_DIRECTORIES(nelmisc PRIVATE config_file)
 TARGET_LINK_LIBRARIES(nelmisc
         PUBLIC
         ${CMAKE_THREAD_LIBS_INIT}
-        LibXml2::LibXml2
-        nel_sevenzip
         PRIVATE
+		NeL::sevenzip
+        LibXml2::LibXml2
         ZLIB::ZLIB
 )
 
