@@ -38,7 +38,6 @@ IF(HUNTER_ENABLED)
   # default options for hunterized build
   SET(WITH_STATIC         ON CACHE BOOL "static" FORCE)
   SET(WITH_STATIC_DRIVERS ON CACHE BOOL "static drivers" FORCE)
-  SET(WITH_STATIC_CURL    ON CACHE BOOL "static curl" FORCE)
   SET(WITH_STATIC_LIBXML2 ON CACHE BOOL "static libxml2" FORCE)
   SET(WITH_STATIC_EXTERNAL ON CACHE BOOL "static external" FORCE)
   SET(WITH_EXTERNAL       OFF CACHE BOOL "external libs" FORCE)
@@ -336,83 +335,6 @@ IF(WITH_NEL)
     ENDIF()
 
     FIND_PACKAGE(CURL REQUIRED)
-
-    IF((WIN32 OR CURL_LIBRARIES MATCHES "\\.a") AND WITH_STATIC_CURL)
-      SET(CURL_STATIC ON)
-    ELSE()
-      SET(CURL_STATIC OFF)
-    ENDIF()
-
-    IF(CURL_STATIC)
-      set_property(TARGET CURL::libcurl
-              APPEND
-              PROPERTY INTERFACE_COMPILE_DEFINITIONS
-              CURL_STATICLIB
-      )
-
-      IF(WIN32)
-        set_property(TARGET CURL::libcurl
-                APPEND
-                PROPERTY INTERFACE_LINK_LIBRARIES
-                Crypt32 Cryptui
-        )
-      ELSE()
-        # CURL depends on libidn
-        FIND_LIBRARY(IDN_LIBRARY idn)
-        IF(IDN_LIBRARY)
-          set_property(TARGET CURL::libcurl
-                  APPEND
-                  PROPERTY INTERFACE_LINK_LIBRARIES
-                  ${IDN_LIBRARY}
-          )
-        ENDIF()
-
-        # CURL Macports version can depend on libidn, libidn2, libintl, libpsl and libiconv too
-        IF(APPLE)
-          FIND_LIBRARY(INTL_LIBRARY intl)
-          IF(INTL_LIBRARY)
-            set_property(TARGET CURL::libcurl
-                    APPEND
-                    PROPERTY INTERFACE_LINK_LIBRARIES
-                    ${INTL_LIBRARY}
-            )
-          ENDIF()
-
-          FIND_LIBRARY(IDN2_LIBRARY idn2)
-          IF(IDN2_LIBRARY)
-            set_property(TARGET CURL::libcurl
-                    APPEND
-                    PROPERTY INTERFACE_LINK_LIBRARIES
-                    ${IDN2_LIBRARY}
-            )
-          ENDIF()
-
-          FIND_LIBRARY(PSL_LIBRARY psl)
-          IF(PSL_LIBRARY)
-            set_property(TARGET CURL::libcurl
-                    APPEND
-                    PROPERTY INTERFACE_LINK_LIBRARIES
-                    ${PSL_LIBRARY}
-            )
-          ENDIF()
-
-          FIND_LIBRARY(UNISTRING_LIBRARY unistring)
-          IF(UNISTRING_LIBRARY)
-            set_property(TARGET CURL::libcurl
-                    APPEND
-                    PROPERTY INTERFACE_LINK_LIBRARIES
-                    ${UNISTRING_LIBRARY}
-            )
-          ENDIF()
-
-          set_property(TARGET CURL::libcurl
-                  APPEND
-                  PROPERTY INTERFACE_LINK_LIBRARIES
-                  ${SECURITY_FRAMEWORK}
-          )
-        ENDIF()
-      ENDIF()
-    ENDIF()
   ENDIF() #hunter
 
   INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/nel/include)
