@@ -225,14 +225,14 @@ ENDIF()
 
 NL_CONFIGURE_CHECKS()
 
-IF(WITH_STATIC_LIBXML2 AND LIBXML2_FOUND)
-  if(HUNTER_ENABLED)
+IF(WITH_STATIC_LIBXML2)
+  if(HUNTER_ENABLED AND TARGET libxml2::libxml2)
       set_property(TARGET libxml2::libxml2
               APPEND
               PROPERTY INTERFACE_COMPILE_DEFINITIONS
               LIBXML_STATIC
       )
-  else()
+  elseif(TARGET LibXml2::LibXml2)
       set_property(TARGET LibXml2::LibXml2
               APPEND
               PROPERTY INTERFACE_COMPILE_DEFINITIONS
