@@ -595,6 +595,9 @@ void			CLandscape::setDriver(IDriver *drv)
 		_Far0VB.setUnsynchronizedMode(unsyncMode);
 		_Far1VB.setUnsynchronizedMode(unsyncMode);
 		_TileVB.setUnsynchronizedMode(unsyncMode);
+
+		// Same for vegetation VB allocators.
+		_VegetableManager->setUnsynchronizedMode(unsyncMode);
 	}
 }
 
@@ -879,6 +882,10 @@ void			CLandscape::lockBuffers ()
 			_Far0VB.processDeferredFrees(inFlight);
 			_Far1VB.processDeferredFrees(inFlight);
 			_TileVB.processDeferredFrees(inFlight);
+
+			// Same for vegetation VB allocators.
+			if(_DriverOkForVegetable)
+				_VegetableManager->processDeferredFrees(inFlight);
 		}
 
 		// Must check driver, and create VB infos,locking buffers.
