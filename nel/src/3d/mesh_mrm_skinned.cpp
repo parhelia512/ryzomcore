@@ -37,6 +37,8 @@
 #include "nel/3d/shifted_triangle_cache.h"
 #include "nel/3d/texture_file.h"
 #include "nel/3d/matrix_3x4.h"
+#include "nel/3d/uniform_buffer_format.h"
+#include "nel/3d/uniform_buffer.h"
 
 
 using namespace NLMISC;
@@ -185,6 +187,7 @@ CMeshMRMSkinnedGeom::CMeshMRMSkinnedGeom()
 	_PreciseClipping= false;
 	_MeshDataId= 0;
 	_SupportShadowSkinGrouping= false;
+	_GPUSkinBuilt= false;
 }
 
 
@@ -1245,6 +1248,8 @@ void	CMeshMRMSkinnedGeom::computeBonesId (CSkeletonModel *skeleton)
 		_BoneIdExtended= true;
 	}
 
+	// Build GPU skinning VB now that bone indices are remapped
+	buildGPUSkinVB();
 }
 
 
@@ -2203,6 +2208,304 @@ void CMeshMRMSkinnedGeom::CPackedVertexBuffer::build (const CVertexBuffer &buffe
 			vertex.Weights[0] += weightSum;
 		}
 	}
+}
+
+// ***************************************************************************
+
+void CMeshMRMSkinnedGeom::buildGPUSkinVB()
+{
+	if (_GPUSkinBuilt)
+		return;
+
+	const uint numVertices = _VBufferFinal.getNumVertices();
+	if (numVertices == 0 || _Lods.empty())
+		return;
+
+	const CPackedVertexBuffer::CPackedVertex *packed = _VBufferFinal.getPackedVertices();
+	if (!packed)
+		return;
+
+	// Check max bone index. If any exceeds NL3D_GPU_SKIN_MAX_BONES, we can't GPU-skin.
+	for (uint v = 0; v < numVertices; v++)
+	{
+		for (uint w = 0; w < NL3D_MESH_MRM_SKINNED_MAX_MATRIX; w++)
+		{
+			if (packed[v].Weights[w] > 0 || w == 0)
+			{
+				if (packed[v].Matrices[w] >= NL3D_GPU_SKIN_MAX_BONES)
+					return; // Fall back to CPU skinning
+			}
+		}
+	}
+
+	// Compute geomorph space (max geomorph count across all LODs)
+	uint nGeomSpace = 0;
+	for (uint lod = 0; lod < _Lods.size(); lod++)
+		nGeomSpace = std::max(nGeomSpace, (uint)_Lods[lod].Geomorphs.size());
+
+	// Build morph target map: for each vertex, which vertex it morphs toward.
+	// -1 means the vertex doesn't participate in any geomorph.
+	std::vector<sint32> morphTarget(numVertices, -1);
+
+	// Iterate LODs from finest to coarsest. A vertex can participate in at most one
+	// geomorph (the LOD transition where it's introduced). Finest-first means we
+	// assign the first transition we encounter.
+	for (sint lod = (sint)_Lods.size() - 1; lod > 0; lod--)
+	{
+		const std::vector<CMRMWedgeGeom> &geoms = _Lods[lod].Geomorphs;
+		for (uint g = 0; g < geoms.size(); g++)
+		{
+			uint32 start = geoms[g].Start;
+			uint32 end = geoms[g].End;
+			if (start < numVertices && end < numVertices && morphTarget[start] < 0)
+			{
+				morphTarget[start] = (sint32)end;
+			}
+		}
+	}
+
+	// Setup the VB format
+	_GPUSkinVB.clearValueEx();
+	_GPUSkinVB.addValueEx(CVertexBuffer::Position, CVertexBuffer::Float3);     // Bind-pose position
+	_GPUSkinVB.addValueEx(CVertexBuffer::Normal, CVertexBuffer::Float3);       // Bind-pose normal
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord0, CVertexBuffer::Float2);    // UV
+	_GPUSkinVB.addValueEx(CVertexBuffer::Tangent, CVertexBuffer::Float4);      // Tangent (zeroed for now)
+	_GPUSkinVB.addValueEx(CVertexBuffer::Weight, CVertexBuffer::Float4);       // Bone weights
+	_GPUSkinVB.addValueEx(CVertexBuffer::PaletteSkin, CVertexBuffer::UChar4);  // Bone indices (uint8, GL converts to float)
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord1, CVertexBuffer::Float3);    // Morph target position
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord2, CVertexBuffer::Float3);    // Morph target normal
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord3, CVertexBuffer::Float2);    // Morph target UV
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord4, CVertexBuffer::Float4);    // Morph target tangent
+	_GPUSkinVB.initEx();
+	_GPUSkinVB.setBufferUsage(CVertexBuffer::Immutable, false);
+	_GPUSkinVB.setNumVertices(numVertices);
+
+	{
+		CVertexBufferReadWrite vba;
+		_GPUSkinVB.lock(vba);
+
+		for (uint v = 0; v < numVertices; v++)
+		{
+			const CPackedVertexBuffer::CPackedVertex &src = packed[v];
+
+			// Position
+			CVector pos;
+			_VBufferFinal.getPos(pos, src);
+			vba.setValueFloat3Ex(CVertexBuffer::Position, v, pos);
+
+			// Normal
+			CVector norm;
+			src.getNormal(norm);
+			vba.setValueFloat3Ex(CVertexBuffer::Normal, v, norm);
+
+			// UV
+			float u, vCoord;
+			src.getU(u);
+			src.getV(vCoord);
+			vba.setValueFloat2Ex(CVertexBuffer::TexCoord0, v, u, vCoord);
+
+			// Tangent (zero for now — current MRM skinned meshes don't have tangents)
+			vba.setValueFloat4Ex(CVertexBuffer::Tangent, v, 0.f, 0.f, 0.f, 1.f);
+
+			// Bone weights (float [0,1])
+			float w0, w1, w2, w3;
+			src.getWeight(w0, 0);
+			src.getWeight(w1, 1);
+			src.getWeight(w2, 2);
+			src.getWeight(w3, 3);
+			vba.setValueFloat4Ex(CVertexBuffer::Weight, v, w0, w1, w2, w3);
+
+			// Bone indices (uint8 → GL converts to float, shader casts to int)
+			vba.setValueUChar4Ex(CVertexBuffer::PaletteSkin, v,
+				CRGBA(src.Matrices[0], src.Matrices[1], src.Matrices[2], src.Matrices[3]));
+
+			// Morph target data
+			if (morphTarget[v] >= 0)
+			{
+				const CPackedVertexBuffer::CPackedVertex &endSrc = packed[morphTarget[v]];
+				CVector endPos;
+				_VBufferFinal.getPos(endPos, endSrc);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord1, v, endPos);
+
+				CVector endNorm;
+				endSrc.getNormal(endNorm);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord2, v, endNorm);
+
+				float endU, endV;
+				endSrc.getU(endU);
+				endSrc.getV(endV);
+				vba.setValueFloat2Ex(CVertexBuffer::TexCoord3, v, endU, endV);
+
+				// Morph target tangent (zero for now)
+				vba.setValueFloat4Ex(CVertexBuffer::TexCoord4, v, 0.f, 0.f, 0.f, 1.f);
+			}
+			else
+			{
+				// Not a morphing vertex — morph target data unused, fill with zero
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord1, v, 0.f, 0.f, 0.f);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord2, v, 0.f, 0.f, 0.f);
+				vba.setValueFloat2Ex(CVertexBuffer::TexCoord3, v, 0.f, 0.f);
+				vba.setValueFloat4Ex(CVertexBuffer::TexCoord4, v, 0.f, 0.f, 0.f, 0.f);
+			}
+		}
+	}
+
+	// Build combined IB from all LODs' render passes.
+	// IMPORTANT: PBlock indices for geomorphed vertices point to the geomorph
+	// destination space [0, nGeomSpace), where the CPU path writes blended results.
+	// For the GPU path, we remap these to the actual Start vertex index so the VP
+	// can blend via the morphThreshold check.
+	uint32 totalIndices = 0;
+	_GPULodPasses.resize(_Lods.size());
+	for (uint lod = 0; lod < _Lods.size(); lod++)
+	{
+		_GPULodPasses[lod].resize(_Lods[lod].RdrPass.size());
+		for (uint rp = 0; rp < _Lods[lod].RdrPass.size(); rp++)
+		{
+			totalIndices += (uint32)_Lods[lod].RdrPass[rp].PBlock.size();
+		}
+	}
+
+	_GPUSkinIB.setFormat(NL_SKINNED_MESH_MRM_INDEX_FORMAT);
+	_GPUSkinIB.setBufferUsage(CIndexBuffer::Immutable, false);
+	_GPUSkinIB.setNumIndexes(totalIndices);
+
+	{
+		CIndexBufferReadWrite iba;
+		_GPUSkinIB.lock(iba);
+		uint32 offset = 0;
+		for (uint lod = 0; lod < _Lods.size(); lod++)
+		{
+			// Build geomorph dest-to-Start remap for this LOD.
+			// Geomorphs[i] maps dest index i to Start vertex.
+			const std::vector<CMRMWedgeGeom> &geoms = _Lods[lod].Geomorphs;
+
+			for (uint rp = 0; rp < _Lods[lod].RdrPass.size(); rp++)
+			{
+				const std::vector<uint16> &pblock = _Lods[lod].RdrPass[rp].PBlock;
+				_GPULodPasses[lod][rp].IBOffset = offset;
+				_GPULodPasses[lod][rp].IBCount = (uint32)pblock.size();
+				uint32 numTris = (uint32)pblock.size() / 3;
+				for (uint32 t = 0; t < numTris; t++)
+				{
+					uint32 i0 = pblock[t * 3 + 0];
+					uint32 i1 = pblock[t * 3 + 1];
+					uint32 i2 = pblock[t * 3 + 2];
+					// Remap geomorph destination indices to Start vertex
+					if (i0 < nGeomSpace && i0 < (uint32)geoms.size())
+						i0 = geoms[i0].Start;
+					if (i1 < nGeomSpace && i1 < (uint32)geoms.size())
+						i1 = geoms[i1].Start;
+					if (i2 < nGeomSpace && i2 < (uint32)geoms.size())
+						i2 = geoms[i2].Start;
+					iba.setTri(offset + t * 3, i0, i1, i2);
+				}
+				offset += (uint32)pblock.size();
+			}
+		}
+	}
+
+	_GPUSkinBuilt = true;
+}
+
+// ***************************************************************************
+void CMeshMRMSkinnedGeom::renderGPUSkin(CMeshMRMSkinnedInstance *mi, float alphaMRM, CSkeletonModel *skeleton)
+{
+	nlassert(_GPUSkinBuilt);
+
+	if (_Lods.empty())
+		return;
+
+	// Get scene/driver
+	CScene *ownerScene = mi->getOwnerScene();
+	CRenderTrav *renderTrav = &ownerScene->getRenderTrav();
+	IDriver *drv = renderTrav->getDriver();
+	nlassert(drv);
+
+	// Choose LOD
+	float alphaLod;
+	sint numLod = chooseLod(alphaMRM, alphaLod);
+	CLod &lod = _Lods[numLod];
+	if (lod.RdrPass.empty())
+		return;
+
+	// Compute morphThreshold: vertices below this index are stable (not morphing).
+	// Vertices at or above this threshold blend toward their morph target.
+	sint32 morphThreshold;
+	if (numLod > 0)
+		morphThreshold = (sint32)_Lods[numLod - 1].NWedges;
+	else
+		morphThreshold = (sint32)_Lods[numLod].NWedges; // No morphing for coarsest LOD
+
+	// Build NlSkinning UBO
+	// Format: morphThreshold (sint32, offset 0), morphAlpha (float, offset 4),
+	//         bones (vec4[240], offset 16) — 3 row-vectors per bone
+	// Use a static UBO to avoid heap allocation per draw call.
+	// Entry indices into the UBO format (not byte offsets).
+	enum { EntryMorphThreshold = 0, EntryMorphAlpha = 1, EntryBones = 2 };
+	static NLMISC::CSmartPtr<CUniformBuffer> s_SkinUB;
+	if (!s_SkinUB)
+	{
+		s_SkinUB = new CUniformBuffer();
+		s_SkinUB->Format.Name = "NlSkinning";
+		s_SkinUB->Format.push("morphThreshold", CUniformBufferFormat::SInt, 1);
+		s_SkinUB->Format.push("morphAlpha", CUniformBufferFormat::Float, 1);
+		s_SkinUB->Format.push("bones", CUniformBufferFormat::FloatVec4, NL3D_GPU_SKIN_MAX_BONES * 3);
+		s_SkinUB->UsageHint = CUniformBuffer::StreamDraw;
+	}
+
+	CUniformBuffer *ub = s_SkinUB;
+	ub->lock();
+	ub->setSInt(ub->Format.offset(EntryMorphThreshold), morphThreshold);
+	ub->set(ub->Format.offset(EntryMorphAlpha), alphaLod);
+
+	// Fill bone matrices: 3 row-vectors per bone
+	// Only fill bones actually used by this LOD's MatrixInfluences
+	for (uint i = 0; i < lod.MatrixInfluences.size(); i++)
+	{
+		uint boneId = lod.MatrixInfluences[i];
+		if (boneId >= NL3D_GPU_SKIN_MAX_BONES)
+			continue;
+
+		const CMatrix &boneMat = skeleton->getActiveBoneSkinMatrix(boneId);
+		const float *m = boneMat.get(); // column-major float[16]
+
+		// Row 0: (m[0], m[4], m[8], m[12]) = (Xx, Xy, Xz, Tx)
+		sint rowBase = ub->Format.offset(EntryBones, boneId * 3);
+		ub->set(rowBase, m[0], m[4], m[8], m[12]);
+
+		// Row 1: (m[1], m[5], m[9], m[13]) = (Yx, Yy, Yz, Ty)
+		rowBase = ub->Format.offset(EntryBones, boneId * 3 + 1);
+		ub->set(rowBase, m[1], m[5], m[9], m[13]);
+
+		// Row 2: (m[2], m[6], m[10], m[14]) = (Zx, Zy, Zz, Tz)
+		rowBase = ub->Format.offset(EntryBones, boneId * 3 + 2);
+		ub->set(rowBase, m[2], m[6], m[10], m[14]);
+	}
+	ub->unlock();
+
+	// Bind UBO at user VP binding
+	drv->bindUniformBuffer(UBBindingVertexProgram, ub);
+
+	// Activate the static GPU skin VB
+	drv->activeVertexBuffer(_GPUSkinVB);
+
+	// Activate the combined IB
+	drv->activeIndexBuffer(_GPUSkinIB);
+
+	// Render each pass
+	for (uint rp = 0; rp < lod.RdrPass.size(); rp++)
+	{
+		CRdrPass &rdrPass = lod.RdrPass[rp];
+		CMaterial &material = mi->Materials[rdrPass.MaterialId];
+
+		const GPULodPass &lodPass = _GPULodPasses[numLod][rp];
+		uint32 numTris = lodPass.IBCount / 3;
+		drv->renderTriangles(material, lodPass.IBOffset, numTris);
+	}
+
+	// Unbind UBO
+	drv->bindUniformBuffer(UBBindingVertexProgram, NULL);
 }
 
 // ***************************************************************************

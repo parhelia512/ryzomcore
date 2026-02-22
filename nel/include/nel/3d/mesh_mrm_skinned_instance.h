@@ -86,6 +86,9 @@ protected:
 	virtual	void			renderSkinGroupPrimitives(uint baseVertex, std::vector<CSkinSpecularRdrPass> &specularRdrPasses, uint skinIndex);
 	virtual	void			renderSkinGroupSpecularRdrPass(uint rdrPassId);
 
+	virtual	bool			supportGPUSkinning() const;
+	virtual	void			renderGPUSkin(float alphaMRM, CSkeletonModel *skeleton);
+
 	virtual	bool			supportShadowSkinGrouping() const;
 	virtual	sint			renderShadowSkinGeom(uint remainingVertices, uint8 *vbDest);
 	virtual	void			renderShadowSkinPrimitives(CMaterial &castMat, IDriver *drv, uint baseVertex);

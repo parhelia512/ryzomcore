@@ -586,6 +586,12 @@ public:
 		glsl300esv = 0x65010300, // GLSL ES 300 vertex program (pipeline stage, for linking)
 		glsl300esf = 0x65020300, // GLSL ES 300 fragment program (pipeline stage, for linking)
 		glsl300es  = 0x65000300, // GLSL ES 300 linked program (combined VP+PP)
+
+		// VP insert — a GLSL snippet spliced into mega VP at compile time.
+		// The source defines a nlPreTransform() function and optional UBO.
+		// The driver compiles all mega VP variants with the insert,
+		// then selects the appropriate variant at render time.
+		glsl3vi    = 0x65010331, // VP insert (works for both 330 SSO and 300es linked)
 	};
 
 	struct CSource : public NLMISC::CRefCount

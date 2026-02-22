@@ -31,6 +31,7 @@
 #include "nel/3d/vertex_stream_manager.h"
 #include "nel/3d/mesh_base_instance.h"
 #include "nel/3d/async_texture_manager.h"
+#include "nel/3d/gpu_skin_vp.h"
 
 
 using namespace std;
@@ -1503,13 +1504,65 @@ void			CSkeletonModel::renderSkins()
 void			CSkeletonModel::renderSkinList(NLMISC::CObjectVector<CTransform*, false> &skinList, float alphaMRM)
 {
 	CRenderTrav			&rdrTrav= getOwnerScene()->getRenderTrav();
+	IDriver				*drv= rdrTrav.getDriver();
+
+	// Check if GPU skinning is available (driver supports glsl3vi profile)
+	bool gpuSkinAvailable = drv && drv->supportVertexProgram(IProgram::glsl3vi);
+
+	// Try GPU skinning first: render GPU-capable skins, collect non-GPU skins for CPU path
+	static std::vector<CTransform*> cpuSkins;
+	cpuSkins.clear();
+
+	if (gpuSkinAvailable)
+	{
+		// Separate GPU-capable and non-GPU skins
+		static std::vector<CTransform*> gpuSkins;
+		gpuSkins.clear();
+
+		for (uint i = 0; i < skinList.size(); i++)
+		{
+			if (skinList[i]->supportGPUSkinning())
+				gpuSkins.push_back(skinList[i]);
+			else
+				cpuSkins.push_back(skinList[i]);
+		}
+
+		// Render GPU skins
+		if (!gpuSkins.empty())
+		{
+			H_AUTO( NL3D_Skin_GPU );
+
+			// Activate the GPU skinning insert VP
+			CVertexProgram *skinVP = getGPUSkinInsertVP();
+			drv->activeVertexProgram(skinVP);
+
+			// Render each GPU skin
+			for (uint i = 0; i < gpuSkins.size(); i++)
+			{
+				gpuSkins[i]->renderGPUSkin(alphaMRM, this);
+			}
+
+			// Deactivate the insert VP
+			drv->activeVertexProgram(NULL);
+		}
+	}
+	else
+	{
+		// No GPU skinning, all skins go to CPU path
+		for (uint i = 0; i < skinList.size(); i++)
+			cpuSkins.push_back(skinList[i]);
+	}
+
+	// CPU path for remaining skins
+	if (!cpuSkins.empty())
+	{
 
 	// if the SkinManager is not possible at all, just rendered the std way.
 	if( !rdrTrav.getMeshSkinManager() )
 	{
-		for(uint i=0;i<skinList.size();i++)
+		for(uint i=0;i<cpuSkins.size();i++)
 		{
-			skinList[i]->renderSkin(alphaMRM);
+			cpuSkins[i]->renderSkin(alphaMRM);
 		}
 	}
 	else
@@ -1528,17 +1581,17 @@ void			CSkeletonModel::renderSkinList(NLMISC::CObjectVector<CTransform*, false> 
 		uint	vertexSize= meshSkinManager.getVertexSize();
 
 		// render any skins which do not support SkinGrouping, and fill array of skins to group
-		for(uint i=0;i<skinList.size();i++)
+		for(uint i=0;i<cpuSkins.size();i++)
 		{
 			// If don't support, or if too big to fit in the manager, just renderSkin()
-			if(!skinList[i]->supportSkinGrouping())
+			if(!cpuSkins[i]->supportSkinGrouping())
 			{
 				H_AUTO( NL3D_Skin_NotGrouped );
-				skinList[i]->renderSkin(alphaMRM);
+				cpuSkins[i]->renderSkin(alphaMRM);
 			}
 			else
 			{
-				skinsToGroup.push_back(skinList[i]);
+				skinsToGroup.push_back(cpuSkins[i]);
 			}
 		}
 
@@ -1625,6 +1678,8 @@ void			CSkeletonModel::renderSkinList(NLMISC::CObjectVector<CTransform*, false> 
 			meshSkinManager.swapVBHard();
 		}
 	}
+
+	} // if (!cpuSkins.empty())
 }
 
 

@@ -248,6 +248,29 @@ void	CMeshMRMSkinnedInstance::initRenderFilterType()
 
 
 // ***************************************************************************
+bool			CMeshMRMSkinnedInstance::supportGPUSkinning() const
+{
+	if(Shape)
+	{
+		CMeshMRMSkinned	*meshMrm= safe_cast<CMeshMRMSkinned*>((IShape*)Shape);
+		return	meshMrm->getMeshGeom().supportGPUSkinning();
+	}
+	else
+		return false;
+}
+
+// ***************************************************************************
+void			CMeshMRMSkinnedInstance::renderGPUSkin(float alphaMRM, CSkeletonModel *skeleton)
+{
+	if(Shape && getVisibility() != CHrcTrav::Hide)
+	{
+		CMeshMRMSkinned *pMesh = NLMISC::safe_cast<CMeshMRMSkinned *>((IShape*)Shape);
+		CMeshMRMSkinnedGeom	&meshGeom= const_cast<CMeshMRMSkinnedGeom&>(pMesh->getMeshGeom ());
+		meshGeom.renderGPUSkin(this, alphaMRM, skeleton);
+	}
+}
+
+// ***************************************************************************
 bool			CMeshMRMSkinnedInstance::supportShadowSkinGrouping() const
 {
 	if(Shape)
