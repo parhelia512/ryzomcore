@@ -349,11 +349,6 @@ IF(WITH_NEL)
               PROPERTY INTERFACE_COMPILE_DEFINITIONS
               CURL_STATICLIB
       )
-      set_property(TARGET CURL::libcurl
-              APPEND
-              PROPERTY INTERFACE_LINK_LIBRARIES
-              OpenSSL::Crypto OpenSSL::SSL
-      )
 
       IF(WIN32)
         set_property(TARGET CURL::libcurl
