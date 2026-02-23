@@ -766,10 +766,11 @@ bool CDriverGL3::isFrameReady()
 	if (_SwapBufferSync[syncI])
 	{
 		// Non-blocking check: is the oldest fence signaled?
-		GLint status = 0;
-		nglGetSynciv(_SwapBufferSync[syncI], GL_SYNC_STATUS, 1, NULL, &status);
-		if (status != GL_SIGNALED)
-			return false; // GPU still processing, skip this frame
+		GLint status = GL_UNSIGNALED;
+		GLsizei len = 0;
+		nglGetSynciv(_SwapBufferSync[syncI], GL_SYNC_STATUS, 1, &len, &status);
+		if (len == 0 || status != GL_SIGNALED)
+			return false; // GPU still processing or query failed, skip this frame
 	}
 	return true;
 }
@@ -787,9 +788,15 @@ bool CDriverGL3::swapBuffers()
 		nldebug("Wait for oldest fence");
 #endif
 #ifdef __EMSCRIPTEN__
-		// On Emscripten, callers should have checked isFrameReady() first.
-		// Just delete the sync — the non-blocking check already confirmed it's signaled,
-		// or we accept the frame regardless to avoid blocking the browser event loop.
+		// On Emscripten, we cannot block. Callers should check isFrameReady() first.
+		// If the sync is still unsignaled (caller didn't check), log a warning.
+		{
+			GLint status = GL_UNSIGNALED;
+			GLsizei len = 0;
+			nglGetSynciv(_SwapBufferSync[syncI], GL_SYNC_STATUS, 1, &len, &status);
+			if (status != GL_SIGNALED)
+				nldebug("GL3: swapBuffers called while GPU sync not yet signaled (caller should check isFrameReady())");
+		}
 #else
 		GLenum syncR = nglClientWaitSync(_SwapBufferSync[syncI], 0, 1000000000ULL);
 		switch (syncR)
