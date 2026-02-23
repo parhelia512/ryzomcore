@@ -23,6 +23,7 @@
 #include "nel/3d/shifted_triangle_cache.h"
 #include "nel/3d/u_scene.h"
 #include "nel/3d/scene.h"
+#include "nel/3d/gpu_skin_vp.h"
 
 
 using namespace NLMISC;
@@ -268,6 +269,12 @@ void			CMeshMRMSkinnedInstance::renderGPUSkin(float alphaMRM, CSkeletonModel *sk
 		CMeshMRMSkinnedGeom	&meshGeom= const_cast<CMeshMRMSkinnedGeom&>(pMesh->getMeshGeom ());
 		meshGeom.renderGPUSkin(this, alphaMRM, skeleton);
 	}
+}
+
+// ***************************************************************************
+CVertexProgram			*CMeshMRMSkinnedInstance::getGPUSkinVP() const
+{
+	return getGPUSkinInsertVP();
 }
 
 // ***************************************************************************

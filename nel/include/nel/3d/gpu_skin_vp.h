@@ -37,10 +37,16 @@ enum TGPUSkinMorphEntry
 	GPUSkinUseSkeleton = 2,     // SInt: 1 = apply bone skinning, 0 = geomorph only
 };
 
-/// Get the singleton GPU skinning VP insert program.
-/// Created lazily on first call. Shared by all skinned meshes.
+/// Get the singleton GPU skinning VP insert program (MRM geomorph + bone skinning).
+/// Created lazily on first call. Shared by all MRM skinned meshes.
 /// The returned program uses the glsl3vi profile.
 CVertexProgram *getGPUSkinInsertVP();
+
+/// Get the singleton simple GPU skinning VP insert program (bone skinning only).
+/// Created lazily on first call. Shared by all simple skinned meshes (CMeshGeom).
+/// The returned program uses the glsl3vi profile.
+/// No morph UBO needed — only NlSkeleton UBO at UBBindingSkeleton.
+CVertexProgram *getGPUSkinSimpleInsertVP();
 
 /// Get the singleton bone UBO (lazy-created with NlSkeleton format).
 CUniformBuffer *getGPUSkinBoneUBO();

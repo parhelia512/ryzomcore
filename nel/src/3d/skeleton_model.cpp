@@ -1532,24 +1532,27 @@ void			CSkeletonModel::renderSkinList(NLMISC::CObjectVector<CTransform*, false> 
 		{
 			H_AUTO( NL3D_Skin_GPU );
 
-			// Activate the GPU skinning insert VP
-			CVertexProgram *skinVP = getGPUSkinInsertVP();
-			drv->activeVertexProgram(skinVP);
-
 			// Fill bone UBO once for this skeleton, bind at UBBindingSkeleton
 			CUniformBuffer *boneUB = getGPUSkinBoneUBO();
 			fillGPUSkinBoneUBO(boneUB, this);
 			drv->bindUniformBuffer(UBBindingSkeleton, boneUB);
 
-			// Render each GPU skin (only fills morph UBO per skin)
+			// Render each GPU skin, switching VP as needed
+			CVertexProgram *activeVP = NULL;
 			for (uint i = 0; i < gpuSkins.size(); i++)
 			{
+				CVertexProgram *vp = gpuSkins[i]->getGPUSkinVP();
+				if (vp != activeVP)
+				{
+					drv->activeVertexProgram(vp);
+					activeVP = vp;
+				}
 				gpuSkins[i]->renderGPUSkin(alphaMRM, this);
 			}
 
 			// Unbind bone UBO and deactivate the insert VP
-			drv->bindUniformBuffer(UBBindingSkeleton, NULL);
 			drv->activeVertexProgram(NULL);
+			drv->bindUniformBuffer(UBBindingSkeleton, NULL);
 		}
 	}
 	else

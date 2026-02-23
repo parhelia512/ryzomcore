@@ -58,6 +58,7 @@ class	CShadowMap;
 class	CMaterial;
 class	IDriver;
 class CInstanceUser;
+class CVertexProgram;
 
 // ***************************************************************************
 // ClassIds.
@@ -680,6 +681,8 @@ protected:
 	 *	\param skeleton the skeleton model providing bone matrices
 	 */
 	virtual	void			renderGPUSkin(float /* alphaMRM */, CSkeletonModel * /* skeleton */) { }
+	/// if supportGPUSkinning(), return the insert VP to use for this skin type.
+	virtual	CVertexProgram	*getGPUSkinVP() const { return NULL; }
 
 	/// Special Skinning For ShadowMapping
 	virtual	bool			supportShadowSkinGrouping() const {return false;}

@@ -92,6 +92,7 @@ protected:
 
 	virtual	bool			supportGPUSkinning() const;
 	virtual	void			renderGPUSkin(float alphaMRM, CSkeletonModel *skeleton);
+	virtual	CVertexProgram	*getGPUSkinVP() const;
 
 	virtual	bool			supportIntersectSkin() const;
 	virtual	bool			intersectSkin(const CMatrix &toRaySpace, float &dist2D, float &distZ, bool computeDist2D);

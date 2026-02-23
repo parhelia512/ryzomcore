@@ -109,6 +109,60 @@ CVertexProgram *getGPUSkinInsertVP()
 	return vp;
 }
 
+// Simple insert VP: bone skinning only (no MRM geomorph, no morph UBO).
+// Used by CMeshGeom which has no MRM/LOD.
+static const char *s_GPUSkinSimpleInsertGLSL =
+	"void nlPreTransform(inout vec4 pos, inout vec3 norm, inout vec4 tc0, inout vec4 tangent)\n"
+	"{\n"
+	"    ivec4 boneIdx = ivec4(vpaletteSkin);\n"
+	"    vec4 boneWgt = vweight;\n"
+	"\n"
+	"    // Weighted bone skinning (3 row-vectors per bone)\n"
+	"    vec3 skinnedPos = vec3(0.0);\n"
+	"    vec3 skinnedNorm = vec3(0.0);\n"
+	"    vec3 skinnedTan = vec3(0.0);\n"
+	"    vec4 p = vec4(pos.xyz, 1.0);\n"
+	"    for (int i = 0; i < 4; i++) {\n"
+	"        float w = boneWgt[i];\n"
+	"        if (w <= 0.0) continue;\n"
+	"        int b = boneIdx[i] * 3;\n"
+	"        vec4 row0 = bones[b];\n"
+	"        vec4 row1 = bones[b+1];\n"
+	"        vec4 row2 = bones[b+2];\n"
+	"        skinnedPos += w * vec3(dot(row0, p), dot(row1, p), dot(row2, p));\n"
+	"        skinnedNorm += w * vec3(dot(row0.xyz, norm), dot(row1.xyz, norm), dot(row2.xyz, norm));\n"
+	"        skinnedTan += w * vec3(dot(row0.xyz, tangent.xyz), dot(row1.xyz, tangent.xyz), dot(row2.xyz, tangent.xyz));\n"
+	"    }\n"
+	"    pos = vec4(skinnedPos, 1.0);\n"
+	"    norm = normalize(skinnedNorm);\n"
+	"    tangent = vec4(normalize(skinnedTan), tangent.w);\n"
+	"}\n";
+
+static CVertexProgram *s_GPUSkinSimpleInsertVP = NULL;
+
+CVertexProgram *getGPUSkinSimpleInsertVP()
+{
+	if (s_GPUSkinSimpleInsertVP)
+		return s_GPUSkinSimpleInsertVP;
+
+	CVertexProgram *vp = new CVertexProgram();
+	IProgram::CSource *src = new IProgram::CSource();
+	src->Profile = IProgram::glsl3vi;
+	src->DisplayName = "GPU Skinning Simple Insert";
+	src->setSource(s_GPUSkinSimpleInsertGLSL);
+
+	// Only NlSkeleton UBO at skeleton binding: bones
+	CUniformBufferFormat *skelFmt = new CUniformBufferFormat();
+	skelFmt->Name = "NlSkeleton";
+	skelFmt->push("bones", CUniformBufferFormat::FloatVec4, NL3D_GPU_SKIN_MAX_BONES * 3);
+	src->UniformBufferFormats[UBBindingSkeleton] = skelFmt;
+
+	vp->addSource(src);
+
+	s_GPUSkinSimpleInsertVP = vp;
+	return vp;
+}
+
 // Singleton bone UBO
 static NLMISC::CSmartPtr<CUniformBuffer> s_BoneUB;
 
