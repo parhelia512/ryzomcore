@@ -1506,8 +1506,9 @@ void			CSkeletonModel::renderSkinList(NLMISC::CObjectVector<CTransform*, false> 
 	CRenderTrav			&rdrTrav= getOwnerScene()->getRenderTrav();
 	IDriver				*drv= rdrTrav.getDriver();
 
-	// Check if GPU skinning is available (driver supports glsl3vi profile)
-	bool gpuSkinAvailable = drv && drv->supportVertexProgram(IProgram::glsl3vi);
+	// Check if GPU skinning is available (driver supports glsl3vi profile and scene has it enabled)
+	bool gpuSkinAvailable = drv && drv->supportVertexProgram(IProgram::glsl3vi)
+		&& getOwnerScene()->isGPUSkinningEnabled();
 
 	// Try GPU skinning first: render GPU-capable skins, collect non-GPU skins for CPU path
 	static std::vector<CTransform*> cpuSkins;

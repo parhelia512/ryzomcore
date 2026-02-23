@@ -821,6 +821,9 @@ public:
 	// check if bloom effect is supported
 	virtual bool				supportBloomEffect() const = 0;
 
+	// check if GPU skinning is supported (requires glsl3vi profile)
+	virtual bool				supportGPUSkinning() const = 0;
+
 	/// \name Bench
 	// @{
 

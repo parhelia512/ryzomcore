@@ -276,19 +276,19 @@ GLenum CDriverGL3::vertexBufferUsageGL3(CVertexBuffer::TBufferUsage usage)
 
 	switch (usage)
 	{
-	case CVertexBuffer::CpuReadWrite:
+	case CVertexBuffer::CpuReadWrite: // Shadow buffer and orphaning
 		return GL_DYNAMIC_DRAW; // Shadow buffer: orphan + full upload, drawn from many times
-	case CVertexBuffer::FullRewrite:
-		return GL_DYNAMIC_DRAW;
+	case CVertexBuffer::FullRewrite: // Triple buffered
+		return GL_STATIC_DRAW;
 	case CVertexBuffer::UnsynchronizedWrite:
 		return GL_STATIC_DRAW; // Caller manages sync via deferred freeing
-	case CVertexBuffer::PartialWrite:
+	case CVertexBuffer::PartialWrite: // Single buffer with intermediate orphaned staging buffers for partial writes
 		return GL_STATIC_DRAW; // Only written by GPU-side CopyBufferSubData from staging
 	case CVertexBuffer::Immutable:
 		return GL_STATIC_DRAW;
 	case CVertexBuffer::SmallStream:
 	case CVertexBuffer::FullStream:
-		return GL_STREAM_DRAW;
+		return GL_STATIC_DRAW; // These are currently implemented as triple buffered rather than a strict "use once" ring buffer
 	default:
 		nlerror("Invalid buffer usage");
 		return GL_DYNAMIC_DRAW;

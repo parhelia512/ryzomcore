@@ -1815,6 +1815,14 @@ bool CDriverUser::supportBloomEffect() const
 }
 
 // ***************************************************************************
+bool CDriverUser::supportGPUSkinning() const
+{
+	NL3D_HAUTO_UI_DRIVER
+
+	return _Driver->supportVertexProgram(CVertexProgram::glsl3vi);
+}
+
+// ***************************************************************************
 
 void CDriverUser::startBench (bool wantStandardDeviation, bool quick, bool reset)
 {

@@ -933,10 +933,11 @@ void	CMeshMRMGeom::render(IDriver *drv, CTransformShape *trans, float polygonCou
 
 
 	// GPU geomorph path: use GPU for MRM geomorph when available
+	bool gpuGeomorphEnabled = trans->getOwnerScene()->isGPUSkinningEnabled();
 	if (!_GPUSkinBuilt && !_MeshVertexProgram
-		&& drv->supportVertexProgram(IProgram::glsl3vi))
+		&& gpuGeomorphEnabled && drv->supportVertexProgram(IProgram::glsl3vi))
 		buildGPUSkinVB();
-	if (_GPUSkinBuilt && !_MeshVertexProgram)
+	if (_GPUSkinBuilt && !_MeshVertexProgram && gpuGeomorphEnabled)
 	{
 		drv->setupModelMatrix(trans->getWorldMatrix());
 		bool bkupNorm= drv->isForceNormalize();

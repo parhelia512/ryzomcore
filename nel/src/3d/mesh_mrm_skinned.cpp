@@ -618,7 +618,7 @@ void	CMeshMRMSkinnedGeom::render(IDriver *drv, CTransformShape *trans, float pol
 
 
 	// GPU geomorph path: replaces slow debug VB unpacking
-	if (_GPUSkinBuilt)
+	if (_GPUSkinBuilt && trans->getOwnerScene()->isGPUSkinningEnabled())
 	{
 		drv->setupModelMatrix(trans->getWorldMatrix());
 		bool bkupNorm= drv->isForceNormalize();

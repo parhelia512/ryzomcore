@@ -602,6 +602,7 @@ CClientConfig::CClientConfig()
 	TrykerScale			= 0.88f;
 	ZoraiScale			= 1.25f;
 	EnableRacialAnimation = true;
+	GPUSkinning = true;
 
 	// OPTIONS
 	RunAtTheBeginning	= true;
@@ -1233,6 +1234,9 @@ void CClientConfig::setValues()
 
 	// EnableRacialAnimation
 	READ_BOOL_FV(EnableRacialAnimation);
+
+	// GPUSkinning
+	READ_BOOL_FV(GPUSkinning);
 
 #if !FINAL_VERSION
 	READ_FLOAT_DEV(FyrosScale);
