@@ -97,6 +97,7 @@ Then navigate Playwright to `http://localhost:8888/SAMPLE_NAME.html`.
 - Font files must be embedded into the Emscripten build via `--embed-file` in LINK_FLAGS
 - Emscripten samples must link with `-sASYNCIFY` to allow `emscripten_sleep(0)` during shader init
 - The mega shader init loops (`initMegaVertexPrograms`, `initMegaPixelPrograms`, `initMegaLinkedPrograms`) call `emscripten_sleep(0)` after each compilation/link step to yield to the browser event loop and prevent WebGL context timeout on slower GPUs (e.g. Nvidia on Windows)
+- `EM_FROZEN_CACHE` must be unset (`EM_FROZEN_CACHE=""`) when building with `-sASYNCIFY` to allow Emscripten to compile its ASYNCIFY system libraries; a frozen cache can cause `asyncifyStubs is not defined` runtime errors
 
 ## CI / GitHub Pages
 
