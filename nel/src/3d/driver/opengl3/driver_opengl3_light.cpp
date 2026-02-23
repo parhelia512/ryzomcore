@@ -295,7 +295,6 @@ void	CDriverGL3::setAmbientColor (CRGBA color)
 static void packLightToEntry(CLightTableUBOEntry &e, const CLight &light)
 {
 	CLight::TLightMode lmode = light.getMode();
-	e.mode = (sint32)lmode;
 
 	if (lmode == CLight::DirectionalLight)
 	{
@@ -311,6 +310,7 @@ static void packLightToEntry(CLightTableUBOEntry &e, const CLight &light)
 		e.dirOrPos[1] = pos.y;
 		e.dirOrPos[2] = pos.z;
 	}
+	e.dirOrPos[3] = (float)lmode;
 
 	NLMISC::CRGBAF diff(light.getDiffuse());
 	e.diffuse[0] = diff.R;
@@ -324,16 +324,16 @@ static void packLightToEntry(CLightTableUBOEntry &e, const CLight &light)
 	e.specular[2] = spec.B;
 	e.specular[3] = spec.A;
 
-	e.constAttn = light.getConstantAttenuation();
-	e.linAttn = light.getLinearAttenuation();
-	e.quadAttn = light.getQuadraticAttenuation();
-	e.spotExp = light.getExponent();
+	e.attenuation[0] = light.getConstantAttenuation();
+	e.attenuation[1] = light.getLinearAttenuation();
+	e.attenuation[2] = light.getQuadraticAttenuation();
+	e.attenuation[3] = light.getExponent();
 
 	CVector spotDir = light.getDirection();
 	e.spotDir[0] = spotDir.x;
 	e.spotDir[1] = spotDir.y;
 	e.spotDir[2] = spotDir.z;
-	e.spotCutoff = cosf(light.getCutoff());
+	e.spotDir[3] = cosf(light.getCutoff());
 
 	NLMISC::CRGBAF amb(light.getAmbiant());
 	e.ambient[0] = amb.R;

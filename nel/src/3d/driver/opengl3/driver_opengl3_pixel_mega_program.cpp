@@ -473,12 +473,12 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 					ss << "        float factor = " << facAccess << ";" << std::endl;
 				else
 					ss << "        float factor = nlLightFactor" << i << ";" << std::endl;
-				ss << "        computeLightPP(li.mode, li.dirOrPos," << std::endl;
+				ss << "        computeLightPP(int(li.dirOrPos.w), li.dirOrPos.xyz," << std::endl;
 				ss << "          li.diffuse * factor * pplMatDiff," << std::endl;
 				ss << "          li.specular * factor * " << matSpecStr << "," << std::endl;
 				ss << "          " << matShinStr << "," << std::endl;
-				ss << "          li.constAttn, li.linAttn, li.quadAttn," << std::endl;
-				ss << "          li.spotDir, li.spotCutoff, li.spotExp," << std::endl;
+				ss << "          li.attenuation.x, li.attenuation.y, li.attenuation.z," << std::endl;
+				ss << "          li.spotDir.xyz, li.spotDir.w, li.attenuation.w," << std::endl;
 				ss << "          wsNormal, wsPos, eyeDir, pzbCameraPos," << std::endl;
 				ss << "          pplDiff, pplSpecAccum);" << std::endl;
 				ss << "      }" << std::endl;
