@@ -30,11 +30,16 @@ const char *GLSLLightTableHeader =
 	// User VPs can reference nlLights[] directly when UsesLightTableUBO is set.
 	// Binding point is set from the CPU via glUniformBlockBinding in setupInitialUniforms.
 	"struct NlLightInfo {\n"
-	"    vec4  dirOrPos;\n"    // .xyz = dir/pos, .w = float(mode: 0=dir, 1=point, 2=spot)
+	"    vec3  dirOrPos;\n"
+	"    int   mode;\n"        // 0=directional, 1=point, 2=spot
 	"    vec4  diffuse;\n"
 	"    vec4  specular;\n"
-	"    vec4  attenuation;\n" // .x=const, .y=linear, .z=quadratic, .w=spotExp
-	"    vec4  spotDir;\n"     // .xyz = spot direction, .w = cos(cutoff)
+	"    float constAttn;\n"
+	"    float linAttn;\n"
+	"    float quadAttn;\n"
+	"    float spotExp;\n"
+	"    vec3  spotDir;\n"
+	"    float spotCutoff;\n"  // cos(cutoff angle)
 	"    vec4  ambient;\n"
 	"};\n"
 	"layout(std140) uniform NlLightTable {\n"
