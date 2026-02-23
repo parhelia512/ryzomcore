@@ -95,6 +95,8 @@ Then navigate Playwright to `http://localhost:8888/SAMPLE_NAME.html`.
 - Emscripten samples must call `driver->isFrameReady()` before rendering each frame; if it returns false, skip the frame to avoid blocking the browser event loop (the GL3 driver uses `nglClientWaitSync` for triple buffering which would block in WebGL)
 - Emscripten FreeType is enabled via the CMake imported target `Freetype::Freetype` with `INTERFACE_COMPILE_OPTIONS -sUSE_FREETYPE=1`; the Emscripten cache must not be frozen (`EM_FROZEN_CACHE=""`)
 - Font files must be embedded into the Emscripten build via `--embed-file` in LINK_FLAGS
+- Emscripten samples must link with `-sASYNCIFY` to allow `emscripten_sleep(0)` during shader init
+- The mega shader init loops (`initMegaVertexPrograms`, `initMegaPixelPrograms`, `initMegaLinkedPrograms`) call `emscripten_sleep(0)` after each compilation/link step to yield to the browser event loop and prevent WebGL context timeout on slower GPUs (e.g. Nvidia on Windows)
 
 ## CI / GitHub Pages
 

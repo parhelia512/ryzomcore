@@ -662,6 +662,9 @@ bool CDriverGL3::initMegaVertexPrograms()
 									delete vp;
 									return false;
 								}
+#ifdef __EMSCRIPTEN__
+								emscripten_sleep(0); // Yield to browser to prevent WebGL context timeout
+#endif
 
 								m_MegaVP[linked][fogOrPpl][hwClip][tableUBO][cameraUBO][objectUBO][materialUBO] = vp;
 							}

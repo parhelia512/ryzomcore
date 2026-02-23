@@ -13,7 +13,7 @@ ENDIF()
 IF(EMSCRIPTEN)
   SET_TARGET_PROPERTIES(nl_sample_ppl PROPERTIES
     SUFFIX ".js"
-    LINK_FLAGS "-s USE_WEBGL2=1 -s FULL_ES3=1 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wl,--no-gc-sections -Wl,--export=__main_argc_argv")
+    LINK_FLAGS "-s USE_WEBGL2=1 -s FULL_ES3=1 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s ASYNCIFY -Wl,--no-gc-sections -Wl,--export=__main_argc_argv")
 
   TARGET_LINK_OPTIONS(nl_sample_ppl PRIVATE
     "LINKER:--whole-archive"

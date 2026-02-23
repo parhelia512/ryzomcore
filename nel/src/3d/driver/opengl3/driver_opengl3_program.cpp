@@ -2722,6 +2722,9 @@ bool CDriverGL3::initMegaLinkedPrograms()
 							nlwarning("GL3: Failed to link mega program (fogOrPpl=%d, hwClip=%d, cube=%d, specular=%d, ppClip=%d)", fogOrPpl, hwClip, cube, specular, ppClip);
 							return false;
 						}
+#ifdef __EMSCRIPTEN__
+						emscripten_sleep(0); // Yield to browser to prevent WebGL context timeout
+#endif
 
 						m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip] = sp;
 					}

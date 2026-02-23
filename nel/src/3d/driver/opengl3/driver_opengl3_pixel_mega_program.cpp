@@ -795,6 +795,9 @@ bool CDriverGL3::initMegaPixelPrograms()
 											delete pp;
 											return false;
 										}
+#ifdef __EMSCRIPTEN__
+										emscripten_sleep(0); // Yield to browser to prevent WebGL context timeout
+#endif
 
 										m_MegaPP[linked][fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO] = pp;
 									}

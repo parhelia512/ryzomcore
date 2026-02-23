@@ -10,7 +10,7 @@ IF(EMSCRIPTEN)
   )
   SET_TARGET_PROPERTIES(nl_sample_font PROPERTIES
     SUFFIX ".js"
-    LINK_FLAGS "-s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2 -s FULL_ES3=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s ALLOW_MEMORY_GROWTH=1 -Wl,--no-gc-sections -Wl,--export=__main_argc_argv --embed-file ${CMAKE_CURRENT_SOURCE_DIR}/beteckna.ttf@/share/nl_sample_font/beteckna.ttf -sUSE_FREETYPE=1"
+    LINK_FLAGS "-s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2 -s FULL_ES3=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY -Wl,--no-gc-sections -Wl,--export=__main_argc_argv --embed-file ${CMAKE_CURRENT_SOURCE_DIR}/beteckna.ttf@/share/nl_sample_font/beteckna.ttf -sUSE_FREETYPE=1"
   )
 ELSE()
   TARGET_COMPILE_DEFINITIONS(nl_sample_font PRIVATE "FONT_DIR=\"${NL_SHARE_ABSOLUTE_PREFIX}/nl_sample_font/\"")
