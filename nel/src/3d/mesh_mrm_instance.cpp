@@ -238,6 +238,28 @@ void			CMeshMRMInstance::renderSkinGroupSpecularRdrPass(uint rdrPassId)
 }
 
 // ***************************************************************************
+bool			CMeshMRMInstance::supportGPUSkinning() const
+{
+	if(Shape)
+	{
+		CMeshMRM	*meshMrm= safe_cast<CMeshMRM*>((IShape*)Shape);
+		return	meshMrm->getMeshGeom().supportGPUSkinning();
+	}
+	else
+		return false;
+}
+// ***************************************************************************
+void			CMeshMRMInstance::renderGPUSkin(float alphaMRM, CSkeletonModel *skeleton)
+{
+	if(Shape && getVisibility() != CHrcTrav::Hide)
+	{
+		CMeshMRM *pMesh = NLMISC::safe_cast<CMeshMRM *>((IShape*)Shape);
+		CMeshMRMGeom	&meshGeom= const_cast<CMeshMRMGeom&>(pMesh->getMeshGeom ());
+		meshGeom.renderGPUSkin(this, alphaMRM, skeleton);
+	}
+}
+
+// ***************************************************************************
 void	CMeshMRMInstance::initRenderFilterType()
 {
 	if(Shape)
