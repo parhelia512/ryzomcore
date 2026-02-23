@@ -60,6 +60,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-nel-${{ matrix.os }}-${{ matrix.build-type }}-${{ github.sha }}
+          restore-keys: ccache-nel-${{ matrix.os }}-${{ matrix.build-type }}-
+
       - id: cache
         uses: actions/cache@v4
         with:
@@ -91,6 +97,12 @@ jobs:
         os: [ ubuntu-22.04, ubuntu-24.04 ]
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-nelns-${{ matrix.os }}-${{ github.sha }}
+          restore-keys: ccache-nelns-${{ matrix.os }}-
 
       - uses: actions/download-artifact@v4
         with:
@@ -133,6 +145,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-ryzom-${{ matrix.os }}-${{ matrix.build-type }}-${{ github.sha }}
+          restore-keys: ccache-ryzom-${{ matrix.os }}-${{ matrix.build-type }}-
+
       - uses: actions/download-artifact@v4
         with:
           pattern: nel-${{ matrix.os }}-${{ matrix.build-type }}-*
@@ -173,6 +191,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-snowballs-${{ matrix.os }}-${{ github.sha }}
+          restore-keys: ccache-snowballs-${{ matrix.os }}-
+
       - uses: actions/download-artifact@v4
         with:
           pattern: nel-${{ matrix.os }}-static-*
@@ -210,6 +234,12 @@ jobs:
         os: [ ubuntu-22.04, ubuntu-24.04 ]
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-studio-${{ matrix.os }}-${{ github.sha }}
+          restore-keys: ccache-studio-${{ matrix.os }}-
 
       - uses: actions/download-artifact@v4
         with:
