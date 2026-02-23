@@ -253,7 +253,6 @@ TARGET_LINK_LIBRARIES(nelmisc
         ${CMAKE_THREAD_LIBS_INIT}
         PRIVATE
 		NeL::sevenzip
-        LibXml2::LibXml2
         ZLIB::ZLIB
 )
 

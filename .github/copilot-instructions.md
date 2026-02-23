@@ -95,6 +95,19 @@ Then navigate Playwright to `http://localhost:8888/SAMPLE_NAME.html`.
 - Emscripten FreeType is enabled via the CMake imported target `Freetype::Freetype` with `INTERFACE_COMPILE_OPTIONS -sUSE_FREETYPE=1`; the Emscripten cache must not be frozen (`EM_FROZEN_CACHE=""`)
 - Font files must be embedded into the Emscripten build via `--embed-file` in LINK_FLAGS
 
+## CI / GitHub Pages
+
+The `emscripten-samples.yml` workflow automates the Emscripten build and deploys
+samples to GitHub Pages.
+
+- **Build job**: Installs emsdk, configures CMake, builds all 5 samples, generates
+  per-sample HTML host pages and an index page linking them all
+- **Deploy job**: Deploys to GitHub Pages (only on core4 branch or manual dispatch)
+- **Index page**: `nel/samples/3d/index.html` — source for the GitHub Pages landing page
+- **Sample HTML**: Generated at build time from a template in the workflow
+
+The workflow uses `mymindstorm/setup-emsdk@v14` for reproducible Emscripten versions.
+
 ## Desktop OpenGL 3.3 Build
 
 ```bash

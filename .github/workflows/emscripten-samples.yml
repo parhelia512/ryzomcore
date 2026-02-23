@@ -1,0 +1,129 @@
+name: Emscripten WebGL 2.0 Samples
+
+on:
+  push:
+    branches: [ "core4", "feature/*" ]
+    paths-ignore:
+      - '.devcontainer/**'
+      - 'snowballs2/**'
+  pull_request:
+    branches: [ "core4" ]
+    paths-ignore:
+      - '.devcontainer/**'
+      - 'snowballs2/**'
+  workflow_dispatch:
+
+env:
+  EM_VERSION: 3.1.51
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EM_VERSION }}
+
+      - name: Verify Emscripten
+        run: emcc --version
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          emcmake cmake .. \
+            -DWITH_STATIC=ON \
+            -DWITH_STATIC_DRIVERS=ON \
+            -DWITH_DRIVER_OPENGL=OFF \
+            -DWITH_DRIVER_OPENGLES=OFF \
+            -DWITH_DRIVER_OPENGL3=OFF \
+            -DWITH_DRIVER_OPENGLES3=ON \
+            -DWITH_NEL_SAMPLES=ON \
+            -DWITH_NEL_TOOLS=OFF \
+            -DWITH_NEL_TESTS=OFF \
+            -DWITH_RYZOM=OFF \
+            -DWITH_RYZOM_CLIENT=OFF \
+            -DWITH_RYZOM_SERVER=OFF \
+            -DWITH_RYZOM_TOOLS=OFF \
+            -DWITH_NELNS=OFF \
+            -DWITH_SNOWBALLS=OFF \
+            -DWITH_GUI=OFF \
+            -DWITH_SOUND=OFF \
+            -DWITH_LOGIC=OFF \
+            -DWITH_PACS=OFF \
+            -DWITH_GEORGES=OFF \
+            -DWITH_LIGO=OFF \
+            -DWITH_NET=OFF \
+            -DWITH_WEB=OFF \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+
+      - name: Build samples
+        run: |
+          cd build
+          emmake make -j$(nproc) \
+            nl_sample_clip_plane \
+            nl_sample_nelvp \
+            nl_sample_planar_reflection \
+            nl_sample_ppl \
+            nl_sample_font
+
+      - name: Prepare Pages artifact
+        run: |
+          mkdir -p pages
+          # Copy built sample files
+          for sample in clip_plane nelvp planar_reflection ppl font; do
+            cp build/bin/nl_sample_${sample}.js pages/
+            cp build/bin/nl_sample_${sample}.wasm pages/
+            # Copy any embedded data files
+            if [ -f "build/bin/nl_sample_${sample}.data" ]; then
+              cp "build/bin/nl_sample_${sample}.data" pages/
+            fi
+          done
+          # Generate per-sample HTML host pages
+          for sample in clip_plane nelvp planar_reflection ppl font; do
+            title=$(echo "$sample" | sed 's/_/ /g; s/\b\(.\)/\u\1/g')
+            cat > pages/nl_sample_${sample}.html << SAMPLEEOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>NeL Sample - ${title} (WebGL 2.0)</title>
+            <style>
+              body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }
+              canvas { display: block; width: 800px; height: 600px; }
+            </style>
+          </head>
+          <body>
+            <canvas id="canvas" width="800" height="600" oncontextmenu="event.preventDefault()"></canvas>
+            <script>var Module = { canvas: document.getElementById('canvas') };</script>
+            <script src="nl_sample_${sample}.js"></script>
+          </body>
+          </html>
+          SAMPLEEOF
+          done
+          # Generate index page
+          cp ${{ github.workspace }}/nel/samples/3d/index.html pages/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/core4' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
