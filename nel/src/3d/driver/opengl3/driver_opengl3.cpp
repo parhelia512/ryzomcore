@@ -559,10 +559,10 @@ bool CDriverGL3::setupDisplay()
 	// WebGL 2.0 requires bound UBOs to be at least as large as the
 	// corresponding uniform block in the shader, even before first use.
 	{
-		// NlLightTable: 128 × NlLightInfo (96 bytes each) = 12288 bytes
+		// NlLightTable: NL_OPENGL3_MAX_LIGHT_TABLE × NlLightInfo (96 bytes each)
 		_DriverGLStates.forceBindUniformBuffer(_LightTableUBOId);
-		nglBufferData(GL_UNIFORM_BUFFER, 128 * sizeof(CLightTableUBOEntry), NULL, GL_STREAM_DRAW);
-		_LightTableUBOCapacity = 128;
+		nglBufferData(GL_UNIFORM_BUFFER, NL_OPENGL3_MAX_LIGHT_TABLE * sizeof(CLightTableUBOEntry), NULL, GL_STREAM_DRAW);
+		_LightTableUBOCapacity = NL_OPENGL3_MAX_LIGHT_TABLE;
 
 		// NlLightTable binding for lightmap dynamic UBO (1 entry)
 		_DriverGLStates.forceBindUniformBuffer(_LightMapDynUBOId);

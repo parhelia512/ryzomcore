@@ -207,3 +207,9 @@ inline void glPolygonMode(GLenum, GLenum) { }
 #include "nel/3d/driver.h"
 
 #define NL_OPENGL3_MAX_LIGHT 8
+
+#ifdef __EMSCRIPTEN__
+#define NL_OPENGL3_MAX_LIGHT_TABLE 8
+#else
+#define NL_OPENGL3_MAX_LIGHT_TABLE 128
+#endif

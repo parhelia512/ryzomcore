@@ -22,6 +22,9 @@
 
 #include <nel/misc/debug.h>
 
+#define NL_STRINGIFY_(x) #x
+#define NL_STRINGIFY(x) NL_STRINGIFY_(x)
+
 namespace NL3D {
 namespace NLDRIVERGL3 {
 
@@ -43,7 +46,7 @@ const char *GLSLLightTableHeader =
 	"    vec4  ambient;\n"
 	"};\n"
 	"layout(std140) uniform NlLightTable {\n"
-	"    NlLightInfo nlLights[128];\n"
+	"    NlLightInfo nlLights[" NL_STRINGIFY(NL_OPENGL3_MAX_LIGHT_TABLE) "];\n"
 	"};\n";
 
 const char *GLSLCameraHeader =
