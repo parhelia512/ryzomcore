@@ -108,51 +108,51 @@ void main()
   // Unrolled 8 light slots from NlModel UBO
   { int idx = nlLightIndices01.x;
     if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.x;
-      vec3 adjDirOrPos = (int(li.dirOrPos.w) == 0) ? -li.dirOrPos.xyz : li.dirOrPos.xyz - pzbCameraPos;
-      computeLight(int(li.dirOrPos.w), adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
-        li.attenuation.x, li.attenuation.y, li.attenuation.z, li.spotDir.xyz, li.spotDir.w, li.attenuation.w, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
   } }
   { int idx = nlLightIndices01.y;
     if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.y;
-      vec3 adjDirOrPos = (int(li.dirOrPos.w) == 0) ? -li.dirOrPos.xyz : li.dirOrPos.xyz - pzbCameraPos;
-      computeLight(int(li.dirOrPos.w), adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
-        li.attenuation.x, li.attenuation.y, li.attenuation.z, li.spotDir.xyz, li.spotDir.w, li.attenuation.w, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
   } }
   { int idx = nlLightIndices01.z;
     if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.z;
-      vec3 adjDirOrPos = (int(li.dirOrPos.w) == 0) ? -li.dirOrPos.xyz : li.dirOrPos.xyz - pzbCameraPos;
-      computeLight(int(li.dirOrPos.w), adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
-        li.attenuation.x, li.attenuation.y, li.attenuation.z, li.spotDir.xyz, li.spotDir.w, li.attenuation.w, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
   } }
   { int idx = nlLightIndices01.w;
     if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors01.w;
-      vec3 adjDirOrPos = (int(li.dirOrPos.w) == 0) ? -li.dirOrPos.xyz : li.dirOrPos.xyz - pzbCameraPos;
-      computeLight(int(li.dirOrPos.w), adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
-        li.attenuation.x, li.attenuation.y, li.attenuation.z, li.spotDir.xyz, li.spotDir.w, li.attenuation.w, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
   } }
   { int idx = nlLightIndices45.x;
     if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.x;
-      vec3 adjDirOrPos = (int(li.dirOrPos.w) == 0) ? -li.dirOrPos.xyz : li.dirOrPos.xyz - pzbCameraPos;
-      computeLight(int(li.dirOrPos.w), adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
-        li.attenuation.x, li.attenuation.y, li.attenuation.z, li.spotDir.xyz, li.spotDir.w, li.attenuation.w, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
   } }
   { int idx = nlLightIndices45.y;
     if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.y;
-      vec3 adjDirOrPos = (int(li.dirOrPos.w) == 0) ? -li.dirOrPos.xyz : li.dirOrPos.xyz - pzbCameraPos;
-      computeLight(int(li.dirOrPos.w), adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
-        li.attenuation.x, li.attenuation.y, li.attenuation.z, li.spotDir.xyz, li.spotDir.w, li.attenuation.w, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
   } }
   { int idx = nlLightIndices45.z;
     if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.z;
-      vec3 adjDirOrPos = (int(li.dirOrPos.w) == 0) ? -li.dirOrPos.xyz : li.dirOrPos.xyz - pzbCameraPos;
-      computeLight(int(li.dirOrPos.w), adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
-        li.attenuation.x, li.attenuation.y, li.attenuation.z, li.spotDir.xyz, li.spotDir.w, li.attenuation.w, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
   } }
   { int idx = nlLightIndices45.w;
     if (idx >= 0) { NlLightInfo li = nlLights[idx]; float factor = nlLightFactors45.w;
-      vec3 adjDirOrPos = (int(li.dirOrPos.w) == 0) ? -li.dirOrPos.xyz : li.dirOrPos.xyz - pzbCameraPos;
-      computeLight(int(li.dirOrPos.w), adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
-        li.attenuation.x, li.attenuation.y, li.attenuation.z, li.spotDir.xyz, li.spotDir.w, li.attenuation.w, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
+      vec3 adjDirOrPos = (li.mode == 0) ? -li.dirOrPos : li.dirOrPos - pzbCameraPos;
+      computeLight(li.mode, adjDirOrPos, li.diffuse * factor * nlMaterialDiffuse, li.specular * factor * nlMaterialSpecular, nlMaterialShininess,
+        li.constAttn, li.linAttn, li.quadAttn, li.spotDir, li.spotCutoff, li.spotExp, normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);
   } }
 
   // Self-illumination from NlModel UBO

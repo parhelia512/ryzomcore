@@ -280,14 +280,18 @@ nlctassert(sizeof(CCameraUBOData) == 352);
 
 // ***************************************************************************
 // CPU-side struct matching the std140 NlLightInfo layout (96 bytes)
-// All fields are vec4 to avoid ANGLE compile-time issues with vec3/mat3 in UBOs.
 struct CLightTableUBOEntry
 {
-	float dirOrPos[4];     //  0: .xyz = dir/pos, .w = float(mode: 0=dir, 1=point, 2=spot)
+	float dirOrPos[3];     // 0
+	sint32 mode;           // 12
 	float diffuse[4];      // 16
 	float specular[4];     // 32
-	float attenuation[4];  // 48: const, linear, quadratic, spotExp
-	float spotDir[4];      // 64: .xyz = spot direction, .w = cos(cutoff)
+	float constAttn;       // 48
+	float linAttn;         // 52
+	float quadAttn;        // 56
+	float spotExp;         // 60
+	float spotDir[3];      // 64
+	float spotCutoff;      // 76
 	float ambient[4];      // 80
 };                         // 96 bytes
 nlctassert(sizeof(CLightTableUBOEntry) == 96);
