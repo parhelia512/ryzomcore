@@ -28,6 +28,7 @@ jobs:
       build-output-dir: ${{ steps.strings.outputs.build-output-dir }}
       build-version: ${{ steps.strings.outputs.build-version }}
       docker-image-tag: ${{ steps.strings.outputs.docker-image-tag }}
+      week: ${{ steps.strings.outputs.week }}
     steps:
       - name: Set reusable strings
         id: strings
@@ -44,6 +45,7 @@ jobs:
           echo IMAGE_ID=$IMAGE_ID
           echo "build-version=${VERSION}+sha.${COMMIT_HASH:0:8}" >> "$GITHUB_OUTPUT"
           echo "docker-image-tag=${IMAGE_ID}:${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "week=$(date +%YW%V)" >> "$GITHUB_OUTPUT"
 
   build:
     needs: [ strings ]
@@ -108,8 +110,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-${{ matrix.os }}-${{ github.sha }}
-          restore-keys: ccache-${{ matrix.os }}-
+          key: ccache-${{ matrix.os }}-${{ needs.strings.outputs.week }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.os }}-${{ needs.strings.outputs.week }}-
 
       - name: Configure ccache
         run: |
