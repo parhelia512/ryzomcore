@@ -133,7 +133,7 @@ jobs:
 
       - name: ccache stats
         if: always()
-        run: ccache -sv
+        run: ccache -s -v || ccache -s
 
       - name: Unit Tests
         run: ctest --preset default

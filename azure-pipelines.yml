@@ -57,7 +57,7 @@ jobs:
     - script: |
         cmake --build --preset release
       displayName: 'Make'
-    - script: ccache -sv
+    - script: ccache -s -v || ccache -s
       displayName: 'ccache stats'
       condition: always()
     - script: |
@@ -126,7 +126,7 @@ jobs:
     - script: |
         cmake --build --preset release
       displayName: 'Make'
-    - script: ccache -sv
+    - script: ccache -s -v || ccache -s
       displayName: 'ccache stats'
       condition: always()
     - script: |
@@ -251,7 +251,7 @@ jobs:
       inputs:
         workingDirectory: $(Build.BinariesDirectory)
         cmakeArgs: '--build . --config Release'
-    - script: ccache -sv
+    - script: ccache -s -v || ccache -s
       displayName: '(ubuntu) ccache stats'
       condition: and(always(), eq(variables['Agent.JobName'], 'client ubuntu'))
     #- task: CMake@1

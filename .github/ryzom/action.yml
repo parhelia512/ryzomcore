@@ -80,7 +80,7 @@ runs:
     - name: ccache stats
       if: always()
       shell: bash
-      run: ccache -sv
+      run: ccache -s -v || ccache -s
 
     - name: Package
       shell: bash

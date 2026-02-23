@@ -149,7 +149,7 @@ jobs:
 
     - name: ccache stats
       if: always() && runner.os == 'Linux'
-      run: ccache -sv
+      run: ccache -s -v || ccache -s
 
     - name: Package
       run: cpack --preset ci-ryzom-client
