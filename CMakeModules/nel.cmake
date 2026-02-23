@@ -120,6 +120,22 @@ MACRO(NL_ADD_RUNTIME_FLAGS name)
   ENDIF()
 ENDMACRO(NL_ADD_RUNTIME_FLAGS)
 
+###
+# Fix for MFC "regular DLL" targets (LNK2005 DllMain conflict).
+# _USRDLL tells MFC this is a regular DLL (not an extension DLL), which controls
+# DLL entry point setup and library pragma directives in MFC headers.
+# Argument: name - the MFC SHARED library target.
+###
+MACRO(NL_MFC_DLL_WORKAROUND name)
+  IF(MSVC)
+    TARGET_COMPILE_DEFINITIONS(${name} PRIVATE _USRDLL)
+    TARGET_LINK_LIBRARIES(${name} PRIVATE
+      $<$<CONFIG:Debug>:mfcs140ud>
+      $<$<CONFIG:Release>:mfcs140u>
+    )
+  ENDIF()
+ENDMACRO(NL_MFC_DLL_WORKAROUND)
+
 MACRO(NL_ADD_STATIC_VID_DRIVERS name)
 IF(HUNTER_ENABLED)
   IF(WIN32)
@@ -279,11 +295,6 @@ MACRO(NL_SETUP_DEFAULT_OPTIONS)
     OPTION(WITH_STATIC_LIBXML2    "With static libxml2"                           ON )
   ELSE()
     OPTION(WITH_STATIC_LIBXML2    "With static libxml2"                           OFF)
-  ENDIF()
-  IF (WITH_STATIC)
-    OPTION(WITH_STATIC_CURL       "With static curl"                              ON )
-  ELSE()
-    OPTION(WITH_STATIC_CURL       "With static curl"                              OFF)
   ENDIF()
   OPTION(WITH_STATIC_DRIVERS      "With static drivers."                          OFF)
   IF(WIN32)

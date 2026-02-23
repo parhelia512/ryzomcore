@@ -231,6 +231,7 @@ static GLenum usageHintToGL(CUniformBuffer::TUsageHint hint)
 static const sint s_UBBindingToGL[] = {
 	NL_USER_VERTEX_PROGRAM_BINDING,  // UBBindingVertexProgram
 	NL_USER_PIXEL_PROGRAM_BINDING,   // UBBindingPixelProgram
+	NL_USER_SKELETON_BINDING,        // UBBindingSkeleton
 };
 
 bool CDriverGL3::bindUniformBuffer(TUBBinding binding, CUniformBuffer *ub)

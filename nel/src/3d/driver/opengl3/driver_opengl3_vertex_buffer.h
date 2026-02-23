@@ -86,15 +86,13 @@ protected:
  *      DYNAMIC_DRAW for CpuReadWrite); subsequent full uploads use DYNAMIC_DRAW.
  *
  *    - With dirty ranges, small total (<50%, <=16 ranges): staging-copy pattern.
- *      A direct glBufferSubData would stall the CPU because GL must immediately
- *      copy the caller's memory while the GPU may still be reading the
- *      destination. Instead, dirty shadow regions are uploaded into an orphaned
+ *      All coalesced ranges are packed contiguously into a single orphaned
  *      GL staging buffer (GL_COPY_READ_BUFFER, STREAM_DRAW) — orphaning means
  *      GL allocates fresh storage so the CPU never waits. Then
- *      glCopyBufferSubData copies from staging into the real buffer
- *      (GL_COPY_WRITE_BUFFER) entirely on the GPU side, scheduled in the
- *      normal command stream after any pending reads complete. The real
- *      buffer's existing data is preserved and neither side stalls.
+ *      glCopyBufferSubData scatter-copies each range from the packed staging
+ *      into the real buffer (GL_COPY_WRITE_BUFFER) entirely on the GPU side,
+ *      scheduled in the normal command stream after any pending reads complete.
+ *      The real buffer's existing data is preserved and neither side stalls.
  *
  *    - With dirty ranges, large total: falls back to full orphan as above.
  *

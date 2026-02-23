@@ -553,6 +553,8 @@ public:
 
 	virtual	bool				supportBloomEffect() const;
 
+	virtual	bool				supportGPUSkinning() const;
+
 	/// \name Bench
 	// @{
 	virtual void startBench (bool wantStandardDeviation = false, bool quick = false, bool reset = true);

@@ -29,6 +29,13 @@ using	namespace std;
 using	namespace NLMISC;
 
 namespace NL3D {
+
+namespace {
+static bool dirtyRangeLess(const CVertexBuffer::CDirtyRange &a, const CVertexBuffer::CDirtyRange &b)
+{
+	return a.Begin < b.Begin;
+}
+} // anonymous namespace
 namespace NLDRIVERGL3 {
 
 // ***************************************************************************
@@ -58,6 +65,7 @@ static inline GLsizei vbgl3BufferForType(CVertexBuffer::TBufferUsage mem)
 	{
 	case CVertexBuffer::FullStream:
 	case CVertexBuffer::SmallStream:
+	case CVertexBuffer::FullRewrite:
 		return NL3D_GL3_BUFFER_QUEUE_MAX;
 	default:
 		return 1;
@@ -193,7 +201,9 @@ void *CVertexBufferGL3::lock()
 			if (glGetError() != GL_NO_ERROR)
 			{
 				m_Driver->incrementResetCounter();
-				nglDeleteBuffers(1, &m_VertexObjectId[i]);
+				nglDeleteBuffers(nbBuff, m_VertexObjectId);
+				for (GLsizei j = 0; j < nbBuff; ++j)
+					m_VertexObjectId[j] = 0;
 				if (!m_ShadowData.empty())
 				{
 					m_VertexPtr = &m_ShadowData[0];
@@ -231,6 +241,7 @@ void *CVertexBufferGL3::lock()
 	{
 	case CVertexBuffer::FullStream:
 	case CVertexBuffer::SmallStream:
+	case CVertexBuffer::FullRewrite:
 	{
 		if (m_CurrentInFlight)
 		{
@@ -265,10 +276,14 @@ void *CVertexBufferGL3::lock()
 		}
 		break;
 	}
-	case CVertexBuffer::FullRewrite:
+	case CVertexBuffer::UnsynchronizedWrite:
 		m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
-		m_VertexPtr = nglMapBufferRange(GL_ARRAY_BUFFER, 0, size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+		m_VertexPtr = nglMapBufferRange(GL_ARRAY_BUFFER, 0, size, GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
 		break;
+	// case CVertexBuffer::FullRewrite:
+	// 	m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
+	// 	m_VertexPtr = nglMapBufferRange(GL_ARRAY_BUFFER, 0, size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+	// 	break;
 	default:
 		m_Driver->_DriverGLStates.bindArrayBuffer(m_VertexObjectId[m_CurrentIndex]);
 #ifdef USE_OPENGLES3
@@ -281,7 +296,6 @@ void *CVertexBufferGL3::lock()
 
 	if (!m_VertexPtr)
 	{
-		nglUnmapBuffer(GL_ARRAY_BUFFER);
 		nlassert(nglIsBuffer(m_VertexObjectId[m_CurrentIndex]));
 		invalidate();
 		return &m_DummyVB[0];
@@ -433,9 +447,7 @@ void CVertexBufferGL3::flush()
 		memcpy(&m_MergedRanges[0], &ranges[0], ranges.size() * sizeof(CVertexBuffer::CDirtyRange));
 
 		// Sort by Begin offset
-		std::sort(m_MergedRanges.begin(), m_MergedRanges.end(),
-			[](const CVertexBuffer::CDirtyRange &a, const CVertexBuffer::CDirtyRange &b)
-			{ return a.Begin < b.Begin; });
+		std::sort(m_MergedRanges.begin(), m_MergedRanges.end(), dirtyRangeLess);
 
 		// Merge overlapping/adjacent and ranges within 128 bytes of each other
 		uint writeIdx = 0;
@@ -476,26 +488,37 @@ void CVertexBufferGL3::flush()
 		}
 		else
 		{
-			// Staging buffer pattern: CPU -> orphaned staging buf -> GL copies into real buf.
-			// Neither CPU nor GPU stalls: staging is orphaned (CPU free), copy is GPU-internal.
+			// Staging buffer pattern: pack all dirty ranges into one orphaned
+			// staging buffer, then scatter-copy GL-side into the real buffer.
+			// Single allocation + single orphan; neither CPU nor GPU stalls.
 			if (!m_StagingBufferId)
 				nglGenBuffers(1, &m_StagingBufferId);
 
 			nglBindBuffer(GL_COPY_READ_BUFFER, m_StagingBufferId);
 			nglBindBuffer(GL_COPY_WRITE_BUFFER, m_VertexObjectId[m_CurrentIndex]);
 
+			// Orphan staging once and pack all ranges contiguously
+			nglBufferData(GL_COPY_READ_BUFFER, totalDirty, NULL, GL_STREAM_DRAW);
+
+			uint32 packOffset = 0;
 			for (uint i = 0; i < m_MergedRanges.size(); ++i)
 			{
 				uint32 rangeBegin = m_MergedRanges[i].Begin;
 				uint32 rangeSize = m_MergedRanges[i].End - rangeBegin;
+				nglBufferSubData(GL_COPY_READ_BUFFER, packOffset, rangeSize,
+					&m_ShadowData[rangeBegin]);
+				packOffset += rangeSize;
+			}
 
-				// Orphan staging and upload dirty region from shadow
-				nglBufferData(GL_COPY_READ_BUFFER, rangeSize,
-					&m_ShadowData[rangeBegin], GL_STREAM_DRAW);
-
-				// GL copies staging -> real buffer (GPU-side, no stall)
+			// Scatter-copy from packed staging into destination
+			packOffset = 0;
+			for (uint i = 0; i < m_MergedRanges.size(); ++i)
+			{
+				uint32 rangeBegin = m_MergedRanges[i].Begin;
+				uint32 rangeSize = m_MergedRanges[i].End - rangeBegin;
 				nglCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER,
-					0, rangeBegin, rangeSize);
+					packOffset, rangeBegin, rangeSize);
+				packOffset += rangeSize;
 			}
 
 			nglBindBuffer(GL_COPY_READ_BUFFER, 0);
@@ -579,7 +602,7 @@ CVertexBufferAMDPinned::~CVertexBufferAMDPinned()
 		nlassert(nglIsBuffer(id));
 		nglDeleteBuffers(1, &id);
 	}
-	delete m_VertexPtrAllocated;
+	delete[] static_cast<char *>(m_VertexPtrAllocated);
 	m_VertexPtrAllocated = NULL;
 	m_VertexPtrAligned = NULL;
 	nlassert(m_VertexPtr == NULL);

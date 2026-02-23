@@ -170,7 +170,9 @@ SOURCE_GROUP(Driver FILES
         program.cpp
         ../../include/nel/3d/program.h
         gpu_program_params.cpp
-        ../../include/nel/3d/gpu_program_params.h)
+        ../../include/nel/3d/gpu_program_params.h
+        gpu_skin_vp.cpp
+        ../../include/nel/3d/gpu_skin_vp.h)
 
 SOURCE_GROUP(Font FILES
         computed_string.cpp

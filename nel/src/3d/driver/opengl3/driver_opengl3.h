@@ -902,7 +902,8 @@ public:
 	virtual bool			supportPackedDepthStencil() const;
 
 	virtual uint64			getSwapBufferCounter() const { return _SwapBufferCounter; }
-	inline uint64			getSwapBufferInFlight() const { return _SwapBufferInFlight; }
+	virtual uint64			getSwapBufferInFlight() const { return _SwapBufferInFlight; }
+	virtual bool			isTripleBufferPipelined() const { return NL3D_GL3_FRAME_QUEUE_MAX > 0; }
 
 	virtual void			setCullMode(TCullMode cullMode);
 	virtual	TCullMode       getCullMode() const;
@@ -1486,6 +1487,7 @@ private:
 	bool			supportVertexProgram(CVertexProgram::TProfile profile) const;
 
 	bool			compileVertexProgram(CVertexProgram *program);
+	bool			compileInsertVertexProgram(CVertexProgram *program);
 	bool			convertNelvpToGLSL(CVertexProgram *program, bool linked);
 	CUniformBuffer	*getNelvpUB(TProgram program) const;
 	void			flushNelvpUserVP();
@@ -1779,6 +1781,16 @@ public:
 	bool isNelvpConverted;                                // True if this VP was converted from nelvp
 	NLMISC::CSmartPtr<CUniformBuffer> NelvpConstantUB;   // UBO for nelvp constant registers (96 + 4 modelView)
 	std::map<std::string, uint> NelvpParamIndices;        // ParamIndices from nelvp source (name → register index)
+
+	// VP insert program state (glsl3vi profile)
+	bool isInsertProgram;                                 // True if this VP is a VP insert
+	std::string InsertSource;                             // Cached insert GLSL text
+	// Compiled mega VP variants with this insert spliced in
+	// [linked][fogOrPpl][hwClip] — always all-UBO dimensions
+	NLMISC::CSmartPtr<CVertexProgram> InsertMegaVP[2][2][2];
+	// Linked combos: insert mega VP + mega PP
+	// [fogOrPpl][cube][specular][ppClip]
+	NLMISC::CSmartPtr<CShaderProgram> InsertLinkedVPMegaPP[2][2][2][2];
 
 private:
 	GLuint programId;
