@@ -66,12 +66,10 @@ void alExtInitDevice(ALCdevice *device)
 		}
 	}
 
-#if !defined(AL_LIBTYPE_STATIC)
-// Windows and Mac OS always link to shared OpenAL library
-#if defined(NL_OS_WINDOWS) || defined(NL_OS_MAC) || !defined(NL_STATIC)
 	// EFX
 	if ((AlExtEfx = (alcIsExtensionPresent(device, "ALC_EXT_EFX") == ALC_TRUE)) == true)
 	{
+#if !defined(AL_ALEXT_PROTOTYPES)
 		// effect objects
 		alGenEffects = (LPALGENEFXOBJECTS)alGetProcAddress("alGenEffects");
 		alDeleteEffects = (LPALDELETEEFXOBJECTS)alGetProcAddress("alDeleteEffects");
@@ -108,14 +106,13 @@ void alExtInitDevice(ALCdevice *device)
 		alGetAuxiliaryEffectSlotiv = (LPALGETEFXOBJECTIV)alGetProcAddress("alGetAuxiliaryEffectSlotiv");
 		alGetAuxiliaryEffectSlotf = (LPALGETEFXOBJECTF)alGetProcAddress("alGetAuxiliaryEffectSlotf");
 		alGetAuxiliaryEffectSlotfv = (LPALGETEFXOBJECTFV)alGetProcAddress("alGetFilterfv");
+#endif
 		if (!alGenEffects || !alGenFilters || !alGenAuxiliaryEffectSlots)
 		{
 			nlwarning("AL: ALC_EXT_EFX alcGetProcAddress failed");
 			AlExtEfx = false;
 		}
 	}
-#endif
-#endif
 }
 
 #if EAX_AVAILABLE
@@ -139,8 +136,7 @@ EAXGetBufferMode eaxGetBufferMode = NULL;
 // ALC_EXT_EFX
 bool AlExtEfx = false;
 // effect objects
-#if !defined(AL_LIBTYPE_STATIC)
-#if defined(NL_OS_WINDOWS) || defined(NL_OS_MAC) || !defined(NL_STATIC)
+#if !defined(AL_ALEXT_PROTOTYPES)
 LPALGENEFXOBJECTS alGenEffects = NULL;
 LPALDELETEEFXOBJECTS alDeleteEffects = NULL;
 LPALISEFXOBJECT alIsEffect = NULL;
@@ -176,7 +172,6 @@ LPALGETEFXOBJECTI alGetAuxiliaryEffectSloti = NULL;
 LPALGETEFXOBJECTIV alGetAuxiliaryEffectSlotiv = NULL;
 LPALGETEFXOBJECTF alGetAuxiliaryEffectSlotf = NULL;
 LPALGETEFXOBJECTFV alGetAuxiliaryEffectSlotfv = NULL;
-#endif
 #endif
 }
 

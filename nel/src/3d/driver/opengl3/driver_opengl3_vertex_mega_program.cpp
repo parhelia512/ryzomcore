@@ -443,16 +443,16 @@ void megaVPGenerate(std::string &result, bool fogOrPpl, bool hwClip, bool tableU
 			else
 				ss << "        float factor = nlLightFactor" << i << ";" << std::endl;
 			ss << "        vec3 adjDirOrPos;" << std::endl;
-			ss << "        if (li.mode == " << (int)CLight::DirectionalLight << ")" << std::endl;
-			ss << "          adjDirOrPos = -li.dirOrPos;" << std::endl;
+			ss << "        if (int(li.dirOrPos.w) == " << (int)CLight::DirectionalLight << ")" << std::endl;
+			ss << "          adjDirOrPos = -li.dirOrPos.xyz;" << std::endl;
 			ss << "        else" << std::endl;
-			ss << "          adjDirOrPos = li.dirOrPos - pzbCameraPos;" << std::endl;
-			ss << "        computeLight(li.mode, adjDirOrPos," << std::endl;
+			ss << "          adjDirOrPos = li.dirOrPos.xyz - pzbCameraPos;" << std::endl;
+			ss << "        computeLight(int(li.dirOrPos.w), adjDirOrPos," << std::endl;
 			ss << "          li.diffuse * factor * " << matDiffStr << "," << std::endl;
 			ss << "          li.specular * factor * " << matSpecStr << "," << std::endl;
 			ss << "          " << matShinStr << "," << std::endl;
-			ss << "          li.constAttn, li.linAttn, li.quadAttn," << std::endl;
-			ss << "          li.spotDir, li.spotCutoff, li.spotExp," << std::endl;
+			ss << "          li.attenuation.x, li.attenuation.y, li.attenuation.z," << std::endl;
+			ss << "          li.spotDir.xyz, li.spotDir.w, li.attenuation.w," << std::endl;
 			ss << "          normal3, ecPos3, eyeDir, diffuseVertex, specularVertex);" << std::endl;
 			ss << "      }" << std::endl;
 			ss << "    }" << std::endl;

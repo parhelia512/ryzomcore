@@ -54,12 +54,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Set reusable strings
-      # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
       id: strings
       shell: bash
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
         echo "hunter-dir=${{ github.workspace }}/build/.hunter" >> "$GITHUB_OUTPUT"
+        echo "week=$(date +%YW%V)" >> "$GITHUB_OUTPUT"
 
     - uses: lukka/get-cmake@latest
       with:
@@ -74,6 +74,7 @@ jobs:
         sudo apt remove --yes man-db
         sudo apt update
         sudo apt install -y --no-install-recommends \
+          ccache \
           libasound2-dev \
           libgl1-mesa-dev \
           libjack-dev \
@@ -87,16 +88,31 @@ jobs:
         wget https://raw.githubusercontent.com/microsoft/msquic/main/src/inc/quic_sal_stub.h
         sudo mv msquic.h msquic_posix.h quic_sal_stub.h /usr/include/
 
+    - uses: actions/cache@v4
+      if: runner.os == 'Linux'
+      with:
+        path: ~/.cache/ccache
+        key: ccache-client-${{ matrix.os }}-${{ steps.strings.outputs.week }}-${{ github.sha }}
+        restore-keys: ccache-client-${{ matrix.os }}-${{ steps.strings.outputs.week }}-
+
+    - name: Configure ccache
+      if: runner.os == 'Linux'
+      run: |
+        ccache --set-config=max_size=1G
+        ccache --set-config=compression=true
+        ccache -z
+
     - uses: actions/cache/restore@v4
       with:
         path: ${{ steps.strings.outputs.hunter-dir }}
-        key: ${{ matrix.os }}-hunter
+        key: ${{ matrix.os }}-hunter-${{ steps.strings.outputs.week }}-${{ github.sha }}
+        restore-keys: ${{ matrix.os }}-hunter-${{ steps.strings.outputs.week }}-
 
     - uses: actions/cache/restore@v4
       if: runner.os == 'Windows'
       with:
         path: C:\Users\runneradmin\AppData\Local\Temp\chocolatey
-        key: ${{ matrix.os }}-chocolatey
+        key: ${{ matrix.os }}-chocolatey-${{ steps.strings.outputs.week }}
 
     - name: Dependencies Windows
       if: runner.os == 'Windows'
@@ -104,9 +120,10 @@ jobs:
         choco install directx-sdk nsis
 
     - uses: actions/cache/save@v4
+      if: runner.os == 'Windows'
       with:
         path: C:\Users\runneradmin\AppData\Local\Temp\chocolatey
-        key: ${{ matrix.os }}-chocolatey
+        key: ${{ matrix.os }}-chocolatey-${{ steps.strings.outputs.week }}
 
     - name: Configure CMake
       env:
@@ -117,17 +134,22 @@ jobs:
         -DHUNTER_CONFIGURATION_TYPES=Release
         -DHUNTER_ENABLED=ON
         -DHUNTER_ROOT=${{ steps.strings.outputs.hunter-dir }}
+        ${{ runner.os == 'Linux' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }}
         -S ${{ github.workspace }}
 
     - uses: actions/cache/save@v4
       with:
         path: ${{ steps.strings.outputs.hunter-dir }}
-        key: ${{ matrix.os }}-hunter
+        key: ${{ matrix.os }}-hunter-${{ steps.strings.outputs.week }}-${{ github.sha }}
 
     - name: Build
       env:
         MACOSX_DEPLOYMENT_TARGET: 10.13
       run: cmake --build --preset ci-ryzom-client
+
+    - name: ccache stats
+      if: always() && runner.os == 'Linux'
+      run: ccache -s
 
     - name: Package
       run: cpack --preset ci-ryzom-client
