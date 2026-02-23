@@ -898,6 +898,8 @@ bool	registerGlExtensions(CGlExtensions &ext)
 #ifdef __EMSCRIPTEN__
 	// Detect Windows platform via navigator.platform (for ANGLE+D3D11 workarounds)
 	ext.IsWindowsPlatform = EM_ASM_INT({ return navigator.platform.indexOf('Win') >= 0 ? 1 : 0; }) != 0;
+	// Detect Android platform via userAgent (for GLES driver workarounds)
+	ext.IsAndroidPlatform = EM_ASM_INT({ return navigator.userAgent.indexOf('Android') >= 0 ? 1 : 0; }) != 0;
 #endif
 
 	// All core GLES 3.0 functions are directly linked

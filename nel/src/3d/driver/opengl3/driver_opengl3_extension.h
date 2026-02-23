@@ -46,6 +46,7 @@ struct	CGlExtensions
 	// Platform/driver detection
 	bool	IsANGLE;           // ANGLE renderer detected (via GL_RENDERER)
 	bool	IsWindowsPlatform; // Running on Windows (compile-time or navigator.platform)
+	bool	IsAndroidPlatform; // Running on Android (compile-time or navigator.userAgent)
 
 	// Optional extensions
 	bool	EXTTextureCompressionS3TC;
@@ -84,6 +85,11 @@ public:
 		IsWindowsPlatform = true;
 #else
 		IsWindowsPlatform = false;
+#endif
+#ifdef NL_OS_ANDROID
+		IsAndroidPlatform = true;
+#else
+		IsAndroidPlatform = false;
 #endif
 
 		EXTTextureCompressionS3TC = false;
@@ -139,6 +145,7 @@ public:
 		result += "\n  Platform: ";
 		result += IsANGLE ? "ANGLE " : "";
 		result += IsWindowsPlatform ? "Windows " : "";
+		result += IsAndroidPlatform ? "Android " : "";
 
 #ifdef NL_OS_WINDOWS
 		result += "\n  WindowsGL: ";

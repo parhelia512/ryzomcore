@@ -446,16 +446,17 @@ bool CDriverGL3::setupDisplay()
 	// Determine runtime light table size based on ANGLE/platform detection
 	_MaxLightTableSize = NL_OPENGL3_MAX_LIGHT_TABLE_CAPACITY;
 #ifdef __EMSCRIPTEN__
-	if (_Extensions.IsWindowsPlatform) // WebGL on Windows: assume ANGLE+D3D11
+	if (_Extensions.IsWindowsPlatform || _Extensions.IsAndroidPlatform) // WebGL on Windows/Android: assume poor GLES translation
 		_MaxLightTableSize = NL_OPENGL3_ANGLE_MAX_LIGHT_TABLE;
 #else
 	if (_Extensions.IsANGLE) // Desktop: only if ANGLE detected via GL_RENDERER
 		_MaxLightTableSize = NL_OPENGL3_ANGLE_MAX_LIGHT_TABLE;
 #endif
-	nlinfo("3D: Light table size: %d (ANGLE: %s, Windows: %s)",
+	nlinfo("3D: Light table size: %d (ANGLE: %s, Windows: %s, Android: %s)",
 		_MaxLightTableSize,
 		_Extensions.IsANGLE ? "yes" : "no",
-		_Extensions.IsWindowsPlatform ? "yes" : "no");
+		_Extensions.IsWindowsPlatform ? "yes" : "no",
+		_Extensions.IsAndroidPlatform ? "yes" : "no");
 
 	// Check required extensions!!
 	if (!_Extensions.GLCore)
