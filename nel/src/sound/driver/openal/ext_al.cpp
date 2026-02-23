@@ -66,10 +66,10 @@ void alExtInitDevice(ALCdevice *device)
 		}
 	}
 
-#if !defined(AL_ALEXT_PROTOTYPES)
 	// EFX
 	if ((AlExtEfx = (alcIsExtensionPresent(device, "ALC_EXT_EFX") == ALC_TRUE)) == true)
 	{
+#if !defined(AL_ALEXT_PROTOTYPES)
 		// effect objects
 		alGenEffects = (LPALGENEFXOBJECTS)alGetProcAddress("alGenEffects");
 		alDeleteEffects = (LPALDELETEEFXOBJECTS)alGetProcAddress("alDeleteEffects");
@@ -106,13 +106,13 @@ void alExtInitDevice(ALCdevice *device)
 		alGetAuxiliaryEffectSlotiv = (LPALGETEFXOBJECTIV)alGetProcAddress("alGetAuxiliaryEffectSlotiv");
 		alGetAuxiliaryEffectSlotf = (LPALGETEFXOBJECTF)alGetProcAddress("alGetAuxiliaryEffectSlotf");
 		alGetAuxiliaryEffectSlotfv = (LPALGETEFXOBJECTFV)alGetProcAddress("alGetFilterfv");
+#endif
 		if (!alGenEffects || !alGenFilters || !alGenAuxiliaryEffectSlots)
 		{
 			nlwarning("AL: ALC_EXT_EFX alcGetProcAddress failed");
 			AlExtEfx = false;
 		}
 	}
-#endif
 }
 
 #if EAX_AVAILABLE
