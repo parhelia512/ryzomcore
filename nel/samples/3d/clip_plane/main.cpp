@@ -160,6 +160,9 @@ void CClipPlaneDemo::operator()(const CEvent &event)
 
 void CClipPlaneDemo::renderOneFrame()
 {
+	if (!m_Driver->isFrameReady())
+		return; // GPU busy, skip frame to avoid blocking browser event loop
+
 	m_Driver->EventServer.pump();
 
 	double now = CTime::ticksToSecond(CTime::getPerformanceTime()) - m_StartTime;

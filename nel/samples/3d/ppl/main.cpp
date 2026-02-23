@@ -557,6 +557,9 @@ void CPPLDemo::run()
 
 void CPPLDemo::renderOneFrame()
 {
+	if (!m_Driver->isFrameReady())
+		return; // GPU busy, skip frame to avoid blocking browser event loop
+
 	IDriver *drv = static_cast<CDriverUser *>(m_Driver)->getDriver();
 
 	CFrustum frustum;

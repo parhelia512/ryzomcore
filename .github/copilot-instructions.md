@@ -92,6 +92,7 @@ Then navigate Playwright to `http://localhost:8888/SAMPLE_NAME.html`.
 - The font sample renders correctly on WebGL 2.0 with FreeType (via Emscripten `-sUSE_FREETYPE=1` port)
 - `CNELU::initDriver` automatically uses `CDRU::createGlEs3Driver()` on Emscripten
 - Emscripten samples must use `emscripten_set_main_loop()` instead of a blocking `do/while` loop
+- Emscripten samples must call `driver->isFrameReady()` before rendering each frame; if it returns false, skip the frame to avoid blocking the browser event loop (the GL3 driver uses `nglClientWaitSync` for triple buffering which would block in WebGL)
 - Emscripten FreeType is enabled via the CMake imported target `Freetype::Freetype` with `INTERFACE_COMPILE_OPTIONS -sUSE_FREETYPE=1`; the Emscripten cache must not be frozen (`EM_FROZEN_CACHE=""`)
 - Font files must be embedded into the Emscripten build via `--embed-file` in LINK_FLAGS
 

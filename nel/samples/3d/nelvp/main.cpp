@@ -446,6 +446,9 @@ void CNelvpDemo::operator()(const CEvent &event)
 
 void CNelvpDemo::renderOneFrame()
 {
+	if (!m_Driver->isFrameReady())
+		return; // GPU busy, skip frame to avoid blocking browser event loop
+
 	IDriver *drv = static_cast<CDriverUser *>(m_Driver)->getDriver();
 
 	m_Driver->EventServer.pump();

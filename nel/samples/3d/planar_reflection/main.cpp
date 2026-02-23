@@ -495,6 +495,9 @@ void CPlanarReflectionDemo::run()
 
 void CPlanarReflectionDemo::renderOneFrame()
 {
+	if (!m_Driver->isFrameReady())
+		return; // GPU busy, skip frame to avoid blocking browser event loop
+
 	CFrustum frustum;
 
 	float camHeight = 4.f;

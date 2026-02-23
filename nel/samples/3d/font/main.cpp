@@ -66,6 +66,9 @@ static TTicks s_OldTick = 0;
 
 void renderOneFrame()
 {
+	if (!CNELU::Driver->isFrameReady())
+		return; // GPU busy, skip frame to avoid blocking browser event loop
+
 	// look at 3dinit example
 	CNELU::clearBuffers(CRGBA(120,120,0));
 

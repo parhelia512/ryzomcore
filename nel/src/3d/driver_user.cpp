@@ -1370,6 +1370,12 @@ void			CDriverUser::swapBuffers()
 }
 
 // ***************************************************************************
+bool CDriverUser::isFrameReady()
+{
+	return _Driver->isFrameReady();
+}
+
+// ***************************************************************************
 void CDriverUser::finish()
 {
 	NL3D_HAUTO_SWAP_DRIVER;

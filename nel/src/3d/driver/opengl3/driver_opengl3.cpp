@@ -760,6 +760,21 @@ void CDriverGL3::setColorMask (bool bRed, bool bGreen, bool bBlue, bool bAlpha)
 }
 
 // --------------------------------------------------
+bool CDriverGL3::isFrameReady()
+{
+	size_t syncI = _SwapBufferCounter % NL3D_GL3_FRAME_QUEUE_MAX;
+	if (_SwapBufferSync[syncI])
+	{
+		// Non-blocking check: is the oldest fence signaled?
+		GLint status = 0;
+		nglGetSynciv(_SwapBufferSync[syncI], GL_SYNC_STATUS, 1, NULL, &status);
+		if (status != GL_SIGNALED)
+			return false; // GPU still processing, skip this frame
+	}
+	return true;
+}
+
+// --------------------------------------------------
 bool CDriverGL3::swapBuffers()
 {
 	H_AUTO_OGL(CDriverGL3_swapBuffers);
@@ -771,6 +786,11 @@ bool CDriverGL3::swapBuffers()
 #if NL3D_GL3_FRAME_IN_FLIGHT_DEBUG
 		nldebug("Wait for oldest fence");
 #endif
+#ifdef __EMSCRIPTEN__
+		// On Emscripten, callers should have checked isFrameReady() first.
+		// Just delete the sync — the non-blocking check already confirmed it's signaled,
+		// or we accept the frame regardless to avoid blocking the browser event loop.
+#else
 		GLenum syncR = nglClientWaitSync(_SwapBufferSync[syncI], 0, 1000000000ULL);
 		switch (syncR)
 		{
@@ -786,6 +806,7 @@ bool CDriverGL3::swapBuffers()
 		default:
 			nlwarning("Unknown glClientWaitSync result");
 		}
+#endif
 		nglDeleteSync(_SwapBufferSync[syncI]);
 		++_SwapBufferInFlight;
 	}

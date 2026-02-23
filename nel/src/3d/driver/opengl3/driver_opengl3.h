@@ -672,6 +672,8 @@ public:
 
 	virtual bool			swapBuffers();
 
+	virtual bool			isFrameReady();
+
 	virtual void			setSwapVBLInterval(uint interval);
 
 	virtual uint			getSwapVBLInterval();
