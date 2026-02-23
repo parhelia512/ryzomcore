@@ -2341,7 +2341,7 @@ void CMeshMRMSkinnedGeom::buildGPUSkinVB()
 	// When tangent data is available in the source mesh, detect with
 	// _VBufferFinal.hasValueEx(CVertexBuffer::Tangent), then add:
 	//   _GPUSkinVB.addValueEx(CVertexBuffer::Tangent, CVertexBuffer::Float4);   // Bind-pose tangent
-	//   _GPUSkinVB.addValueEx(CVertexBuffer::TexCoord4, CVertexBuffer::Float4); // Morph target tangent
+	//   _GPUSkinVB.addValueEx(CVertexBuffer::TexCoord7, CVertexBuffer::Float4); // Morph target tangent
 	// and fill from the source vertex data + morph targets in the loop below.
 	// The VP insert (gpu_skin_vp.cpp) already handles tangent skinning;
 	// unbound attributes default to zero in the driver so it's safe to omit them.
@@ -2351,9 +2351,9 @@ void CMeshMRMSkinnedGeom::buildGPUSkinVB()
 	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord0, CVertexBuffer::Float2);    // UV
 	_GPUSkinVB.addValueEx(CVertexBuffer::Weight, CVertexBuffer::Float4);       // Bone weights
 	_GPUSkinVB.addValueEx(CVertexBuffer::PaletteSkin, CVertexBuffer::UChar4);  // Bone indices (uint8, GL converts to float)
-	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord1, CVertexBuffer::Float3);    // Morph target position
-	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord2, CVertexBuffer::Float3);    // Morph target normal
-	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord3, CVertexBuffer::Float2);    // Morph target UV
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord4, CVertexBuffer::Float3);    // Morph target position
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord5, CVertexBuffer::Float3);    // Morph target normal
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord6, CVertexBuffer::Float2);    // Morph target UV
 	_GPUSkinVB.initEx();
 	_GPUSkinVB.setBufferUsage(CVertexBuffer::Immutable, false);
 	_GPUSkinVB.setNumVertices(numVertices);
@@ -2402,16 +2402,16 @@ void CMeshMRMSkinnedGeom::buildGPUSkinVB()
 				const CPackedVertexBuffer::CPackedVertex &endSrc = packed[morphTarget[v]];
 				CVector endPos;
 				_VBufferFinal.getPos(endPos, endSrc);
-				vba.setValueFloat3Ex(CVertexBuffer::TexCoord1, v, endPos);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord4, v, endPos);
 
 				CVector endNorm;
 				endSrc.getNormal(endNorm);
-				vba.setValueFloat3Ex(CVertexBuffer::TexCoord2, v, endNorm);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord5, v, endNorm);
 
 				float endU, endV;
 				endSrc.getU(endU);
 				endSrc.getV(endV);
-				vba.setValueFloat2Ex(CVertexBuffer::TexCoord3, v, endU, endV);
+				vba.setValueFloat2Ex(CVertexBuffer::TexCoord6, v, endU, endV);
 
 				// TODO: Morph target tangent — fill from end vertex when available
 			}
@@ -2420,9 +2420,9 @@ void CMeshMRMSkinnedGeom::buildGPUSkinVB()
 				// No geomorph entry — fill morph target with own data (identity morph).
 				// This is safe if the vertex accidentally falls above morphThreshold:
 				// mix(self, self, alpha) = self — no visual change.
-				vba.setValueFloat3Ex(CVertexBuffer::TexCoord1, v, pos);
-				vba.setValueFloat3Ex(CVertexBuffer::TexCoord2, v, norm);
-				vba.setValueFloat2Ex(CVertexBuffer::TexCoord3, v, u, vCoord);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord4, v, pos);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord5, v, norm);
+				vba.setValueFloat2Ex(CVertexBuffer::TexCoord6, v, u, vCoord);
 				// TODO: Morph target tangent — fill with own tangent when available
 			}
 		}

@@ -3031,9 +3031,9 @@ void CMeshMRMGeom::buildGPUSkinVB()
 	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord0, CVertexBuffer::Float2);
 	_GPUSkinVB.addValueEx(CVertexBuffer::Weight, CVertexBuffer::Float4);
 	_GPUSkinVB.addValueEx(CVertexBuffer::PaletteSkin, CVertexBuffer::UChar4);
-	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord1, CVertexBuffer::Float3);    // Morph target position
-	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord2, CVertexBuffer::Float3);    // Morph target normal
-	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord3, CVertexBuffer::Float2);    // Morph target UV
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord4, CVertexBuffer::Float3);    // Morph target position
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord5, CVertexBuffer::Float3);    // Morph target normal
+	_GPUSkinVB.addValueEx(CVertexBuffer::TexCoord6, CVertexBuffer::Float2);    // Morph target UV
 	_GPUSkinVB.initEx();
 	_GPUSkinVB.setBufferUsage(CVertexBuffer::Immutable, false);
 	_GPUSkinVB.setNumVertices(numVertices);
@@ -3101,8 +3101,8 @@ void CMeshMRMGeom::buildGPUSkinVB()
 					endPos = *(const CVector *)vbaOri.getVertexCoordPointer(endV);
 					endNorm = hasNormal ? *(const CVector *)vbaOri.getNormalCoordPointer(endV) : CVector::K;
 				}
-				vba.setValueFloat3Ex(CVertexBuffer::TexCoord1, v, endPos);
-				vba.setValueFloat3Ex(CVertexBuffer::TexCoord2, v, endNorm);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord4, v, endPos);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord5, v, endNorm);
 
 				float endU = 0, endVCoord = 0;
 				if (hasUV)
@@ -3111,14 +3111,14 @@ void CMeshMRMGeom::buildGPUSkinVB()
 					endU = endUV->U;
 					endVCoord = endUV->V;
 				}
-				vba.setValueFloat2Ex(CVertexBuffer::TexCoord3, v, endU, endVCoord);
+				vba.setValueFloat2Ex(CVertexBuffer::TexCoord6, v, endU, endVCoord);
 			}
 			else
 			{
 				// No geomorph — identity morph (mix(self, self, alpha) = self)
-				vba.setValueFloat3Ex(CVertexBuffer::TexCoord1, v, pos);
-				vba.setValueFloat3Ex(CVertexBuffer::TexCoord2, v, norm);
-				vba.setValueFloat2Ex(CVertexBuffer::TexCoord3, v, u, vCoord);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord4, v, pos);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord5, v, norm);
+				vba.setValueFloat2Ex(CVertexBuffer::TexCoord6, v, u, vCoord);
 			}
 		}
 	}
