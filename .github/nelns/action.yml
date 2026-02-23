@@ -77,7 +77,7 @@ runs:
     - name: ccache stats
       if: always()
       shell: bash
-      run: ccache -s
+      run: ccache -sv
 
     - name: Test
       shell: bash

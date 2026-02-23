@@ -116,7 +116,7 @@ jobs:
 
     - name: ccache stats
       if: always()
-      run: ccache -s
+      run: ccache -sv
 
     - uses: actions/upload-artifact@v4
       with:
