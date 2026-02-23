@@ -208,8 +208,5 @@ inline void glPolygonMode(GLenum, GLenum) { }
 
 #define NL_OPENGL3_MAX_LIGHT 8
 
-#ifdef __EMSCRIPTEN__
-#define NL_OPENGL3_MAX_LIGHT_TABLE 8
-#else
-#define NL_OPENGL3_MAX_LIGHT_TABLE 128
-#endif
+#define NL_OPENGL3_MAX_LIGHT_TABLE_CAPACITY 128 // Hard limit for CPU staging buffers
+#define NL_OPENGL3_ANGLE_MAX_LIGHT_TABLE 8      // Reduced limit for ANGLE/D3D11

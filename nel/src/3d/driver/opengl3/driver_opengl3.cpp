@@ -334,6 +334,7 @@ CDriverGL3::CDriverGL3()
 	_LightTableDirty = false;
 	_UserLightUBODirty = true;
 	_LightTableUBOCapacity = 0;
+	_MaxLightTableSize = NL_OPENGL3_MAX_LIGHT_TABLE_CAPACITY;
 	_CameraUBOId = 0;
 	_CameraUBODirty = true;
 	_CameraUBOUploadDirty = false;
@@ -441,6 +442,20 @@ bool CDriverGL3::setupDisplay()
 #elif defined(NL_OS_UNIX) && !defined(__EMSCRIPTEN__)
 	registerGlXExtensions(_Extensions, _dpy, DefaultScreen(_dpy));
 #endif // NL_OS_WINDOWS
+
+	// Determine runtime light table size based on ANGLE/platform detection
+	_MaxLightTableSize = NL_OPENGL3_MAX_LIGHT_TABLE_CAPACITY;
+#ifdef __EMSCRIPTEN__
+	if (_Extensions.IsWindowsPlatform) // WebGL on Windows: assume ANGLE+D3D11
+		_MaxLightTableSize = NL_OPENGL3_ANGLE_MAX_LIGHT_TABLE;
+#else
+	if (_Extensions.IsANGLE) // Desktop: only if ANGLE detected via GL_RENDERER
+		_MaxLightTableSize = NL_OPENGL3_ANGLE_MAX_LIGHT_TABLE;
+#endif
+	nlinfo("3D: Light table size: %d (ANGLE: %s, Windows: %s)",
+		_MaxLightTableSize,
+		_Extensions.IsANGLE ? "yes" : "no",
+		_Extensions.IsWindowsPlatform ? "yes" : "no");
 
 	// Check required extensions!!
 	if (!_Extensions.GLCore)
@@ -560,10 +575,10 @@ bool CDriverGL3::setupDisplay()
 	// WebGL 2.0 requires bound UBOs to be at least as large as the
 	// corresponding uniform block in the shader, even before first use.
 	{
-		// NlLightTable: NL_OPENGL3_MAX_LIGHT_TABLE × NlLightInfo (96 bytes each)
+		// NlLightTable: _MaxLightTableSize × NlLightInfo (96 bytes each)
 		_DriverGLStates.forceBindUniformBuffer(_LightTableUBOId);
-		nglBufferData(GL_UNIFORM_BUFFER, NL_OPENGL3_MAX_LIGHT_TABLE * sizeof(CLightTableUBOEntry), NULL, GL_STREAM_DRAW);
-		_LightTableUBOCapacity = NL_OPENGL3_MAX_LIGHT_TABLE;
+		nglBufferData(GL_UNIFORM_BUFFER, _MaxLightTableSize * sizeof(CLightTableUBOEntry), NULL, GL_STREAM_DRAW);
+		_LightTableUBOCapacity = _MaxLightTableSize;
 
 		// NlLightTable binding for lightmap dynamic UBO (1 entry)
 		_DriverGLStates.forceBindUniformBuffer(_LightMapDynUBOId);
@@ -1726,6 +1741,12 @@ bool CDriverGL3::supportMADOperator() const
 	H_AUTO_OGL(CDriverGL3_supportMADOperator)
 
 	return _Extensions.GLCore;
+}
+
+// ***************************************************************************
+bool CDriverGL3::supportLargeUBOArrays() const
+{
+	return _MaxLightTableSize >= NL_OPENGL3_MAX_LIGHT_TABLE_CAPACITY;
 }
 
 // ***************************************************************************

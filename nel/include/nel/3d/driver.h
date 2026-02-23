@@ -1454,6 +1454,10 @@ public:
 	// see if the Multiply-Add Tex Env operator is supported (see CMaterial::Mad)
 	virtual	bool			supportMADOperator() const = 0;
 
+	/// Return true if the driver supports large UBO arrays (e.g. skeleton bones, light tables).
+	/// Returns false on ANGLE/D3D11 where the GLSL-to-HLSL translator fails on large arrays.
+	virtual bool			supportLargeUBOArrays() const { return true; }
+
 	// Adapter class
 	class CAdapter
 	{

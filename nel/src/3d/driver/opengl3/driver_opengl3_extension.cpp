@@ -27,6 +27,10 @@
 
 #include "nel/3d/material.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 using namespace std;
 using namespace NLMISC;
 
@@ -635,6 +639,13 @@ bool	registerGlExtensions(CGlExtensions &ext)
 	}
 
 	nldebug("OpenGL version is OK");
+
+	// Query renderer/vendor strings for driver detection
+	const char *nglRenderer = (const char *)glGetString(GL_RENDERER);
+	const char *nglVendor = (const char *)glGetString(GL_VENDOR);
+	ext.GLRenderer = nglRenderer ? nglRenderer : "";
+	ext.GLVendor = nglVendor ? nglVendor : "";
+	ext.IsANGLE = (ext.GLRenderer.find("ANGLE") != std::string::npos);
 	
 	// Extensions.
 	/*const char	*glext= (const char*)glGetString(GL_EXTENSIONS);
@@ -876,6 +887,18 @@ bool	registerGlExtensions(CGlExtensions &ext)
 	const char	*nglVersion= (const char *)glGetString(GL_VERSION);
 	ext.GLVersion = nglVersion;
 	nldebug("GL Version: %s", nglVersion);
+
+	// Query renderer/vendor strings for driver detection
+	const char *nglRenderer = (const char *)glGetString(GL_RENDERER);
+	const char *nglVendor = (const char *)glGetString(GL_VENDOR);
+	ext.GLRenderer = nglRenderer ? nglRenderer : "";
+	ext.GLVendor = nglVendor ? nglVendor : "";
+	ext.IsANGLE = (ext.GLRenderer.find("ANGLE") != std::string::npos);
+
+#ifdef __EMSCRIPTEN__
+	// Detect Windows platform via navigator.platform (for ANGLE+D3D11 workarounds)
+	ext.IsWindowsPlatform = EM_ASM_INT({ return navigator.platform.indexOf('Win') >= 0 ? 1 : 0; }) != 0;
+#endif
 
 	// All core GLES 3.0 functions are directly linked
 	ext.GLCore = true;

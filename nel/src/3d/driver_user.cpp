@@ -1828,7 +1828,15 @@ bool CDriverUser::supportGPUSkinning() const
 {
 	NL3D_HAUTO_UI_DRIVER
 
-	return _Driver->supportVertexProgram(CVertexProgram::glsl3vi);
+	return _Driver->supportVertexProgram(CVertexProgram::glsl3vi) && _Driver->supportLargeUBOArrays();
+}
+
+// ***************************************************************************
+bool CDriverUser::supportLargeUBOArrays() const
+{
+	NL3D_HAUTO_UI_DRIVER
+
+	return _Driver->supportLargeUBOArrays();
 }
 
 // ***************************************************************************

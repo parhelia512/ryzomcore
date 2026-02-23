@@ -35,11 +35,17 @@ namespace NLDRIVERGL3 {
 struct	CGlExtensions
 {
 	std::string GLVersion;
+	std::string GLRenderer;
+	std::string GLVendor;
 
 	// Required extensions
 	bool	GLCore;
 	bool	ARBSeparateShaderObjects;
 	GLint	MaxFragmentTextureImageUnits;
+
+	// Platform/driver detection
+	bool	IsANGLE;           // ANGLE renderer detected (via GL_RENDERER)
+	bool	IsWindowsPlatform; // Running on Windows (compile-time or navigator.platform)
 
 	// Optional extensions
 	bool	EXTTextureCompressionS3TC;
@@ -72,6 +78,13 @@ public:
 		GLCore = false;
 		ARBSeparateShaderObjects = false;
 		MaxFragmentTextureImageUnits = 0;
+
+		IsANGLE = false;
+#ifdef NL_OS_WINDOWS
+		IsWindowsPlatform = true;
+#else
+		IsWindowsPlatform = false;
+#endif
 
 		EXTTextureCompressionS3TC = false;
 		EXTTextureFilterAnisotropic = false;
@@ -118,6 +131,14 @@ public:
 		result += "\n  Memory info: ";
 		result += NVXGPUMemoryInfo ? "NVXGPUMemoryInfo " : "";
 		result += ATIMeminfo ? "ATIMeminfo " : "";
+
+		result += "\n  Renderer: ";
+		result += GLRenderer;
+		result += "\n  Vendor: ";
+		result += GLVendor;
+		result += "\n  Platform: ";
+		result += IsANGLE ? "ANGLE " : "";
+		result += IsWindowsPlatform ? "Windows " : "";
 
 #ifdef NL_OS_WINDOWS
 		result += "\n  WindowsGL: ";

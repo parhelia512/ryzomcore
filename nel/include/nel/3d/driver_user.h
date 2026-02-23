@@ -556,6 +556,8 @@ public:
 
 	virtual	bool				supportGPUSkinning() const;
 
+	virtual	bool				supportLargeUBOArrays() const;
+
 	/// \name Bench
 	// @{
 	virtual void startBench (bool wantStandardDeviation = false, bool quick = false, bool reset = true);

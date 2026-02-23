@@ -1185,7 +1185,8 @@ private:
 	bool						_LightTableDirty; // Light table entries changed
 	bool						_UserLightUBODirty; // _UserLight[] changed (for non-table UBO mode)
 	sint						_LightTableUBOCapacity; // Current GPU buffer capacity (entries)
-	CLightTableUBOEntry			_LightTableUBOStaging[NL_OPENGL3_MAX_LIGHT_TABLE]; // Persistent staging buffer (avoids per-frame heap alloc)
+	sint						_MaxLightTableSize; // Runtime maximum (reduced on ANGLE/D3D11)
+	CLightTableUBOEntry			_LightTableUBOStaging[NL_OPENGL3_MAX_LIGHT_TABLE_CAPACITY]; // Persistent staging buffer (avoids per-frame heap alloc)
 	void						uploadLightTableUBO();
 
 	// Per-object light table selection (set by setLights, used by setupUniforms)
@@ -1548,6 +1549,7 @@ private:
 	bool		    supportVertexProgramDoubleSidedColor() const { return false; }
 
 	virtual	bool			supportMADOperator() const ;
+	virtual	bool			supportLargeUBOArrays() const ;
 
 
 	/// \fallback for material shaders

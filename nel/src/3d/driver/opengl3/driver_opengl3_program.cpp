@@ -28,7 +28,7 @@ namespace NLDRIVERGL3 {
 
 // Insert builtin UBO headers after leading preprocessor and precision lines
 static std::string insertBuiltinHeaders(const char *source, bool lightTable, bool camera, bool object, bool material,
-	const std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> > &userUBOs)
+	const std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> > &userUBOs, sint maxLightTableSize)
 {
 	const char *p = source;
 
@@ -52,7 +52,7 @@ static std::string insertBuiltinHeaders(const char *source, bool lightTable, boo
 	if (camera)
 		result.append(GLSLCameraHeader);
 	if (lightTable)
-		result.append(GLSLLightTableHeader);
+		result.append(buildGLSLLightTableHeader(maxLightTableSize));
 	if (object)
 		result.append(GLSLObjectHeader);
 	if (material)
@@ -250,7 +250,7 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 		fullSource = insertBuiltinHeaders(src->SourcePtr,
 			src->Features.UsesLightTableUBO, src->Features.UsesCameraUBO,
 			src->Features.UsesObjectUBO, src->Features.UsesMaterialUBO,
-			src->UniformBufferFormats);
+			src->UniformBufferFormats, _MaxLightTableSize);
 		s = fullSource.c_str();
 	}
 	else
