@@ -617,6 +617,78 @@ void	CMeshMRMSkinnedGeom::render(IDriver *drv, CTransformShape *trans, float pol
 	nlassert(!(mi->isSkinned() && skeleton));
 
 
+	// GPU geomorph path: replaces slow debug VB unpacking
+	if (_GPUSkinBuilt)
+	{
+		drv->setupModelMatrix(trans->getWorldMatrix());
+		bool bkupNorm= drv->isForceNormalize();
+		drv->forceNormalize(true);
+
+		CVertexProgram *skinVP = getGPUSkinInsertVP();
+		drv->activeVertexProgram(skinVP);
+
+		// Morph UBO with useSkeleton = 0
+		sint32 morphThreshold;
+		if (numLod > 0)
+			morphThreshold = (sint32)_Lods[numLod - 1].NWedges;
+		else
+			morphThreshold = (sint32)lod.NWedges;
+
+		CUniformBuffer *ub = getGPUSkinMorphUBO();
+		ub->lock();
+		ub->setSInt(ub->Format.offset(GPUSkinMorphThreshold), morphThreshold);
+		ub->set(ub->Format.offset(GPUSkinMorphAlpha), alphaLod);
+		ub->setSInt(ub->Format.offset(GPUSkinUseSkeleton), 0);
+		ub->unlock();
+		drv->bindUniformBuffer(UBBindingVertexProgram, ub);
+
+		drv->activeVertexBuffer(_GPUSkinVB);
+		drv->activeIndexBuffer(_GPUSkinIB);
+
+		// Render all passes with material filtering
+		uint32 globalAlphaUsed= rdrFlags & IMeshGeom::RenderGlobalAlpha;
+		uint8 globalAlphaInt=(uint8)NLMISC::OptFastFloor(globalAlpha*255);
+
+		if (globalAlphaUsed)
+		{
+			bool gaDisableZWrite= (rdrFlags & IMeshGeom::RenderGADisableZWrite)?true:false;
+			for(uint i=0;i<lod.RdrPass.size();i++)
+			{
+				CRdrPass	&rdrPass= lod.RdrPass[i];
+				if ( ( (mi->Materials[rdrPass.MaterialId].getBlend() == false) && (rdrFlags & IMeshGeom::RenderOpaqueMaterial) ) ||
+					 ( (mi->Materials[rdrPass.MaterialId].getBlend() == true) && (rdrFlags & IMeshGeom::RenderTransparentMaterial) ) )
+				{
+					CMaterial &material=mi->Materials[rdrPass.MaterialId];
+					CMeshBlender	blender;
+					blender.prepareRenderForGlobalAlpha(material, drv, globalAlpha, globalAlphaInt, gaDisableZWrite);
+					const GPULodPass &lodPass = _GPULodPasses[numLod][i];
+					drv->renderTriangles(material, lodPass.IBOffset, lodPass.IBCount / 3);
+					blender.restoreRender(material, drv, gaDisableZWrite);
+				}
+			}
+		}
+		else
+		{
+			for(uint i=0;i<lod.RdrPass.size();i++)
+			{
+				CRdrPass	&rdrPass= lod.RdrPass[i];
+				if ( ( (mi->Materials[rdrPass.MaterialId].getBlend() == false) && (rdrFlags & IMeshGeom::RenderOpaqueMaterial) ) ||
+					 ( (mi->Materials[rdrPass.MaterialId].getBlend() == true) && (rdrFlags & IMeshGeom::RenderTransparentMaterial) ) )
+				{
+					CMaterial &material=mi->Materials[rdrPass.MaterialId];
+					const GPULodPass &lodPass = _GPULodPasses[numLod][i];
+					drv->renderTriangles(material, lodPass.IBOffset, lodPass.IBCount / 3);
+				}
+			}
+		}
+
+		drv->bindUniformBuffer(UBBindingVertexProgram, NULL);
+		drv->activeVertexProgram(NULL);
+		drv->forceNormalize(bkupNorm);
+		return;
+	}
+
+
 	// Profiling
 	//===========
 	H_AUTO( NL3D_MeshMRMGeom_RenderNormal );
@@ -2443,22 +2515,12 @@ void CMeshMRMSkinnedGeom::renderGPUSkin(CMeshMRMSkinnedInstance *mi, float alpha
 	else
 		morphThreshold = (sint32)_Lods[numLod].NWedges; // No morphing for coarsest LOD
 
-	// Build NlMorph UBO (bones are already bound by the skeleton at UBBindingSkeleton)
-	enum { EntryMorphThreshold = 0, EntryMorphAlpha = 1 };
-	static NLMISC::CSmartPtr<CUniformBuffer> s_MorphUB;
-	if (!s_MorphUB)
-	{
-		s_MorphUB = new CUniformBuffer();
-		s_MorphUB->Format.Name = "NlMorph";
-		s_MorphUB->Format.push("morphThreshold", CUniformBufferFormat::SInt, 1);
-		s_MorphUB->Format.push("morphAlpha", CUniformBufferFormat::Float, 1);
-		s_MorphUB->UsageHint = CUniformBuffer::StreamDraw;
-	}
-
-	CUniformBuffer *ub = s_MorphUB;
+	// Fill NlMorph UBO (bones are already bound by the skeleton at UBBindingSkeleton)
+	CUniformBuffer *ub = getGPUSkinMorphUBO();
 	ub->lock();
-	ub->setSInt(ub->Format.offset(EntryMorphThreshold), morphThreshold);
-	ub->set(ub->Format.offset(EntryMorphAlpha), alphaLod);
+	ub->setSInt(ub->Format.offset(GPUSkinMorphThreshold), morphThreshold);
+	ub->set(ub->Format.offset(GPUSkinMorphAlpha), alphaLod);
+	ub->setSInt(ub->Format.offset(GPUSkinUseSkeleton), 1);
 	ub->unlock();
 
 	// Bind morph UBO at user VP binding

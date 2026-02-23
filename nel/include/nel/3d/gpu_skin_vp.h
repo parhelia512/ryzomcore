@@ -29,6 +29,14 @@ class CSkeletonModel;
 /// 80 bones * 3 vec4 = 240 vec4 entries = 3840 bytes.
 #define NL3D_GPU_SKIN_MAX_BONES 80
 
+/// NlMorph UBO entry indices.
+enum TGPUSkinMorphEntry
+{
+	GPUSkinMorphThreshold = 0,  // SInt: vertex index threshold for geomorph
+	GPUSkinMorphAlpha = 1,      // Float: geomorph blend factor [0,1]
+	GPUSkinUseSkeleton = 2,     // SInt: 1 = apply bone skinning, 0 = geomorph only
+};
+
 /// Get the singleton GPU skinning VP insert program.
 /// Created lazily on first call. Shared by all skinned meshes.
 /// The returned program uses the glsl3vi profile.
@@ -36,6 +44,9 @@ CVertexProgram *getGPUSkinInsertVP();
 
 /// Get the singleton bone UBO (lazy-created with NlSkeleton format).
 CUniformBuffer *getGPUSkinBoneUBO();
+
+/// Get the singleton morph UBO (lazy-created with NlMorph format).
+CUniformBuffer *getGPUSkinMorphUBO();
 
 /// Fill the bone UBO with matrices from the given skeleton.
 void fillGPUSkinBoneUBO(CUniformBuffer *ub, CSkeletonModel *skeleton);

@@ -49,26 +49,31 @@ static const char *s_GPUSkinInsertGLSL =
 	"        tangent.xyz = mix(vtexCoord4.xyz, tangent.xyz, morphAlpha);\n"
 	"    }\n"
 	"\n"
-	"    // Weighted bone skinning (3 row-vectors per bone)\n"
-	"    vec3 skinnedPos = vec3(0.0);\n"
-	"    vec3 skinnedNorm = vec3(0.0);\n"
-	"    vec3 skinnedTan = vec3(0.0);\n"
-	"    vec4 p = vec4(pos.xyz, 1.0);\n"
-	"    for (int i = 0; i < 4; i++) {\n"
-	"        float w = boneWgt[i];\n"
-	"        if (w <= 0.0) continue;\n"
-	"        int b = boneIdx[i] * 3;\n"
-	"        vec4 row0 = bones[b];\n"
-	"        vec4 row1 = bones[b+1];\n"
-	"        vec4 row2 = bones[b+2];\n"
-	"        skinnedPos += w * vec3(dot(row0, p), dot(row1, p), dot(row2, p));\n"
-	"        skinnedNorm += w * vec3(dot(row0.xyz, norm), dot(row1.xyz, norm), dot(row2.xyz, norm));\n"
-	"        skinnedTan += w * vec3(dot(row0.xyz, tangent.xyz), dot(row1.xyz, tangent.xyz), dot(row2.xyz, tangent.xyz));\n"
+	"    if (useSkeleton != 0) {\n"
+	"        // Weighted bone skinning (3 row-vectors per bone)\n"
+	"        vec3 skinnedPos = vec3(0.0);\n"
+	"        vec3 skinnedNorm = vec3(0.0);\n"
+	"        vec3 skinnedTan = vec3(0.0);\n"
+	"        vec4 p = vec4(pos.xyz, 1.0);\n"
+	"        for (int i = 0; i < 4; i++) {\n"
+	"            float w = boneWgt[i];\n"
+	"            if (w <= 0.0) continue;\n"
+	"            int b = boneIdx[i] * 3;\n"
+	"            vec4 row0 = bones[b];\n"
+	"            vec4 row1 = bones[b+1];\n"
+	"            vec4 row2 = bones[b+2];\n"
+	"            skinnedPos += w * vec3(dot(row0, p), dot(row1, p), dot(row2, p));\n"
+	"            skinnedNorm += w * vec3(dot(row0.xyz, norm), dot(row1.xyz, norm), dot(row2.xyz, norm));\n"
+	"            skinnedTan += w * vec3(dot(row0.xyz, tangent.xyz), dot(row1.xyz, tangent.xyz), dot(row2.xyz, tangent.xyz));\n"
+	"        }\n"
+	"        pos = vec4(skinnedPos, 1.0);\n"
+	"        norm = normalize(skinnedNorm);\n"
+	"        tangent = vec4(normalize(skinnedTan), tangent.w);\n"
+	"    } else {\n"
+	"        // Geomorph only -- normalize after interpolation\n"
+	"        norm = normalize(norm);\n"
+	"        tangent = vec4(normalize(tangent.xyz), tangent.w);\n"
 	"    }\n"
-	"\n"
-	"    pos = vec4(skinnedPos, 1.0);\n"
-	"    norm = normalize(skinnedNorm);\n"
-	"    tangent = vec4(normalize(skinnedTan), tangent.w);\n"
 	"}\n";
 
 static CVertexProgram *s_GPUSkinInsertVP = NULL;
@@ -84,11 +89,12 @@ CVertexProgram *getGPUSkinInsertVP()
 	src->DisplayName = "GPU Skinning Insert";
 	src->setSource(s_GPUSkinInsertGLSL);
 
-	// NlMorph UBO at VP binding: morphThreshold + morphAlpha
+	// NlMorph UBO at VP binding: morphThreshold + morphAlpha + useSkeleton
 	CUniformBufferFormat *morphFmt = new CUniformBufferFormat();
 	morphFmt->Name = "NlMorph";
 	morphFmt->push("morphThreshold", CUniformBufferFormat::SInt, 1);
 	morphFmt->push("morphAlpha", CUniformBufferFormat::Float, 1);
+	morphFmt->push("useSkeleton", CUniformBufferFormat::SInt, 1);
 	src->UniformBufferFormats[UBBindingVertexProgram] = morphFmt;
 
 	// NlSkeleton UBO at skeleton binding: bones
@@ -145,6 +151,23 @@ void fillGPUSkinBoneUBO(CUniformBuffer *ub, CSkeletonModel *skeleton)
 		ub->set(rowBase, m[2], m[6], m[10], m[14]);
 	}
 	ub->unlock();
+}
+
+// Singleton morph UBO
+static NLMISC::CSmartPtr<CUniformBuffer> s_MorphUB;
+
+CUniformBuffer *getGPUSkinMorphUBO()
+{
+	if (!s_MorphUB)
+	{
+		s_MorphUB = new CUniformBuffer();
+		s_MorphUB->Format.Name = "NlMorph";
+		s_MorphUB->Format.push("morphThreshold", CUniformBufferFormat::SInt, 1);
+		s_MorphUB->Format.push("morphAlpha", CUniformBufferFormat::Float, 1);
+		s_MorphUB->Format.push("useSkeleton", CUniformBufferFormat::SInt, 1);
+		s_MorphUB->UsageHint = CUniformBuffer::StreamDraw;
+	}
+	return s_MorphUB;
 }
 
 } // NL3D

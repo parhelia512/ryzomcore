@@ -932,6 +932,81 @@ void	CMeshMRMGeom::render(IDriver *drv, CTransformShape *trans, float polygonCou
 		return;
 
 
+	// GPU geomorph path: use GPU for MRM geomorph when available
+	if (!_GPUSkinBuilt && !_MeshVertexProgram
+		&& drv->supportVertexProgram(IProgram::glsl3vi))
+		buildGPUSkinVB();
+	if (_GPUSkinBuilt && !_MeshVertexProgram)
+	{
+		drv->setupModelMatrix(trans->getWorldMatrix());
+		bool bkupNorm= drv->isForceNormalize();
+		drv->forceNormalize(true);
+
+		CVertexProgram *skinVP = getGPUSkinInsertVP();
+		drv->activeVertexProgram(skinVP);
+
+		// Morph UBO with useSkeleton = 0
+		sint32 morphThreshold;
+		if (numLod > 0)
+			morphThreshold = (sint32)_Lods[numLod - 1].NWedges;
+		else
+			morphThreshold = (sint32)lod.NWedges;
+
+		CUniformBuffer *ub = getGPUSkinMorphUBO();
+		ub->lock();
+		ub->setSInt(ub->Format.offset(GPUSkinMorphThreshold), morphThreshold);
+		ub->set(ub->Format.offset(GPUSkinMorphAlpha), alphaLod);
+		ub->setSInt(ub->Format.offset(GPUSkinUseSkeleton), 0);
+		ub->unlock();
+		drv->bindUniformBuffer(UBBindingVertexProgram, ub);
+
+		drv->activeVertexBuffer(_GPUSkinVB);
+		drv->activeIndexBuffer(_GPUSkinIB);
+
+		// Render all passes with material filtering
+		uint32 globalAlphaUsed= rdrFlags & IMeshGeom::RenderGlobalAlpha;
+		uint8 globalAlphaInt=(uint8)NLMISC::OptFastFloor(globalAlpha*255);
+
+		if (globalAlphaUsed)
+		{
+			bool gaDisableZWrite= (rdrFlags & IMeshGeom::RenderGADisableZWrite)?true:false;
+			for(uint i=0;i<lod.RdrPass.size();i++)
+			{
+				CRdrPass	&rdrPass= lod.RdrPass[i];
+				if ( ( (mi->Materials[rdrPass.MaterialId].getBlend() == false) && (rdrFlags & IMeshGeom::RenderOpaqueMaterial) ) ||
+					 ( (mi->Materials[rdrPass.MaterialId].getBlend() == true) && (rdrFlags & IMeshGeom::RenderTransparentMaterial) ) )
+				{
+					CMaterial &material=mi->Materials[rdrPass.MaterialId];
+					CMeshBlender	blender;
+					blender.prepareRenderForGlobalAlpha(material, drv, globalAlpha, globalAlphaInt, gaDisableZWrite);
+					const GPULodPass &lodPass = _GPULodPasses[numLod][i];
+					drv->renderTriangles(material, lodPass.IBOffset, lodPass.IBCount / 3);
+					blender.restoreRender(material, drv, gaDisableZWrite);
+				}
+			}
+		}
+		else
+		{
+			for(uint i=0;i<lod.RdrPass.size();i++)
+			{
+				CRdrPass	&rdrPass= lod.RdrPass[i];
+				if ( ( (mi->Materials[rdrPass.MaterialId].getBlend() == false) && (rdrFlags & IMeshGeom::RenderOpaqueMaterial) ) ||
+					 ( (mi->Materials[rdrPass.MaterialId].getBlend() == true) && (rdrFlags & IMeshGeom::RenderTransparentMaterial) ) )
+				{
+					CMaterial &material=mi->Materials[rdrPass.MaterialId];
+					const GPULodPass &lodPass = _GPULodPasses[numLod][i];
+					drv->renderTriangles(material, lodPass.IBOffset, lodPass.IBCount / 3);
+				}
+			}
+		}
+
+		drv->bindUniformBuffer(UBBindingVertexProgram, NULL);
+		drv->activeVertexProgram(NULL);
+		drv->forceNormalize(bkupNorm);
+		return;
+	}
+
+
 	// Update the vertexBufferHard (if possible).
 	// \toto yoyo: TODO_OPTIMIZE: allocate only what is needed for the current Lod (Max of all instances, like
 	// the loading....) (see loadHeader()).
@@ -2890,26 +2965,34 @@ void CMeshMRMGeom::buildGPUSkinVB()
 	if (_GPUSkinBuilt)
 		return;
 
-	// Only build for skinned meshes without blend shapes
-	if (!_Skinned || !_MeshMorpher.BlendShapes.empty())
+	// Only build when no blend shapes (CPU morpher needed otherwise)
+	if (!_MeshMorpher.BlendShapes.empty())
 		return;
 
-	const uint numVertices = (uint)_OriginalSkinVertices.size();
+	// Determine vertex count from appropriate source
+	uint numVertices;
+	if (_Skinned)
+		numVertices = (uint)_OriginalSkinVertices.size();
+	else
+		numVertices = _VBufferOriginal.getNumVertices();
 	if (numVertices == 0 || _Lods.empty())
 		return;
 
-	// Check max bone index. If any exceeds NL3D_GPU_SKIN_MAX_BONES, we can't GPU-skin.
-	for (uint v = 0; v < _SkinWeights.size(); v++)
+	// For skinned meshes, check max bone index
+	if (_Skinned)
 	{
-		for (uint w = 0; w < NL3D_MESH_SKINNING_MAX_MATRIX; w++)
+		for (uint v = 0; v < _SkinWeights.size(); v++)
 		{
-			if (_SkinWeights[v].Weights[w] > 0 || w == 0)
+			for (uint w = 0; w < NL3D_MESH_SKINNING_MAX_MATRIX; w++)
 			{
-				if (_SkinWeights[v].MatrixId[w] >= NL3D_GPU_SKIN_MAX_BONES)
-					return; // Fall back to CPU skinning
+				if (_SkinWeights[v].Weights[w] > 0 || w == 0)
+				{
+					if (_SkinWeights[v].MatrixId[w] >= NL3D_GPU_SKIN_MAX_BONES)
+						return; // Fall back to CPU skinning
+				}
+				else
+					break;
 			}
-			else
-				break;
 		}
 	}
 
@@ -2934,10 +3017,11 @@ void CMeshMRMGeom::buildGPUSkinVB()
 		}
 	}
 
-	// Read UVs from original VB
+	// Read from original VB (positions/normals/UVs)
 	CVertexBufferRead vbaOri;
 	_VBufferOriginal.lock(vbaOri);
 	bool hasUV = (_VBufferOriginal.getVertexFormat() & CVertexBuffer::TexCoord0Flag) != 0;
+	bool hasNormal = (_VBufferOriginal.getVertexFormat() & CVertexBuffer::NormalFlag) != 0;
 
 	// Setup the VB format (same as CMeshMRMSkinnedGeom)
 	_GPUSkinVB.clearValueEx();
@@ -2959,12 +3043,19 @@ void CMeshMRMGeom::buildGPUSkinVB()
 
 		for (uint v = 0; v < numVertices; v++)
 		{
-			// Position (from bind-pose)
-			const CVector &pos = _OriginalSkinVertices[v];
+			// Position and Normal
+			CVector pos, norm;
+			if (_Skinned)
+			{
+				pos = _OriginalSkinVertices[v];
+				norm = _OriginalSkinNormals[v];
+			}
+			else
+			{
+				pos = *(const CVector *)vbaOri.getVertexCoordPointer(v);
+				norm = hasNormal ? *(const CVector *)vbaOri.getNormalCoordPointer(v) : CVector::K;
+			}
 			vba.setValueFloat3Ex(CVertexBuffer::Position, v, pos);
-
-			// Normal (from bind-pose)
-			const CVector &norm = _OriginalSkinNormals[v];
 			vba.setValueFloat3Ex(CVertexBuffer::Normal, v, norm);
 
 			// UV
@@ -2977,22 +3068,40 @@ void CMeshMRMGeom::buildGPUSkinVB()
 			}
 			vba.setValueFloat2Ex(CVertexBuffer::TexCoord0, v, u, vCoord);
 
-			// Bone weights
-			const CMesh::CSkinWeight &sw = _SkinWeights[v];
-			vba.setValueFloat4Ex(CVertexBuffer::Weight, v,
-				sw.Weights[0], sw.Weights[1], sw.Weights[2], sw.Weights[3]);
-
-			// Bone indices (uint32 -> uint8, GL converts to float)
-			vba.setValueUChar4Ex(CVertexBuffer::PaletteSkin, v,
-				CRGBA((uint8)sw.MatrixId[0], (uint8)sw.MatrixId[1],
-				       (uint8)sw.MatrixId[2], (uint8)sw.MatrixId[3]));
+			// Bone weights and indices
+			if (_Skinned)
+			{
+				const CMesh::CSkinWeight &sw = _SkinWeights[v];
+				vba.setValueFloat4Ex(CVertexBuffer::Weight, v,
+					sw.Weights[0], sw.Weights[1], sw.Weights[2], sw.Weights[3]);
+				vba.setValueUChar4Ex(CVertexBuffer::PaletteSkin, v,
+					CRGBA((uint8)sw.MatrixId[0], (uint8)sw.MatrixId[1],
+					       (uint8)sw.MatrixId[2], (uint8)sw.MatrixId[3]));
+			}
+			else
+			{
+				// No skeleton — zero weights, VP skips bone transform via useSkeleton=0
+				vba.setValueFloat4Ex(CVertexBuffer::Weight, v, 0.f, 0.f, 0.f, 0.f);
+				vba.setValueUChar4Ex(CVertexBuffer::PaletteSkin, v, CRGBA(0, 0, 0, 0));
+			}
 
 			// Morph target data
 			if (morphTarget[v] >= 0)
 			{
 				uint32 endV = (uint32)morphTarget[v];
-				vba.setValueFloat3Ex(CVertexBuffer::TexCoord1, v, _OriginalSkinVertices[endV]);
-				vba.setValueFloat3Ex(CVertexBuffer::TexCoord2, v, _OriginalSkinNormals[endV]);
+				CVector endPos, endNorm;
+				if (_Skinned)
+				{
+					endPos = _OriginalSkinVertices[endV];
+					endNorm = _OriginalSkinNormals[endV];
+				}
+				else
+				{
+					endPos = *(const CVector *)vbaOri.getVertexCoordPointer(endV);
+					endNorm = hasNormal ? *(const CVector *)vbaOri.getNormalCoordPointer(endV) : CVector::K;
+				}
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord1, v, endPos);
+				vba.setValueFloat3Ex(CVertexBuffer::TexCoord2, v, endNorm);
 
 				float endU = 0, endVCoord = 0;
 				if (hasUV)
@@ -3109,22 +3218,12 @@ void CMeshMRMGeom::renderGPUSkin(CMeshMRMInstance *mi, float alphaMRM, CSkeleton
 	else
 		morphThreshold = (sint32)_Lods[numLod].NWedges;
 
-	// Build NlMorph UBO (bones are already bound by the skeleton at UBBindingSkeleton)
-	enum { EntryMorphThreshold = 0, EntryMorphAlpha = 1 };
-	static NLMISC::CSmartPtr<CUniformBuffer> s_MorphUB;
-	if (!s_MorphUB)
-	{
-		s_MorphUB = new CUniformBuffer();
-		s_MorphUB->Format.Name = "NlMorph";
-		s_MorphUB->Format.push("morphThreshold", CUniformBufferFormat::SInt, 1);
-		s_MorphUB->Format.push("morphAlpha", CUniformBufferFormat::Float, 1);
-		s_MorphUB->UsageHint = CUniformBuffer::StreamDraw;
-	}
-
-	CUniformBuffer *ub = s_MorphUB;
+	// Fill NlMorph UBO (bones are already bound by the skeleton at UBBindingSkeleton)
+	CUniformBuffer *ub = getGPUSkinMorphUBO();
 	ub->lock();
-	ub->setSInt(ub->Format.offset(EntryMorphThreshold), morphThreshold);
-	ub->set(ub->Format.offset(EntryMorphAlpha), alphaLod);
+	ub->setSInt(ub->Format.offset(GPUSkinMorphThreshold), morphThreshold);
+	ub->set(ub->Format.offset(GPUSkinMorphAlpha), alphaLod);
+	ub->setSInt(ub->Format.offset(GPUSkinUseSkeleton), 1);
 	ub->unlock();
 
 	// Bind morph UBO at user VP binding
