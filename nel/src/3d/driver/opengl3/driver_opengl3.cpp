@@ -373,6 +373,7 @@ CDriverGL3::CDriverGL3()
 	m_LinkedMegaShaders = true; // GL 3.3: also useful, set true for both
 	m_SupportSSO = true; // GL 3.3: separable shader objects supported
 #endif
+	_DriverGLStates.setPPClipPlanes(m_PPClipPlanes);
 	// m_SupportNonUBOs = false; // testing strict mode, linked-only always implies ubo-only // TODO
 
 #if !FINAL_VERSION && defined(NL_DEBUG)
