@@ -88,20 +88,25 @@ void megaPPGenerate(std::string &result, bool fogOrPpl, bool cube, bool specular
 	if (ppClip) { fogOrPpl = true; }
 
 	std::stringstream ss;
-	ss << "// Megashader Pixel Program";
-	ss << " (fogOrPpl=" << (int)fogOrPpl << ", cube=" << (int)cube << ", specular=" << (int)specular
-	   << ", ppClip=" << (int)ppClip << ", tableUBO=" << (int)tableUBO
-	   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
-	   << ", materialUBO=" << (int)materialUBO << ", linked=" << (int)linked << ")" << std::endl;
-	ss << std::endl;
 	if (linked)
 	{
 		ss << "#version 300 es" << std::endl;
 		ss << "precision highp float;" << std::endl;
 		ss << "precision highp int;" << std::endl;
+		ss << "// Megashader Pixel Program";
+		ss << " (fogOrPpl=" << (int)fogOrPpl << ", cube=" << (int)cube << ", specular=" << (int)specular
+		   << ", ppClip=" << (int)ppClip << ", tableUBO=" << (int)tableUBO
+		   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
+		   << ", materialUBO=" << (int)materialUBO << ", linked=" << (int)linked << ")" << std::endl;
 	}
 	else
 	{
+		ss << "// Megashader Pixel Program";
+		ss << " (fogOrPpl=" << (int)fogOrPpl << ", cube=" << (int)cube << ", specular=" << (int)specular
+		   << ", ppClip=" << (int)ppClip << ", tableUBO=" << (int)tableUBO
+		   << ", cameraUBO=" << (int)cameraUBO << ", objectUBO=" << (int)objectUBO
+		   << ", materialUBO=" << (int)materialUBO << ", linked=" << (int)linked << ")" << std::endl;
+		ss << std::endl;
 		ss << "#version 330" << std::endl;
 		ss << "#extension GL_ARB_separate_shader_objects : enable" << std::endl;
 	}
@@ -790,6 +795,9 @@ bool CDriverGL3::initMegaPixelPrograms()
 											delete pp;
 											return false;
 										}
+#ifdef __EMSCRIPTEN__
+										emscripten_sleep(0); // Yield to browser to prevent WebGL context timeout
+#endif
 
 										m_MegaPP[linked][fogOrPpl][cube][specular][ppClip][tableUBO][cameraUBO][objectUBO][materialUBO] = pp;
 									}

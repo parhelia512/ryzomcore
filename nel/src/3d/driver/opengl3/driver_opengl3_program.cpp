@@ -17,6 +17,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+#include "stdopengl3.h"
 #include "driver_opengl3.h"
 #include "driver_opengl3_program.h"
 #include "driver_opengl3_vertex_buffer.h"
@@ -27,7 +28,7 @@ namespace NLDRIVERGL3 {
 
 // Insert builtin UBO headers after leading preprocessor and precision lines
 static std::string insertBuiltinHeaders(const char *source, bool lightTable, bool camera, bool object, bool material,
-	const std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> > &userUBOs)
+	const std::map<sint, NLMISC::CSmartPtr<CUniformBufferFormat> > &userUBOs, sint maxLightTableSize)
 {
 	const char *p = source;
 
@@ -51,7 +52,7 @@ static std::string insertBuiltinHeaders(const char *source, bool lightTable, boo
 	if (camera)
 		result.append(GLSLCameraHeader);
 	if (lightTable)
-		result.append(GLSLLightTableHeader);
+		result.append(buildGLSLLightTableHeader(maxLightTableSize));
 	if (object)
 		result.append(GLSLObjectHeader);
 	if (material)
@@ -249,7 +250,7 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 		fullSource = insertBuiltinHeaders(src->SourcePtr,
 			src->Features.UsesLightTableUBO, src->Features.UsesCameraUBO,
 			src->Features.UsesObjectUBO, src->Features.UsesMaterialUBO,
-			src->UniformBufferFormats);
+			src->UniformBufferFormats, _MaxLightTableSize);
 		s = fullSource.c_str();
 	}
 	else
@@ -292,23 +293,34 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 
 		id = nglCreateProgram();
 		nglAttachShader(id, shader);
-		nglLinkProgram(id);
 
-		GLint linkOk;
-		nglGetProgramiv(id, GL_LINK_STATUS, &linkOk);
-		if (linkOk == 0)
+		// Under GL ES 3.0 / WebGL 2.0, single-stage programs cannot be linked
+		// (both vertex and fragment shaders are required). Skip the link here;
+		// the final link happens in linkPrograms() which combines VP + PP.
+		// Under desktop GL 3.3, we can link single-stage programs and use the
+		// result for uniform introspection.
+#ifndef USE_OPENGLES3
+		if (m_SupportSSO)
 		{
-			char errorLog[1024];
-			nglGetProgramInfoLog(id, 1024, NULL, errorLog);
-			nlwarning("GL3: %s link failed (pipeline stage): %s", stageName, errorLog);
-			nglDeleteShader(shader);
-			nglDeleteProgram(id);
-			program->m_CompileFailed = true;
+			nglLinkProgram(id);
+
+			GLint linkOk;
+			nglGetProgramiv(id, GL_LINK_STATUS, &linkOk);
+			if (linkOk == 0)
+			{
+				char errorLog[1024];
+				nglGetProgramInfoLog(id, 1024, NULL, errorLog);
+				nlwarning("GL3: %s link failed (pipeline stage): %s", stageName, errorLog);
+				nglDeleteShader(shader);
+				nglDeleteProgram(id);
+				program->m_CompileFailed = true;
 #ifdef NL_DEBUG
-			nlerror("GL3: %s program link failed (pipeline stage)", stageName);
+				nlerror("GL3: %s program link failed (pipeline stage)", stageName);
 #endif
-			return false;
+				return false;
+			}
 		}
+#endif
 		// NOTE: do NOT detach/delete the shader — keep it attached for later extraction
 	}
 	else
@@ -351,7 +363,12 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 		{ isNelvp = true; break; }
 	}
 
-	// Override OnlyUBOs based on actual program introspection
+	// Override OnlyUBOs based on actual program introspection.
+	// On GLES3, linked-profile programs aren't linked yet at this point
+	// (single-stage link is skipped at line ~301); they are combined and
+	// linked later in linkPrograms(). programHasNonUBOUniforms returns
+	// false trivially for unlinked programs — correct since the linked
+	// path only uses UBOs.
 	bool hasNonUBO = programHasNonUBOUniforms(id);
 	if (src->Features.OnlyUBOs && hasNonUBO)
 	{
@@ -389,9 +406,21 @@ bool CDriverGL3::compileProgram(IProgram *program, GLenum shaderType,
 		drvInfo->NelvpParamIndices = src->ParamIndices;
 	}
 
-	program->buildInfo(src);
+	// buildInfo resolves and caches uniform locations via getUniformIndex.
+	// Under GL ES 3.0, single-stage pipeline programs aren't linked yet
+	// (linking happens in linkPrograms()), so uniform queries would fail.
+	// Defer uniform resolution to linkPrograms() for these programs, but
+	// still associate the source so features()/source() are available.
+	if (src->Profile != linkedProfile || m_SupportSSO)
+		program->buildInfo(src);
+	else
+		program->setBuildSrc(src);
 
-	setupInitialUniforms(program);
+	// Setup initial uniforms (sampler bindings, UBO block bindings).
+	// Under GL ES 3.0 pipeline stages, the single-stage program isn't linked,
+	// so uniform setup is deferred to linkPrograms().
+	if (src->Profile != linkedProfile || m_SupportSSO)
+		setupInitialUniforms(program);
 
 	return true;
 }
@@ -1239,6 +1268,9 @@ bool CDriverGL3::setupBuiltinPrograms()
 		if (setupUserLinkedPrograms(effectiveVP, effectivePP))
 			return setupUniforms();
 		// Fall through to SSO if linking not possible
+#ifdef USE_OPENGLES3
+		nlwarning("GL3: GLES3 unreachable: setupUserLinkedPrograms failed, no SSO fallback available");
+#endif
 	}
 
 	return setupBuiltinVertexProgram(effectiveVP, effectivePP)
@@ -1248,6 +1280,13 @@ bool CDriverGL3::setupBuiltinPrograms()
 
 bool CDriverGL3::setupBuiltinVertexProgram(CVertexProgram *effectiveVP, CPixelProgram *effectivePP)
 {
+#ifdef USE_OPENGLES3
+	// Builtin non-mega shaders are not supported under GLES 3.0;
+	// they generate #version 330 which cannot compile on this target.
+	// This path should be unreachable when m_LinkedMegaShaders is true.
+	nlwarning("GL3: GLES3 unreachable: setupBuiltinVertexProgram called (effectiveVP=%p, effectivePP=%p)", (void *)effectiveVP, (void *)effectivePP);
+	return false;
+#endif
 	touchVertexFormatVP(); // Always update — PP builtin depends on vertex format
 
 	// Resolve PPL support: both VP and PP must support it
@@ -2226,7 +2265,17 @@ void CDriverGL3::setupInitialUniforms(IProgram *program)
 		{
 			uint samplerIdx = program->getUniformIndex((CProgramIndex::TName)(CProgramIndex::Sampler0 + i));
 			if (samplerIdx >= 0)
+			{
+#ifdef USE_OPENGLES3
+				// GLES 3.0: nglProgramUniform1i is a no-op (SSO not available).
+				// Use glUseProgram + glUniform1i instead.
+				nglUseProgram(id);
+				glUniform1i(samplerIdx, i);
+				nglUseProgram(0);
+#else
 				nglProgramUniform1i(id, samplerIdx, i);
+#endif
+			}
 		}
 
 		// Resolve and cache NlLightTable UBO block index, bind to its binding point
@@ -2673,6 +2722,9 @@ bool CDriverGL3::initMegaLinkedPrograms()
 							nlwarning("GL3: Failed to link mega program (fogOrPpl=%d, hwClip=%d, cube=%d, specular=%d, ppClip=%d)", fogOrPpl, hwClip, cube, specular, ppClip);
 							return false;
 						}
+#ifdef __EMSCRIPTEN__
+						emscripten_sleep(0); // Yield to browser to prevent WebGL context timeout
+#endif
 
 						m_MegaLinked[fogOrPpl][hwClip][cube][specular][ppClip] = sp;
 					}
@@ -2773,6 +2825,9 @@ bool CDriverGL3::setupMegaLinkedPrograms()
 bool CDriverGL3::initProgramPipeline()
 {
 	ppoId = 0;
+
+	if (!m_SupportSSO)
+		return true;
 
 	nglGenProgramPipelines(1, &ppoId);
 	if (ppoId == 0)

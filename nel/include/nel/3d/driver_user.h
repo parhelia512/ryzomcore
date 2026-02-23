@@ -192,6 +192,7 @@ public:
 	virtual	void			clearBuffers(CRGBA col= CRGBA(255,255,255,255));
 	/// This swap the back and front buffer (ALL the buffer :) ).
 	virtual	void			swapBuffers();
+	virtual bool			isFrameReady();
 	virtual void            finish();
 	virtual void            flush();
 
@@ -554,6 +555,8 @@ public:
 	virtual	bool				supportBloomEffect() const;
 
 	virtual	bool				supportGPUSkinning() const;
+
+	virtual	bool				supportLargeUBOArrays() const;
 
 	/// \name Bench
 	// @{
