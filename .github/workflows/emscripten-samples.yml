@@ -134,17 +134,22 @@ jobs:
                 text-align: center; z-index: 10; color: #e0e0e0; min-width: 320px;
               }
               #loading-title { font-size: 1.5rem; color: #e94560; margin-bottom: 1.2rem; }
-              #loading-bar-outer {
+              .bar-outer {
                 width: 300px; height: 6px; background: #0f3460; border-radius: 3px;
-                overflow: hidden; margin: 0 auto 1rem auto;
+                overflow: hidden; margin: 0 auto;
               }
-              #loading-bar-inner {
+              .bar-inner {
                 width: 0%; height: 100%; background: #e94560; border-radius: 3px;
                 transition: width 0.15s ease-out;
+              }
+              #task-bar .bar-inner { background: #0f7460; }
+              #global-label, #task-label {
+                font-size: 0.75rem; color: #666; margin-top: 0.2rem; margin-bottom: 0.6rem;
               }
               #loading-tasks {
                 text-align: left; display: inline-block;
                 font-size: 0.85rem; line-height: 1.6;
+                margin-top: 0.6rem;
               }
               .task { color: #555; }
               .task.active { color: #a0a0b0; }
@@ -156,24 +161,39 @@ jobs:
           <body>
             <div id="loading">
               <div id="loading-title">NeL 3D</div>
-              <div id="loading-bar-outer"><div id="loading-bar-inner"></div></div>
+              <div id="global-bar" class="bar-outer"><div class="bar-inner"></div></div>
+              <div id="global-label"></div>
+              <div id="task-bar" class="bar-outer"><div class="bar-inner"></div></div>
+              <div id="task-label"></div>
               <div id="loading-tasks"></div>
             </div>
             <canvas id="canvas" width="800" height="600" oncontextmenu="event.preventDefault()"></canvas>
             <script>
           (function() {
-            var barEl = document.getElementById('loading-bar-inner');
+            var globalBarEl = document.querySelector('#global-bar .bar-inner');
+            var globalLabelEl = document.getElementById('global-label');
+            var taskBarEl = document.querySelector('#task-bar .bar-inner');
+            var taskLabelEl = document.getElementById('task-label');
             var tasksEl = document.getElementById('loading-tasks');
             var loadEl = document.getElementById('loading');
             var tasks = {}, taskOrder = [];
             var globalStep = 0, globalTotal = 0;
-            function setBar(f) { barEl.style.width = Math.min(100, Math.round(f * 100)) + '%'; }
-            function renderTasks() {
+            var activeTask = null;
+            function setGlobalBar(f) { globalBarEl.style.width = Math.min(100, Math.round(f * 100)) + '%'; }
+            function setTaskBar(f) { taskBarEl.style.width = Math.min(100, Math.round(f * 100)) + '%'; }
+            function update() {
+              setGlobalBar(globalTotal > 0 ? globalStep / globalTotal : 0);
+              if (activeTask) {
+                var f = activeTask.total > 0 ? activeTask.step / activeTask.total : 0;
+                setTaskBar(f);
+                taskLabelEl.textContent = activeTask.name + ' ' + activeTask.step + ' / ' + activeTask.total;
+              }
+              globalLabelEl.textContent = globalStep + ' / ' + globalTotal;
               var html = '';
               for (var i = 0; i < taskOrder.length; i++) {
                 var t = tasks[taskOrder[i]];
                 var done = t.step >= t.total && t.total > 0;
-                var cls = done ? 'done' : (t.step > 0 || t.active ? 'active' : '');
+                var cls = done ? 'done' : (t.active ? 'active' : '');
                 var icon = done ? '\u2713' : (t.active ? '\u25B8' : '\u00B7');
                 html += '<div class="task ' + cls + '"><span class="task-icon">' + icon + '</span>' + t.name;
                 if (t.active && !done && t.total > 0)
@@ -189,23 +209,33 @@ jobs:
               }
               tasks[name].total += total;
               tasks[name].active = true;
+              activeTask = tasks[name];
               globalTotal += total;
-              renderTasks();
+              setTaskBar(0);
+              update();
             };
             window.nlStepTask = function(name) {
               if (!tasks[name]) return;
               tasks[name].step++;
               globalStep++;
-              setBar(globalTotal > 0 ? globalStep / globalTotal : 0);
-              renderTasks();
+              activeTask = tasks[name];
+              update();
             };
             window.nlLoadingComplete = function() { loadEl.style.display = 'none'; };
-            // WASM download: treated as a special task
+            // Pre-register all known tasks so the full list is visible from the start
+            var knownTasks = ['Downloading', 'Compiling vertex shaders', 'Compiling pixel shaders', 'Linking shader programs'];
+            for (var i = 0; i < knownTasks.length; i++) {
+              tasks[knownTasks[i]] = { name: knownTasks[i], step: 0, total: 0, active: false };
+              taskOrder.push(knownTasks[i]);
+            }
+            // WASM download: starts immediately
             var wasmDone = false;
-            var wasmTask = { name: 'Downloading', step: 0, total: 100, active: true };
-            tasks['wasm'] = wasmTask; taskOrder.push('wasm');
+            var wasmTask = tasks['Downloading'];
+            wasmTask.total = 100;
+            wasmTask.active = true;
+            activeTask = wasmTask;
             globalTotal = 100;
-            renderTasks();
+            update();
             window.Module = {
               canvas: document.getElementById('canvas'),
               setStatus: function(text) {
@@ -214,8 +244,7 @@ jobs:
                   wasmDone = true;
                   globalStep += (wasmTask.total - wasmTask.step);
                   wasmTask.step = wasmTask.total;
-                  setBar(globalTotal > 0 ? globalStep / globalTotal : 0);
-                  renderTasks();
+                  update();
                   return;
                 }
                 var m = text.match(/\((\d+)\/(\d+)\)/);
@@ -223,8 +252,7 @@ jobs:
                   var pct = Math.round(100 * parseInt(m[1]) / parseInt(m[2]));
                   var delta = pct - wasmTask.step;
                   if (delta > 0) { wasmTask.step = pct; globalStep += delta; }
-                  setBar(globalTotal > 0 ? globalStep / globalTotal : 0);
-                  renderTasks();
+                  update();
                 }
               },
               monitorRunDependencies: function(left) {
@@ -232,8 +260,7 @@ jobs:
                   wasmDone = true;
                   globalStep += (wasmTask.total - wasmTask.step);
                   wasmTask.step = wasmTask.total;
-                  setBar(globalTotal > 0 ? globalStep / globalTotal : 0);
-                  renderTasks();
+                  update();
                 }
               }
             };
