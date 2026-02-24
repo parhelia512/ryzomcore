@@ -597,6 +597,34 @@ bool CDriverGL3::initMegaVertexPrograms()
 	int activeObjectUBO = m_UseMegaObjectUBO ? 1 : 0;
 	int activeMaterialUBO = m_UseMegaMaterialUBO ? 1 : 0;
 
+#ifdef __EMSCRIPTEN__
+	{
+		int vpCount = 0;
+		for (int linked = 0; linked < 2; ++linked)
+		{
+			if (!linked && !m_SupportSSO) continue;
+			if (linked && !m_LinkedMegaShaders) continue;
+			for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
+			for (int hwClip = 0; hwClip < 2; ++hwClip)
+			for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
+			for (int cameraUBO = 0; cameraUBO < 2; ++cameraUBO)
+			for (int objectUBO = 0; objectUBO < 2; ++objectUBO)
+			for (int materialUBO = 0; materialUBO < 2; ++materialUBO)
+			{
+				if (objectUBO && (!tableUBO || !cameraUBO)) continue;
+				if (!m_BuildUnusedPrograms)
+				{
+					if (hwClip && m_PPClipPlanes) continue;
+					if (linked) { if (!tableUBO || !cameraUBO || !objectUBO || !materialUBO) continue; }
+					else { if (tableUBO != activeTableUBO || cameraUBO != activeCameraUBO || objectUBO != activeObjectUBO || materialUBO != activeMaterialUBO) continue; }
+				}
+				vpCount++;
+			}
+		}
+		EM_ASM({ window.nlBeginTask('Compiling vertex shaders', $0); }, vpCount);
+	}
+#endif
+
 	for (int linked = 0; linked < 2; ++linked)
 	{
 		if (!linked && !m_SupportSSO) continue; // Skip unlinked if no SSO support
@@ -663,6 +691,7 @@ bool CDriverGL3::initMegaVertexPrograms()
 									return false;
 								}
 #ifdef __EMSCRIPTEN__
+								EM_ASM({ window.nlStepTask('Compiling vertex shaders'); });
 								emscripten_sleep(0); // Yield to browser to prevent WebGL context timeout
 #endif
 

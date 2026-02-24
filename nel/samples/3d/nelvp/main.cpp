@@ -610,6 +610,7 @@ sint main(int /* argc */, char ** /* argv */)
 	// Emscripten: demo must persist since emscripten_set_main_loop never returns
 	static CNelvpDemo demo;
 	s_Demo = &demo;
+	EM_ASM({ if (window.nlLoadingComplete) window.nlLoadingComplete(); });
 	emscripten_set_main_loop(emscriptenMainLoop, 0, 1);
 #else
 	CNelvpDemo demo;

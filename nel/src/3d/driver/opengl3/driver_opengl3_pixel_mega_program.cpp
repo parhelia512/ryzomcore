@@ -710,6 +710,39 @@ bool CDriverGL3::initMegaPixelPrograms()
 	int activeMaterialUBO = m_UseMegaMaterialUBO ? 1 : 0;
 	int activePPClip = m_PPClipPlanes ? 1 : 0;
 
+#ifdef __EMSCRIPTEN__
+	{
+		int ppCount = 0;
+		for (int linked = 0; linked < 2; ++linked)
+		{
+			if (!linked && !m_SupportSSO) continue;
+			if (linked && !m_LinkedMegaShaders) continue;
+			for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
+			for (int cube = 0; cube < 2; ++cube)
+			for (int specular = 0; specular < 2; ++specular)
+			for (int ppClip = 0; ppClip < 2; ++ppClip)
+			for (int tableUBO = 0; tableUBO < 2; ++tableUBO)
+			for (int cameraUBO = linked; cameraUBO < 2; ++cameraUBO)
+			for (int objectUBO = linked; objectUBO < 2; ++objectUBO)
+			for (int materialUBO = linked; materialUBO < 2; ++materialUBO)
+			{
+				if (ppClip && !fogOrPpl) continue;
+				if (tableUBO && !fogOrPpl) continue;
+				if (objectUBO && !cameraUBO) continue;
+				if (objectUBO && !tableUBO && fogOrPpl) continue;
+				if (!m_BuildUnusedPrograms)
+				{
+					if (ppClip && !m_PPClipPlanes) continue;
+					if (linked) { if (tableUBO != (fogOrPpl ? 1 : 0) || !cameraUBO || !objectUBO || !materialUBO) continue; }
+					else { if (tableUBO != (fogOrPpl ? activeTableUBO : 0) || cameraUBO != activeCameraUBO || objectUBO != activeObjectUBO || materialUBO != activeMaterialUBO) continue; }
+				}
+				ppCount++;
+			}
+		}
+		EM_ASM({ window.nlBeginTask('Compiling pixel shaders', $0); }, ppCount);
+	}
+#endif
+
 	for (int linked = 0; linked < 2; ++linked)
 	{
 		if (!linked && !m_SupportSSO) continue; // Skip unlinked if no SSO support
@@ -796,6 +829,7 @@ bool CDriverGL3::initMegaPixelPrograms()
 											return false;
 										}
 #ifdef __EMSCRIPTEN__
+										EM_ASM({ window.nlStepTask('Compiling pixel shaders'); });
 										emscripten_sleep(0); // Yield to browser to prevent WebGL context timeout
 #endif
 

@@ -116,24 +116,135 @@ jobs:
           # Generate per-sample HTML host pages
           for sample in clip_plane nelvp planar_reflection ppl font; do
             title=$(echo "$sample" | sed 's/_/ /g; s/\b\(.\)/\u\1/g')
-            cat > pages/nl_sample_${sample}.html << SAMPLEEOF
+            cat > pages/nl_sample_${sample}.html << 'SAMPLEEOF'
           <!DOCTYPE html>
           <html>
           <head>
             <meta charset="utf-8">
-            <title>NeL Sample - ${title} (WebGL 2.0)</title>
+            <title>NeL Sample (WebGL 2.0)</title>
             <style>
-              body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }
+              body {
+                margin: 0; background: #1a1a2e;
+                display: flex; justify-content: center; align-items: center; height: 100vh;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              }
               canvas { display: block; width: 800px; height: 600px; }
+              #loading {
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                text-align: center; z-index: 10; color: #e0e0e0; min-width: 320px;
+              }
+              #loading-title { font-size: 1.5rem; color: #e94560; margin-bottom: 1.2rem; }
+              #loading-bar-outer {
+                width: 300px; height: 6px; background: #0f3460; border-radius: 3px;
+                overflow: hidden; margin: 0 auto 1rem auto;
+              }
+              #loading-bar-inner {
+                width: 0%; height: 100%; background: #e94560; border-radius: 3px;
+                transition: width 0.15s ease-out;
+              }
+              #loading-tasks {
+                text-align: left; display: inline-block;
+                font-size: 0.85rem; line-height: 1.6;
+              }
+              .task { color: #555; }
+              .task.active { color: #a0a0b0; }
+              .task.done { color: #4a7; }
+              .task-icon { display: inline-block; width: 1.2em; text-align: center; }
+              .task-detail { color: #666; font-size: 0.8em; }
             </style>
           </head>
           <body>
+            <div id="loading">
+              <div id="loading-title">NeL 3D</div>
+              <div id="loading-bar-outer"><div id="loading-bar-inner"></div></div>
+              <div id="loading-tasks"></div>
+            </div>
             <canvas id="canvas" width="800" height="600" oncontextmenu="event.preventDefault()"></canvas>
-            <script>var Module = { canvas: document.getElementById('canvas') };</script>
-            <script src="nl_sample_${sample}.js"></script>
-          </body>
-          </html>
+            <script>
+          (function() {
+            var barEl = document.getElementById('loading-bar-inner');
+            var tasksEl = document.getElementById('loading-tasks');
+            var loadEl = document.getElementById('loading');
+            var tasks = {}, taskOrder = [];
+            var globalStep = 0, globalTotal = 0;
+            function setBar(f) { barEl.style.width = Math.min(100, Math.round(f * 100)) + '%'; }
+            function renderTasks() {
+              var html = '';
+              for (var i = 0; i < taskOrder.length; i++) {
+                var t = tasks[taskOrder[i]];
+                var done = t.step >= t.total && t.total > 0;
+                var cls = done ? 'done' : (t.step > 0 || t.active ? 'active' : '');
+                var icon = done ? '\u2713' : (t.active ? '\u25B8' : '\u00B7');
+                html += '<div class="task ' + cls + '"><span class="task-icon">' + icon + '</span>' + t.name;
+                if (t.active && !done && t.total > 0)
+                  html += ' <span class="task-detail">' + t.step + ' / ' + t.total + '</span>';
+                html += '</div>';
+              }
+              tasksEl.innerHTML = html;
+            }
+            window.nlBeginTask = function(name, total) {
+              if (!tasks[name]) {
+                tasks[name] = { name: name, step: 0, total: 0, active: false };
+                taskOrder.push(name);
+              }
+              tasks[name].total += total;
+              tasks[name].active = true;
+              globalTotal += total;
+              renderTasks();
+            };
+            window.nlStepTask = function(name) {
+              if (!tasks[name]) return;
+              tasks[name].step++;
+              globalStep++;
+              setBar(globalTotal > 0 ? globalStep / globalTotal : 0);
+              renderTasks();
+            };
+            window.nlLoadingComplete = function() { loadEl.style.display = 'none'; };
+            // WASM download: treated as a special task
+            var wasmDone = false;
+            var wasmTask = { name: 'Downloading', step: 0, total: 100, active: true };
+            tasks['wasm'] = wasmTask; taskOrder.push('wasm');
+            globalTotal = 100;
+            renderTasks();
+            window.Module = {
+              canvas: document.getElementById('canvas'),
+              setStatus: function(text) {
+                if (wasmDone) return;
+                if (!text) {
+                  wasmDone = true;
+                  globalStep += (wasmTask.total - wasmTask.step);
+                  wasmTask.step = wasmTask.total;
+                  setBar(globalTotal > 0 ? globalStep / globalTotal : 0);
+                  renderTasks();
+                  return;
+                }
+                var m = text.match(/\((\d+)\/(\d+)\)/);
+                if (m) {
+                  var pct = Math.round(100 * parseInt(m[1]) / parseInt(m[2]));
+                  var delta = pct - wasmTask.step;
+                  if (delta > 0) { wasmTask.step = pct; globalStep += delta; }
+                  setBar(globalTotal > 0 ? globalStep / globalTotal : 0);
+                  renderTasks();
+                }
+              },
+              monitorRunDependencies: function(left) {
+                if (left === 0 && !wasmDone) {
+                  wasmDone = true;
+                  globalStep += (wasmTask.total - wasmTask.step);
+                  wasmTask.step = wasmTask.total;
+                  setBar(globalTotal > 0 ? globalStep / globalTotal : 0);
+                  renderTasks();
+                }
+              }
+            };
+          })();
+            </script>
           SAMPLEEOF
+            # Append the title and sample-specific script tag (needs shell variable expansion)
+            sed -i "s|<title>NeL Sample (WebGL 2.0)</title>|<title>NeL Sample - ${title} (WebGL 2.0)</title>|" pages/nl_sample_${sample}.html
+            echo "  <script src=\"nl_sample_${sample}.js\"></script>" >> pages/nl_sample_${sample}.html
+            echo "  </body>" >> pages/nl_sample_${sample}.html
+            echo "  </html>" >> pages/nl_sample_${sample}.html
           done
           # Generate index page
           cp ${{ github.workspace }}/nel/samples/3d/index.html pages/index.html

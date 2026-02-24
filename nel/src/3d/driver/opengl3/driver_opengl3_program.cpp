@@ -2685,6 +2685,26 @@ bool CDriverGL3::initMegaLinkedPrograms()
 	int objectUBO = 1;
 	int materialUBO = 1;
 
+#ifdef __EMSCRIPTEN__
+	{
+		int linkCount = 0;
+		for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
+		for (int hwClip = 0; hwClip < 2; ++hwClip)
+		{
+			if (hwClip && m_PPClipPlanes) continue;
+			for (int cube = 0; cube < 2; ++cube)
+			for (int specular = 0; specular < 2; ++specular)
+			for (int ppClip = 0; ppClip < 2; ++ppClip)
+			{
+				if (ppClip && !fogOrPpl) continue;
+				if (ppClip && !m_PPClipPlanes) continue;
+				linkCount++;
+			}
+		}
+		EM_ASM({ window.nlBeginTask('Linking shader programs', $0); }, linkCount);
+	}
+#endif
+
 	for (int fogOrPpl = 0; fogOrPpl < 2; ++fogOrPpl)
 	{
 		for (int hwClip = 0; hwClip < 2; ++hwClip)
@@ -2723,6 +2743,7 @@ bool CDriverGL3::initMegaLinkedPrograms()
 							return false;
 						}
 #ifdef __EMSCRIPTEN__
+						EM_ASM({ window.nlStepTask('Linking shader programs'); });
 						emscripten_sleep(0); // Yield to browser to prevent WebGL context timeout
 #endif
 

@@ -187,6 +187,7 @@ int main(int argc, char **argv)
 	s_OldTick = CTime::getPerformanceTime();
 
 #ifdef __EMSCRIPTEN__
+	EM_ASM({ if (window.nlLoadingComplete) window.nlLoadingComplete(); });
 	emscripten_set_main_loop(renderOneFrame, 0, 1);
 #else
 	do
