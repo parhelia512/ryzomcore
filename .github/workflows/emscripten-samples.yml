@@ -177,18 +177,18 @@ jobs:
             var tasksEl = document.getElementById('loading-tasks');
             var loadEl = document.getElementById('loading');
             var tasks = {}, taskOrder = [];
-            var globalStep = 0, globalTotal = 0;
+            var tasksDone = 0;
             var activeTask = null;
             function setGlobalBar(f) { globalBarEl.style.width = Math.min(100, Math.round(f * 100)) + '%'; }
             function setTaskBar(f) { taskBarEl.style.width = Math.min(100, Math.round(f * 100)) + '%'; }
             function update() {
-              setGlobalBar(globalTotal > 0 ? globalStep / globalTotal : 0);
+              setGlobalBar(taskOrder.length > 0 ? tasksDone / taskOrder.length : 0);
               if (activeTask) {
                 var f = activeTask.total > 0 ? activeTask.step / activeTask.total : 0;
                 setTaskBar(f);
                 taskLabelEl.textContent = activeTask.name + ' ' + activeTask.step + ' / ' + activeTask.total;
               }
-              globalLabelEl.textContent = globalStep + ' / ' + globalTotal;
+              globalLabelEl.textContent = tasksDone + ' / ' + taskOrder.length;
               var html = '';
               for (var i = 0; i < taskOrder.length; i++) {
                 var t = tasks[taskOrder[i]];
@@ -202,30 +202,35 @@ jobs:
               }
               tasksEl.innerHTML = html;
             }
+            function checkTaskDone(t) {
+              if (t.total > 0 && t.step >= t.total && !t.counted) {
+                t.counted = true;
+                tasksDone++;
+              }
+            }
             window.nlBeginTask = function(name, total) {
               if (!tasks[name]) {
-                tasks[name] = { name: name, step: 0, total: 0, active: false };
+                tasks[name] = { name: name, step: 0, total: 0, active: false, counted: false };
                 taskOrder.push(name);
               }
               tasks[name].total += total;
               tasks[name].active = true;
               activeTask = tasks[name];
-              globalTotal += total;
               setTaskBar(0);
               update();
             };
             window.nlStepTask = function(name) {
               if (!tasks[name]) return;
               tasks[name].step++;
-              globalStep++;
               activeTask = tasks[name];
+              checkTaskDone(tasks[name]);
               update();
             };
             window.nlLoadingComplete = function() { loadEl.style.display = 'none'; };
             // Pre-register all known tasks so the full list is visible from the start
             var knownTasks = ['Downloading', 'Compiling vertex shaders', 'Compiling pixel shaders', 'Linking shader programs'];
             for (var i = 0; i < knownTasks.length; i++) {
-              tasks[knownTasks[i]] = { name: knownTasks[i], step: 0, total: 0, active: false };
+              tasks[knownTasks[i]] = { name: knownTasks[i], step: 0, total: 0, active: false, counted: false };
               taskOrder.push(knownTasks[i]);
             }
             // WASM download: starts immediately
@@ -234,7 +239,6 @@ jobs:
             wasmTask.total = 100;
             wasmTask.active = true;
             activeTask = wasmTask;
-            globalTotal = 100;
             update();
             window.Module = {
               canvas: document.getElementById('canvas'),
@@ -242,24 +246,22 @@ jobs:
                 if (wasmDone) return;
                 if (!text) {
                   wasmDone = true;
-                  globalStep += (wasmTask.total - wasmTask.step);
                   wasmTask.step = wasmTask.total;
+                  checkTaskDone(wasmTask);
                   update();
                   return;
                 }
                 var m = text.match(/\((\d+)\/(\d+)\)/);
                 if (m) {
-                  var pct = Math.round(100 * parseInt(m[1]) / parseInt(m[2]));
-                  var delta = pct - wasmTask.step;
-                  if (delta > 0) { wasmTask.step = pct; globalStep += delta; }
+                  wasmTask.step = Math.round(100 * parseInt(m[1]) / parseInt(m[2]));
                   update();
                 }
               },
               monitorRunDependencies: function(left) {
                 if (left === 0 && !wasmDone) {
                   wasmDone = true;
-                  globalStep += (wasmTask.total - wasmTask.step);
                   wasmTask.step = wasmTask.total;
+                  checkTaskDone(wasmTask);
                   update();
                 }
               }
