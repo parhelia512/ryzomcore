@@ -2981,8 +2981,8 @@ void	CMeshGeom::buildGPUSkinVB()
 	}
 
 	uint32 totalIndices = 0;
-	for (auto &kv : materialIndexCount)
-		totalIndices += kv.second;
+	for (std::map<uint32, uint32>::iterator it = materialIndexCount.begin(); it != materialIndexCount.end(); ++it)
+		totalIndices += it->second;
 
 	_GPUSkinIB.setFormat(NL_MESH_INDEX_FORMAT);
 	_GPUSkinIB.setBufferUsage(CIndexBuffer::Immutable, false);
@@ -2995,9 +2995,9 @@ void	CMeshGeom::buildGPUSkinVB()
 		_GPUSkinIB.lock(iba);
 		uint32 offset = 0;
 
-		for (auto &kv : materialIndexCount)
+		for (std::map<uint32, uint32>::iterator it = materialIndexCount.begin(); it != materialIndexCount.end(); ++it)
 		{
-			uint32 matId = kv.first;
+			uint32 matId = it->first;
 			GPURdrPass gpuPass;
 			gpuPass.MaterialId = matId;
 			gpuPass.IBOffset = offset;
