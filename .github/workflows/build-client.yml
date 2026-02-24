@@ -108,22 +108,26 @@ jobs:
         key: ${{ matrix.os }}-hunter-${{ steps.strings.outputs.week }}-${{ github.sha }}
         restore-keys: ${{ matrix.os }}-hunter-${{ steps.strings.outputs.week }}-
 
-    - uses: actions/cache/restore@v4
+    - uses: actions/cache@v4
       if: runner.os == 'Windows'
       with:
-        path: C:\Users\runneradmin\AppData\Local\Temp\chocolatey
-        key: ${{ matrix.os }}-chocolatey-${{ steps.strings.outputs.week }}
+        path: C:\DXSDK
+        key: dxsdk-jun2010
+
+    - name: DirectX SDK
+      if: runner.os == 'Windows'
+      shell: cmd
+      run: |
+        IF NOT EXIST C:\DXSDK (
+          aria2c https://download.microsoft.com/download/A/E/7/AE743F1F-632B-4809-87A9-AA1BB3458E31/DXSDK_Jun10.exe
+          7z x DXSDK_Jun10.exe -oC:\ -r -y
+          del DXSDK_Jun10.exe
+        )
 
     - name: Dependencies Windows
       if: runner.os == 'Windows'
       run: |
-        choco install directx-sdk nsis
-
-    - uses: actions/cache/save@v4
-      if: runner.os == 'Windows'
-      with:
-        path: C:\Users\runneradmin\AppData\Local\Temp\chocolatey
-        key: ${{ matrix.os }}-chocolatey-${{ steps.strings.outputs.week }}
+        choco install nsis
 
     - name: Configure CMake
       env:
@@ -135,6 +139,7 @@ jobs:
         -DHUNTER_ENABLED=ON
         -DHUNTER_ROOT=${{ steps.strings.outputs.hunter-dir }}
         ${{ runner.os == 'Linux' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }}
+        ${{ runner.os == 'Windows' && '-DDXSDK_DIR=C:/DXSDK' || '' }}
         -S ${{ github.workspace }}
 
     - uses: actions/cache/save@v4
