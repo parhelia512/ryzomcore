@@ -138,7 +138,7 @@ jobs:
         -DHUNTER_CONFIGURATION_TYPES=Release
         -DHUNTER_ENABLED=ON
         -DHUNTER_ROOT=${{ steps.strings.outputs.hunter-dir }}
-        ${{ runner.os == 'Linux' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }}
+        ${{ runner.os == 'Linux' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DWITH_PCH=OFF' || '' }}
         ${{ runner.os == 'Windows' && '-DDXSDK_DIR=C:/DXSDK' || '' }}
         -S ${{ github.workspace }}
 

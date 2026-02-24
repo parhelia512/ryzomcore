@@ -51,6 +51,7 @@ jobs:
         -DWITH_MSQUIC=ON
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        -DWITH_PCH=OFF
       displayName: 'CMake'
     - script: |
         cat build/CMakeCache.txt
@@ -120,6 +121,7 @@ jobs:
         -DWITH_MSQUIC=ON
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        -DWITH_PCH=OFF
       displayName: 'CMake'
     - script: |
         cat build/CMakeCache.txt
@@ -152,6 +154,7 @@ jobs:
             -DCMAKE_INSTALL_LIBDIR=lib
             -DCMAKE_C_COMPILER_LAUNCHER=ccache
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            -DWITH_PCH=OFF
         win2022:
           vmImage: 'windows-2022'
           releaseName: 'Win64'

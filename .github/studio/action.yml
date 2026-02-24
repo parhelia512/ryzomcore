@@ -65,6 +65,7 @@ runs:
         cmake --preset ci-linux-studio
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        -DWITH_PCH=OFF
 
     - name: Build
       shell: bash

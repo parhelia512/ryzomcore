@@ -60,6 +60,7 @@ jobs:
           emcmake cmake .. \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DWITH_PCH=OFF \
             -DWITH_STATIC=ON \
             -DWITH_STATIC_DRIVERS=ON \
             -DWITH_DRIVER_OPENGL=OFF \
