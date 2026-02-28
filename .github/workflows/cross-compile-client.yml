@@ -25,6 +25,9 @@ on:
       - CMakePresets.json
   workflow_dispatch:
 
+env:
+  CCACHE_DIR: "${{ github.workspace }}/.ccache"
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -35,7 +38,7 @@ jobs:
       id: strings
       shell: bash
       run: |
-        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+        echo "build-output-dir=${{ github.workspace }}/build/ryzom-client" >> "$GITHUB_OUTPUT"
         echo "hunter-dir=${{ github.workspace }}/.hunter" >> "$GITHUB_OUTPUT"
         COMMIT_HASH=${{ github.sha }}
         echo "version=sha.${COMMIT_HASH:0:8}" >> "$GITHUB_OUTPUT"
@@ -59,6 +62,7 @@ jobs:
         libxxf86vm-dev \
         mingw-w64 \
         mingw-w64-tools \
+        nsis \
         ninja-build
         git clone --depth 1 --branch openssl-3.0.12 https://github.com/openssl/openssl.git
         cd openssl
@@ -69,7 +73,7 @@ jobs:
     - name: Set up ccache
       uses: actions/cache@v4
       with:
-        path: ~/.cache/ccache
+        path: ${{ env.CCACHE_DIR }}
         key: ccache-cross-mingw-${{ steps.strings.outputs.week }}-${{ github.sha }}
         restore-keys: ccache-cross-mingw-${{ steps.strings.outputs.week }}-
 
@@ -88,38 +92,20 @@ jobs:
 
     - name: Configure CMake
       run: >
-        cmake --version;
-        cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -G Ninja
-        -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/CMakeModules/toolchain-mingw.cmake
-        -DCMAKE_CONFIGURATION_TYPES=Release
-        -DFINAL_VERSION=OFF
-        -DHUNTER_CONFIGURATION_TYPES=Release
-        -DHUNTER_ENABLED=ON
-        -DHUNTER_ROOT=${{ steps.strings.outputs.hunter-dir }}
-        -DWITH_DRIVER_OPENAL=ON
-        -DWITH_DRIVER_OPENGL=ON
-        -DWITH_DRIVER_OPENGL3=ON
-        -DWITH_INSTALL_LIBRARIES=OFF
-        -DWITH_NEL_SAMPLES=OFF
-        -DWITH_NEL_TESTS=OFF
-        -DWITH_NEL_TOOLS=OFF
-        -DWITH_RYZOM_CLIENT=ON
-        -DWITH_RYZOM_SERVER=OFF
-        -DWITH_RYZOM_TOOLS=OFF
-        -DCMAKE_C_COMPILER_LAUNCHER=ccache
-        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-        -DWITH_PCH=OFF
-        -S ${{ github.workspace }}
+        cmake --preset ryzom-client-x86-mingw-vcpkg
 
     - name: Build
-      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config Release
+      run: cmake --build --preset ci-ryzom-client
 
     - name: ccache stats
       if: always()
       run: ccache -s -v || ccache -s
 
+    - name: Package
+      run: cpack --preset ci-ryzom-client
+
     - uses: actions/upload-artifact@v4
       with:
         name: ryzom-client-win32-${{ steps.strings.outputs.version }}
-        path: ${{ steps.strings.outputs.build-output-dir }}/bin
+        path: build/ryzom-client/ryzom-client-*
+        if-no-files-found: error
