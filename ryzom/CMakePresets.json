@@ -90,6 +90,7 @@
       "name": "ci-linux-ryzom-client-hunter",
       "inherits": [
         "hunter",
+        "ccache",
         "ryzom-client",
         "linux"
       ]
@@ -103,18 +104,26 @@
       ],
       "cacheVariables": {
         "WITH_DRIVER_DIRECT3D": true,
-        "WITH_DRIVER_XAUDIO2": true
+        "WITH_DRIVER_XAUDIO2": true,
+        "DXSDK_DIR": "C:/DXSDK"
       }
     },
     {
-      "name": "ci-macos-ryzom-client-hunter",
+      "name": "ci-macos-ryzom-client-vcpkg",
       "inherits": [
-        "hunter",
+        "vcpkg",
         "ryzom-client",
         "macos"
       ],
       "cacheVariables": {
-        "WITH_LIBXML2_ICONV": false
+        "WITH_LIBXML2_ICONV": false,
+        "WITH_SSE2": false,
+        "WITH_SSE3": false,
+        "CMAKE_THREAD_LIBS_INIT": "-lpthread",
+        "CMAKE_HAVE_THREADS_LIBRARY": true,
+        "CMAKE_USE_WIN32_THREADS_INIT": false,
+        "CMAKE_USE_PTHREADS_INIT": true,
+        "THREADS_PREFER_PTHREAD_FLAG": true
       }
     }
   ],
