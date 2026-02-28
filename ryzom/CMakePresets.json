@@ -131,7 +131,7 @@
       }
     },
     {
-      "name": "ryzom-client-x86-mingw-vcpkg",
+      "name": "ryzom-client-x86-mingw-hunter",
       "inherits": [
         "hunter",
         "ryzom-client",
