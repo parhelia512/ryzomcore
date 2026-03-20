@@ -112,7 +112,7 @@ jobs:
           key: ccache-nelns-${{ matrix.os }}-${{ needs.strings.outputs.week }}-${{ github.sha }}
           restore-keys: ccache-nelns-${{ matrix.os }}-${{ needs.strings.outputs.week }}-
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: nel-${{ matrix.os }}-static-*
           merge-multiple: true
@@ -159,7 +159,7 @@ jobs:
           key: ccache-ryzom-${{ matrix.os }}-${{ matrix.build-type }}-${{ needs.strings.outputs.week }}-${{ github.sha }}
           restore-keys: ccache-ryzom-${{ matrix.os }}-${{ matrix.build-type }}-${{ needs.strings.outputs.week }}-
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: nel-${{ matrix.os }}-${{ matrix.build-type }}-*
           merge-multiple: true
@@ -205,7 +205,7 @@ jobs:
           key: ccache-snowballs-${{ matrix.os }}-${{ needs.strings.outputs.week }}-${{ github.sha }}
           restore-keys: ccache-snowballs-${{ matrix.os }}-${{ needs.strings.outputs.week }}-
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: nel-${{ matrix.os }}-static-*
           merge-multiple: true
@@ -249,7 +249,7 @@ jobs:
           key: ccache-studio-${{ matrix.os }}-${{ needs.strings.outputs.week }}-${{ github.sha }}
           restore-keys: ccache-studio-${{ matrix.os }}-${{ needs.strings.outputs.week }}-
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: nel-${{ matrix.os }}-static-*
           merge-multiple: true
@@ -309,13 +309,13 @@ jobs:
       contents: read
     if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch ) }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: "*-ubuntu-24.04-*"
           merge-multiple: true
           path: ${{ needs.strings.outputs.build-dir }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: "web-*"
           merge-multiple: true
