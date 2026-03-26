@@ -64,6 +64,10 @@ jobs:
           - os: ubuntu-24.04
             cmake-preset: ci-linux-nel-dynamic
             build-type: dynamic
+          - os: windows-2025
+            cmake-preset: ci-windows-nel-vcpkg
+          - os: windows-2025
+            cmake-preset: ci-windows-nel-hunter
     steps:
       - uses: actions/checkout@v4
 
@@ -84,7 +88,6 @@ jobs:
         with:
           os: ${{ matrix.os }}
           cmake-preset: ${{ matrix.cmake-preset }}
-          build-dir: ${{ needs.strings.outputs.build-dir }}
           build-version: ${{ needs.strings.outputs.build-version }}
 
       - uses: actions/upload-artifact@v7
@@ -149,7 +152,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-24.04 ]
-        build-type: ["static", "dynamic"]
+        build-type: [ "static", "dynamic" ]
     steps:
       - uses: actions/checkout@v4
 
