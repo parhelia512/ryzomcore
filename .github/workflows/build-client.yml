@@ -83,7 +83,7 @@ jobs:
     - uses: lukka/run-vcpkg@v11
       if: matrix.vcpkg == true
 
-    - uses: actions/cache/restore@v4
+    - uses: actions/cache/restore@v5
       if: matrix.vcpkg == true
       with:
         path: ${{ github.workspace }}/.vcpkg
@@ -117,7 +117,7 @@ jobs:
       run: |
         brew install autoconf autoconf-archive automake libtool
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v5
       if: matrix.ccache == true
       with:
         path: ${{ env.CCACHE_DIR }}
@@ -131,13 +131,13 @@ jobs:
         ccache --set-config=compression=true
         ccache -z
 
-    - uses: actions/cache/restore@v4
+    - uses: actions/cache/restore@v5
       with:
         path: ${{ env.HUNTER_ROOT }}
         key: ${{ matrix.os }}-hunter-${{ steps.strings.outputs.week }}-${{ github.sha }}
         restore-keys: ${{ matrix.os }}-hunter-${{ steps.strings.outputs.week }}-
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v5
       if: runner.os == 'Windows'
       with:
         path: C:\DXSDK
@@ -153,7 +153,7 @@ jobs:
           del DXSDK_Jun10.exe
         )
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v5
       if: runner.os == 'Windows'
       with:
         path: ${{ env.CHOCOLATEY_CACHE }}
@@ -168,12 +168,12 @@ jobs:
       run: |
         cmake --preset ${{ matrix.cmake_preset }}
 
-    - uses: actions/cache/save@v4
+    - uses: actions/cache/save@v5
       with:
         path: ${{ env.HUNTER_ROOT }}
         key: ${{ matrix.os }}-hunter-${{ steps.strings.outputs.week }}-${{ github.sha }}
 
-    - uses: actions/cache/save@v4
+    - uses: actions/cache/save@v5
       if: (matrix.vcpkg == true)
       with:
         path: ${{ github.workspace }}/.vcpkg
