@@ -39,7 +39,7 @@ runs:
 
     - uses: lukka/run-vcpkg@v11
 
-    - uses: actions/cache/restore@v4
+    - uses: actions/cache/restore@v5
       id: vcpkg-cache
       with:
         path: ${{ inputs.vcpkg-cache-dir}}
@@ -89,7 +89,7 @@ runs:
       shell: bash
       run: cmake --preset ${{ inputs.cmake-preset }}
 
-    - uses: actions/cache/save@v4
+    - uses: actions/cache/save@v5
       if: ( ! cancelled() )
       with:
         path: ${{ inputs.vcpkg-cache-dir }}
